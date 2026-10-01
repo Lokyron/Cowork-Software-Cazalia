@@ -1,0 +1,25 @@
+# Contexte de build minimal : le build se fait DANS l'image.
+**/node_modules
+web/dist
+.git
+.gitignore
+
+# Données runtime / secrets — jamais dans l'image
+*.db
+*.db-shm
+*.db-wal
+data
+.env
+.env.*
+
+# Documentation interne / infra
+docs
+Documentation
+deploy/durcissement.md
+DOCUMENTATION.md
+*.pdf
+
+# Divers
+.DS_Store
+*.log
+.claude

@@ -1,0 +1,31 @@
+# Cazalia — déploiement conteneurisé (portable).
+#
+# Usage :
+#   cp server/.env.example .env     # puis renseigner APP_SECRET, SMTP_*, UNIFI_*…
+#   docker compose up -d --build
+#
+# Le TLS est géré par un reverse proxy en amont ; l'app n'écoute qu'en local.
+services:
+  app:
+    build: .
+    image: cazalia:local
+    container_name: cazalia
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      HOST: 0.0.0.0
+      DB_PATH: /data/cowork.db
+      GALLERY_DIR: /gallery
+      TRUST_PROXY: "1"
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - cazalia-data:/data
+      - cazalia-gallery:/gallery
+
+volumes:
+  cazalia-data:
+  cazalia-gallery:
