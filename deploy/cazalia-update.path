@@ -1,0 +1,11 @@
+# Surveille le fichier de requete ecrit par l'application (dans le volume de
+# donnees) quand on clique sur le bouton de mise a jour, et lance l'updater Docker.
+[Unit]
+Description=Surveille une demande de mise a jour Cazalia (Docker)
+
+[Path]
+PathExists=/opt/cazalia/data/update.request
+Unit=cazalia-update.service
+
+[Install]
+WantedBy=paths.target

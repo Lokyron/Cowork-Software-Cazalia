@@ -1,0 +1,31 @@
+# Cazalia — compose de PRODUCTION (tire l'image publiée sur GHCR, ne build pas).
+#
+# Préparation sur l'hôte :
+#   install -d -o 1000 -g 1000 /opt/cazalia/data /opt/cazalia/gallery   # uid de l'utilisateur 'node'
+#   cp .env.example /opt/cazalia/.env   # puis renseigner APP_SECRET, SMTP_*, UNIFI_*…
+#   COWORK_CHANNEL=stable docker compose -f docker-compose.prod.yml up -d
+#
+# ⚠️ Les dossiers bind-montés DOIVENT appartenir à l'uid 1000 (utilisateur non-root
+#    'node' du conteneur), sinon l'app ne peut pas écrire la base SQLite.
+#
+# Le canal (stable/beta) est choisi par la variable COWORK_CHANNEL ; l'updater
+# in-app la pilote. Le TLS est assuré par un reverse proxy en amont.
+services:
+  app:
+    image: ghcr.io/lokyron/cowork-software-cazalia:${COWORK_CHANNEL:-stable}
+    container_name: cazalia
+    restart: unless-stopped
+    env_file:
+      - /opt/cazalia/.env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      HOST: 0.0.0.0
+      DB_PATH: /data/cowork.db
+      GALLERY_DIR: /gallery
+      TRUST_PROXY: "1"
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - /opt/cazalia/data:/data
+      - /opt/cazalia/gallery:/gallery

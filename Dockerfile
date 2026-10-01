@@ -23,6 +23,14 @@ RUN npm install --omit=dev --no-audit --no-fund
 
 # ── 3. Image finale ───────────────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS runtime
+# Métadonnées de version, injectées par la CI (identifie l'image installée).
+ARG GIT_SHA=unknown
+ARG GIT_BRANCH=unknown
+ARG CHANNEL=unknown
+LABEL org.opencontainers.image.title="Cazalia" \
+      org.opencontainers.image.source="https://github.com/Lokyron/Cowork-Software-Cazalia" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.licenses="MIT"
 ENV NODE_ENV=production \
     PORT=3001 \
     HOST=0.0.0.0 \
@@ -35,6 +43,10 @@ WORKDIR /app/server
 COPY --chown=node:node server/ ./
 COPY --from=server-deps --chown=node:node /app/server/node_modules ./node_modules
 COPY --from=web-build --chown=node:node /app/web/dist /app/web/dist
+# VERSION relu par l'app (server/src/update.js → installedVersion), à la racine /app.
+RUN printf '{"commit":"%s","branch":"%s","channel":"%s","installedAt":"%s"}\n' \
+      "$GIT_SHA" "$GIT_BRANCH" "$CHANNEL" "$(date -Is)" > /app/VERSION \
+    && chown node:node /app/VERSION
 USER node
 EXPOSE 3001
 # Health-check : l'endpoint public /api/config répond sans authentification.

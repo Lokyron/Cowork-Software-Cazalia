@@ -1,0 +1,15 @@
+# Lance l'updater Docker une fois, en root sur l'hôte Docker. Démarré par
+# cazalia-update.path, jamais par l'application.
+[Unit]
+Description=Mise a jour Docker de Cazalia
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cazalia-docker-update
+Environment=APP_DIR=/opt/cazalia
+Environment=COMPOSE=/opt/cazalia/docker-compose.prod.yml
+Environment=DATA_DIR=/opt/cazalia/data
+Environment=CONTAINER=cazalia
+Environment=IMAGE=ghcr.io/lokyron/cowork-software-cazalia
