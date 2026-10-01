@@ -1,0 +1,11 @@
+# Surveille le fichier de requete que l'application ecrit quand on clique sur le
+# bouton de mise a jour, et demarre l'updater.
+[Unit]
+Description=Surveille une demande de mise a jour Cazalia
+
+[Path]
+PathExists=/var/lib/lucie-cowork/update.request
+Unit=cowork-update.service
+
+[Install]
+WantedBy=paths.target

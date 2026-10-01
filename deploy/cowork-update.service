@@ -1,0 +1,18 @@
+# Lance l'updater une fois, en root. Démarré par cowork-update.path, jamais par
+# l'application elle-même.
+[Unit]
+Description=Mise a jour de Cazalia (Lucie Cowork)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cowork-update
+Environment=APP_DIR=/opt/lucie-cowork
+Environment=DATA_DIR=/var/lib/lucie-cowork
+Environment=SERVICE=lucie-cowork
+Environment=APP_USER=cowork
+Environment=UPDATE_REPO=Lokyron/Cowork-Software-Cazalia
+Environment=UPDATE_BRANCH=main
+# La branche installee par le canal beta. Laisser vide pour n'offrir que stable.
+Environment=UPDATE_BETA_BRANCH=beta

@@ -1,0 +1,93 @@
+# systemd unit pour l'API Express (LXC Debian).
+#
+# Installation :
+#   install -o root -g root -m 0644 deploy/lucie-cowork.service /etc/systemd/system/
+#   install -d -o root -g root -m 0750 /etc/lucie-cowork
+#   install -o root -g cowork -m 0640 .env.example /etc/lucie-cowork/lucie-cowork.env  # puis renseigner
+#   systemctl daemon-reload && systemctl enable --now lucie-cowork
+#
+# DURCISSEMENT — trois principes :
+#  1. MOINDRE PRIVILÈGE : le service tourne sous un compte dédié non privilégié.
+#     Une exécution de code arbitraire ne donne alors pas root dans le conteneur.
+#         adduser --system --group --no-create-home --shell /usr/sbin/nologin cowork
+#         chown -R cowork:cowork /var/lib/lucie-cowork && chmod 750 /var/lib/lucie-cowork
+#         chmod 600 /var/lib/lucie-cowork/cowork.db*
+#  2. SECRETS HORS UNITÉ : les valeurs sensibles vivent dans un EnvironmentFile
+#     en 0640 root:cowork, pas dans des `Environment=` lisibles par `systemctl cat`.
+#  3. SURFACE RÉDUITE : le reste des directives ci-dessous retire au process les
+#     capacités, les chemins et les appels système dont il n'a pas besoin.
+
+[Unit]
+Description=Cazalia (Lucie Cowork) — API
+After=network.target
+
+[Service]
+Type=simple
+User=cowork
+Group=cowork
+WorkingDirectory=/opt/lucie-cowork/server
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=3
+
+# Réglages non sensibles (les secrets sont dans l'EnvironmentFile).
+Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=HOST=127.0.0.1
+Environment=TRUST_PROXY=1
+Environment=DB_PATH=/var/lib/lucie-cowork/cowork.db
+Environment=GALLERY_DIR=/opt/lucie-cowork/web/gallery
+Environment=REFUND_WINDOW_HOURS=24
+
+# Secrets : APP_SECRET, DEFAULT_USER_PASSWORD, UNIFI_API_KEY, SMTP_*…
+EnvironmentFile=/etc/lucie-cowork/lucie-cowork.env
+
+# ── Durcissement systemd (CIS / systemd-analyze security) ────────────────────
+# Aucune élévation de privilèges possible depuis ce process (setuid, capacités).
+NoNewPrivileges=yes
+# Système de fichiers en lecture seule, sauf les chemins explicitement ouverts.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/lucie-cowork /opt/lucie-cowork/web/gallery
+# /home, /root et /run/user invisibles ; /tmp privé au service.
+ProtectHome=yes
+PrivateTmp=yes
+# Pas d'accès aux périphériques, au noyau, ni aux autres process.
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+# Aucune capacité Linux n'est nécessaire : le port 3001 est > 1024.
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Uniquement les familles d'adresses réellement utilisées (HTTP local + SMTP/UniFi).
+# AF_NETLINK est indispensable : la résolution DNS de Node passe par getaddrinfo,
+# qui interroge le noyau via netlink — sans lui, tout appel sortant échoue.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+# Jeu d'appels système restreint à un service applicatif classique.
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+# NOTE : `MemoryDenyWriteExecute=yes` est volontairement ABSENT. V8 compile le
+# JavaScript à l'exécution et a besoin de projections mémoire inscriptibles puis
+# exécutables ; l'activer fait tomber Node en SIGTRAP dès les premières
+# secondes. C'est une incompatibilité de fond avec un moteur JIT, pas un oubli.
+UMask=0077
+
+# ── Garde-fous de ressources (1 Gio de RAM dans le CT) ───────────────────────
+# `MemoryHigh` freine le process avant la limite dure ; `MemoryMax` reste une
+# sécurité. Marge calibrée sur le coût de scrypt (~64 Mio par empreinte, la
+# limitation de débit bornant le nombre de vérifications simultanées).
+MemoryHigh=512M
+MemoryMax=768M
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target

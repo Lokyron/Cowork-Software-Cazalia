@@ -1,0 +1,30 @@
+# Dépendances / builds
+node_modules/
+dist/
+
+# Données runtime (base SQLite)
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# macOS / divers
+.DS_Store
+*.log
+
+# Documentation interne / infra — NE PAS publier sur le dépôt public
+# (schémas réseau, contrôle d'accès, audit de sécurité, runbook de durcissement,
+#  docs API UniFi avec identifiants). Conservées en local hors dépôt.
+docs/
+Documentation/
+deploy/durcissement.md
+DOCUMENTATION.md
+*.pdf
+
+# Config locale de l_IDE / session
+.claude/
