@@ -9,7 +9,7 @@ import { fail } from './errors.js';
 // chiffres de fin usuels (« Azerty2024 » ≡ « azerty »).
 const COMMON_PASSWORDS = new Set([
   'password', 'motdepasse', 'azerty', 'azertyuiop', 'qwerty', 'qwertyuiop',
-  'motdepasse!', 'bonjour', 'coworking', 'cazalia', 'lucie', 'soleil',
+  'motdepasse!', 'bonjour', 'coworking', 'cazalia', 'soleil',
   'admin', 'administrateur', 'welcome', 'bienvenue', 'iloveyou', 'abcdef',
 ]);
 

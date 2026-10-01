@@ -3,7 +3,7 @@
 // Le fichier de base contient des données sensibles (empreintes de mots de
 // passe, secrets 2FA chiffrés, coordonnées des membres) : ses permissions
 // doivent rester restrictives sur l'hôte (0600, propriétaire = utilisateur du
-// service) — cf. `deploy/lucie-cowork.service` et `deploy/durcissement.md`.
+// service) — cf. `deploy/cazalia.service` et `deploy/durcissement.md`.
 
 import fs from 'node:fs';
 import path from 'node:path';

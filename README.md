@@ -138,7 +138,7 @@ dépendances, builder le front, puis servir `web/dist` par nginx et lancer l'API
 via systemd.
 
 Le dossier [`deploy/`](deploy) fournit des modèles :
-- `lucie-cowork.service` — unité systemd durcie (compte dédié non privilégié,
+- `cazalia.service` — unité systemd durcie (compte dédié non privilégié,
   `ProtectSystem=strict`, capacités retirées…) ;
 - `nginx.conf` — vhost (fichiers statiques + proxy `/api`, limitation de débit) ;
 - `cowork-update.{sh,service,path}` — système de mise à jour in-app.

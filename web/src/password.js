@@ -14,7 +14,7 @@ export const PASSWORD_RULE =
 
 const COMMON = new Set([
   'password', 'motdepasse', 'azerty', 'azertyuiop', 'qwerty', 'qwertyuiop',
-  'motdepasse', 'bonjour', 'coworking', 'cazalia', 'lucie', 'soleil',
+  'motdepasse', 'bonjour', 'coworking', 'cazalia', 'soleil',
   'admin', 'administrateur', 'welcome', 'bienvenue', 'iloveyou', 'abcdef',
 ]);
 

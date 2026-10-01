@@ -7,4 +7,4 @@ Dossier des photos du carrousel « Galerie » de la page d'accueil.
   Astuce : préfixez par un numéro (01-…, 02-…) pour maîtriser l'ordre.
 - Les fichiers cachés (commençant par un point) et ce README sont ignorés.
 
-En production, ce dossier se trouve sur le conteneur : /opt/lucie-cowork/web/gallery
+En production, ce dossier se trouve sur le conteneur : /opt/cazalia/web/gallery

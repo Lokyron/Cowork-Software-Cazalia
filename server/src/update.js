@@ -21,7 +21,7 @@ import { getSetting, setSetting } from './lib/settings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Racine de l'application installée (…/opt/lucie-cowork), d'où src = server/src.
+// Racine de l'application installée (…/opt/cazalia), d'où src = server/src.
 const ROOT_DIR = path.resolve(__dirname, '..', '..');
 // Dossier de données (écrivable par le service) = dossier de la base SQLite.
 const DATA_DIR = path.dirname(config.dbPath);

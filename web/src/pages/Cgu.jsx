@@ -1,7 +1,7 @@
 import BackLink from '../components/BackLink.jsx';
 
 // Conditions Générales d'Utilisation + mentions légales + politique de confidentialité (RGPD).
-// Mentions légales renseignées (CAZALIA — EI Lucie Cazanave Pin, SIREN 109 422 121).
+// Mentions légales renseignées (CAZALIA, SIREN 109 422 121).
 // Reste à compléter plus tard : l'adresse e-mail de contact (en cours de création),
 // définie à l'article 3 et référencée partout ailleurs.
 export default function Cgu() {

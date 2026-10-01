@@ -22,11 +22,11 @@ export const config = {
     .split(',')
     .map((h) => h.trim())
     .filter(Boolean),
-  // Fichier SQLite. En prod (LXC) : /var/lib/lucie-cowork/data.db par exemple.
+  // Fichier SQLite. En prod (LXC) : /var/lib/cazalia/data.db par exemple.
   dbPath: process.env.DB_PATH || path.join(__dirname, '..', 'data', 'cowork.db'),
   // Dossier des photos de la galerie (carrousel de la landing). Persistant, hors
   // du build `dist` : déposer des images dedans les fait apparaître automatiquement.
-  // En prod (LXC) : /opt/lucie-cowork/web/gallery.
+  // En prod (LXC) : /opt/cazalia/web/gallery.
   galleryDir: process.env.GALLERY_DIR || path.join(__dirname, '..', '..', 'web', 'gallery'),
   // Mise à jour in-app (voir server/src/update.js et deploy/cowork-update.*).
   // L'app ne fait QUE déposer un fichier de requête dans le dossier de données ;

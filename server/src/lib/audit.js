@@ -8,7 +8,7 @@
 // est visé si le journal fuite.
 //
 // La sortie va sur stdout, donc dans le journal systemd du service
-// (`journalctl -u lucie-cowork`), déjà collecté et rotaté par l'hôte.
+// (`journalctl -u cazalia`), déjà collecté et rotaté par l'hôte.
 
 import crypto from 'node:crypto';
 

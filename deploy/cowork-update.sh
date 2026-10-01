@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Updater Cazalia (Lucie Cowork).
+# Updater Cazalia.
 #
 # Tourne en root, lancé par cowork-update.service quand l'application dépose son
 # fichier de requête. L'application ne lance jamais ce script et n'écrit jamais
@@ -15,9 +15,9 @@
 # version précédente si la nouvelle ne démarre pas.
 set -euo pipefail
 
-APP_DIR=${APP_DIR:-/opt/lucie-cowork}
-DATA_DIR=${DATA_DIR:-/var/lib/lucie-cowork}
-SERVICE=${SERVICE:-lucie-cowork}
+APP_DIR=${APP_DIR:-/opt/cazalia}
+DATA_DIR=${DATA_DIR:-/var/lib/cazalia}
+SERVICE=${SERVICE:-cazalia}
 APP_USER=${APP_USER:-cowork}
 REPO=${UPDATE_REPO:-Lokyron/Cowork-Software-Cazalia}
 BRANCH=${UPDATE_BRANCH:-main}

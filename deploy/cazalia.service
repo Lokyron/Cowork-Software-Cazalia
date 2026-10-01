@@ -1,31 +1,31 @@
 # systemd unit pour l'API Express (LXC Debian).
 #
 # Installation :
-#   install -o root -g root -m 0644 deploy/lucie-cowork.service /etc/systemd/system/
-#   install -d -o root -g root -m 0750 /etc/lucie-cowork
-#   install -o root -g cowork -m 0640 .env.example /etc/lucie-cowork/lucie-cowork.env  # puis renseigner
-#   systemctl daemon-reload && systemctl enable --now lucie-cowork
+#   install -o root -g root -m 0644 deploy/cazalia.service /etc/systemd/system/
+#   install -d -o root -g root -m 0750 /etc/cazalia
+#   install -o root -g cowork -m 0640 .env.example /etc/cazalia/cazalia.env  # puis renseigner
+#   systemctl daemon-reload && systemctl enable --now cazalia
 #
 # DURCISSEMENT — trois principes :
 #  1. MOINDRE PRIVILÈGE : le service tourne sous un compte dédié non privilégié.
 #     Une exécution de code arbitraire ne donne alors pas root dans le conteneur.
 #         adduser --system --group --no-create-home --shell /usr/sbin/nologin cowork
-#         chown -R cowork:cowork /var/lib/lucie-cowork && chmod 750 /var/lib/lucie-cowork
-#         chmod 600 /var/lib/lucie-cowork/cowork.db*
+#         chown -R cowork:cowork /var/lib/cazalia && chmod 750 /var/lib/cazalia
+#         chmod 600 /var/lib/cazalia/cowork.db*
 #  2. SECRETS HORS UNITÉ : les valeurs sensibles vivent dans un EnvironmentFile
 #     en 0640 root:cowork, pas dans des `Environment=` lisibles par `systemctl cat`.
 #  3. SURFACE RÉDUITE : le reste des directives ci-dessous retire au process les
 #     capacités, les chemins et les appels système dont il n'a pas besoin.
 
 [Unit]
-Description=Cazalia (Lucie Cowork) — API
+Description=Cazalia — API
 After=network.target
 
 [Service]
 Type=simple
 User=cowork
 Group=cowork
-WorkingDirectory=/opt/lucie-cowork/server
+WorkingDirectory=/opt/cazalia/server
 ExecStart=/usr/bin/node src/index.js
 Restart=on-failure
 RestartSec=3
@@ -35,19 +35,19 @@ Environment=NODE_ENV=production
 Environment=PORT=3001
 Environment=HOST=127.0.0.1
 Environment=TRUST_PROXY=1
-Environment=DB_PATH=/var/lib/lucie-cowork/cowork.db
-Environment=GALLERY_DIR=/opt/lucie-cowork/web/gallery
+Environment=DB_PATH=/var/lib/cazalia/cowork.db
+Environment=GALLERY_DIR=/opt/cazalia/web/gallery
 Environment=REFUND_WINDOW_HOURS=24
 
 # Secrets : APP_SECRET, DEFAULT_USER_PASSWORD, UNIFI_API_KEY, SMTP_*…
-EnvironmentFile=/etc/lucie-cowork/lucie-cowork.env
+EnvironmentFile=/etc/cazalia/cazalia.env
 
 # ── Durcissement systemd (CIS / systemd-analyze security) ────────────────────
 # Aucune élévation de privilèges possible depuis ce process (setuid, capacités).
 NoNewPrivileges=yes
 # Système de fichiers en lecture seule, sauf les chemins explicitement ouverts.
 ProtectSystem=strict
-ReadWritePaths=/var/lib/lucie-cowork /opt/lucie-cowork/web/gallery
+ReadWritePaths=/var/lib/cazalia /opt/cazalia/web/gallery
 # /home, /root et /run/user invisibles ; /tmp privé au service.
 ProtectHome=yes
 PrivateTmp=yes
