@@ -107,7 +107,7 @@ cd web && npm run dev         # Front sur http://localhost:5173 (proxy /api → 
 Build de production du front :
 
 ```bash
-cd web && npm run build       # génère web/dist, servi par nginx
+cd web && npm run build       # génère web/dist (servi en prod par le conteneur ou nginx)
 ```
 
 ---
@@ -133,17 +133,35 @@ en production ils vivent dans un fichier d'environnement hors du dépôt.
 
 ## Déploiement
 
-Pas de Docker. Le principe : copier le dépôt sur le serveur, installer les
-dépendances, builder le front, puis servir `web/dist` par nginx et lancer l'API
-via systemd.
+### Docker (recommandé — portable)
 
-Le dossier [`deploy/`](deploy) fournit des modèles :
-- `cazalia.service` — unité systemd durcie (compte dédié non privilégié,
-  `ProtectSystem=strict`, capacités retirées…) ;
-- `nginx.conf` — vhost (fichiers statiques + proxy `/api`, limitation de débit) ;
-- `cowork-update.{sh,service,path}` — système de mise à jour in-app.
+L'image est publiée sur **GHCR** par l'intégration continue (`main` → `:stable`,
+`beta` → `:beta`). Sur n'importe quel hôte Docker :
 
-Les secrets sont fournis par un `EnvironmentFile` lu par le service, hors du dépôt.
+```bash
+# Dossiers de données — DOIVENT appartenir à l'uid 1000 (utilisateur 'node' du conteneur)
+install -d -o 1000 -g 1000 /opt/cazalia/data /opt/cazalia/gallery
+
+# Config (secrets hors image)
+cp server/.env.example /opt/cazalia/.env        # renseigner APP_SECRET, SMTP_*, UNIFI_*…
+cp docker-compose.prod.yml /opt/cazalia/
+
+# Démarrage (canal stable)
+cd /opt/cazalia && COWORK_CHANNEL=stable docker compose -f docker-compose.prod.yml up -d
+```
+
+Le TLS est assuré par un reverse proxy en amont, qui pointe sur `127.0.0.1:3001`.
+Runbook complet (CI, mise à jour in-app, migration des données) :
+[`deploy/DOCKER.md`](deploy/DOCKER.md).
+
+### systemd + nginx (alternative sans Docker)
+
+Copier le dépôt sur le serveur, installer les dépendances, builder le front
+(`web/dist` servi par nginx), lancer l'API via systemd. Modèles dans
+[`deploy/`](deploy) : `cazalia.service` (unité durcie : compte non privilégié,
+`ProtectSystem=strict`, capacités retirées…), `nginx.conf` (fichiers statiques +
+proxy `/api`, limitation de débit), `cowork-update.{sh,service,path}`
+(mise à jour in-app). Les secrets sont fournis par un `EnvironmentFile` hors dépôt.
 
 ---
 
@@ -154,20 +172,19 @@ L'administrateur peut installer une nouvelle version **depuis l'interface**
 (branche `beta`), avec **retour arrière automatique**.
 
 Principe de sécurité : **l'application n'écrit jamais son propre code.** Elle se
-contente de déposer un fichier de requête dans son dossier de données ; une unité
-systemd `cowork-update.path` (exécutée en **root**, hors de l'application) détecte
-ce fichier et lance l'updater, qui :
+contente de déposer un fichier de requête dans son dossier de données ; un service
+**root** sur l'hôte (hors de l'application) détecte ce fichier et effectue la mise
+à jour, selon le mode de déploiement :
 
-1. télécharge la branche du canal demandé (archive GitHub) ;
-2. installe les dépendances et **build le front** dans un dossier de staging ;
-3. **préserve les données** (galerie d'images, base) et **sauvegarde la base** ;
-4. permute le dossier applicatif de façon atomique et redémarre le service ;
-5. **restaure la version précédente** si la nouvelle ne démarre pas.
+- **Docker** : `docker compose pull` du tag du canal → recréation du conteneur →
+  health-check → **retour arrière au digest précédent** si le démarrage échoue.
+- **systemd** : téléchargement de la branche → build du front → permutation atomique
+  du dossier → redémarrage → **retour arrière** si le service ne démarre pas.
 
-Le fichier de requête ne transporte qu'un **nom de canal** (jamais un nom de
-branche) : le mapping canal → branche vit dans l'environnement du service root,
-donc la partie non privilégiée ne peut pas pointer l'updater vers une référence
-arbitraire.
+Dans les deux cas, le fichier de requête ne transporte qu'un **nom de canal**
+(jamais un nom de branche ni un tag arbitraire) : le mapping vit dans
+l'environnement du service root, donc la partie non privilégiée ne peut pas viser
+une référence arbitraire.
 
 ---
 
