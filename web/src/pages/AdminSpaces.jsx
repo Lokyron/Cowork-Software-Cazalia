@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
-import { api } from '../api.js';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { api, msg } from '../api.js';
+import { prepareImage } from '../lib/image.js';
 
-const EMPTY = { name: '', kind: 'zone', capacity: 8, exclusive: false, privatizable: false, credits_per_hour: 2, color: '#1C3155', description: '', amenities: '', active: true };
+const EMPTY = { name: '', kind: 'zone', capacity: 8, exclusive: false, privatizable: false, credits_per_hour: 2, color: '#1C3155', description: '', amenities: '', photo: null, active: true };
 
 export default function AdminSpaces() {
   const [spaces, setSpaces] = useState([]);
@@ -22,7 +23,7 @@ export default function AdminSpaces() {
 
   const startEdit = (s) => {
     setEditingId(s.id);
-    setForm({ name: s.name, kind: s.kind, capacity: s.capacity, exclusive: !!s.exclusive, privatizable: !!s.privatizable, credits_per_hour: s.credits_per_hour, color: s.color, description: s.description || '', amenities: s.amenities || '', active: !!s.active });
+    setForm({ name: s.name, kind: s.kind, capacity: s.capacity, exclusive: !!s.exclusive, privatizable: !!s.privatizable, credits_per_hour: s.credits_per_hour, color: s.color, description: s.description || '', amenities: s.amenities || '', photo: s.photo || null, active: !!s.active });
   };
   const reset = () => { setEditingId(null); setForm(EMPTY); };
 
@@ -92,6 +93,11 @@ export default function AdminSpaces() {
                 <input type="color" value={form.color} onChange={set('color')} style={{ height: 42, padding: 4 }} />
               </div>
             </div>
+            <SpacePhotoField
+              photo={form.photo}
+              onChange={(photo) => setForm((f) => ({ ...f, photo }))}
+              onError={(text) => setFeedback({ type: 'error', text })}
+            />
             <div className="field" style={{ marginTop: 14 }}>
               <label>Description (affichée sur la landing)</label>
               <textarea rows={3} value={form.description} onChange={set('description')} placeholder="Descriptif de l'espace…" />
@@ -129,6 +135,59 @@ export default function AdminSpaces() {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Champ « photo de l'espace » : aperçu, envoi (glisser-déposer ou sélection) et
+ * retrait. La photo est réduite dans le navigateur, envoyée à la bibliothèque de
+ * médias, et c'est son NOM DE FICHIER qui est enregistré avec l'espace — elle
+ * n'est donc pas perdue à la prochaine mise à jour de l'application.
+ */
+function SpacePhotoField({ photo, onChange, onError }) {
+  const [busy, setBusy] = useState(false);
+  const [over, setOver] = useState(false);
+  const input = useRef(null);
+
+  const send = async (file) => {
+    if (!file || !file.type?.startsWith('image/')) return;
+    setBusy(true);
+    try {
+      const { blob, name } = await prepareImage(file);
+      const up = await api.upload('/admin/media', blob, name);
+      // La photo n'est rattachée qu'à l'enregistrement du formulaire : on ne
+      // modifie pas l'espace dans le dos de l'utilisateur.
+      onChange(up.file);
+    } catch (err) { onError(msg(err.code)); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="field" style={{ marginTop: 14 }}>
+      <label>Photo (affichée sur la landing)</label>
+      <div className="space-photo-field">
+        {photo && <img src={`/api/media/${encodeURIComponent(photo)}`} alt="" className="space-photo-preview" />}
+        <div
+          className={`dropzone compact ${over ? 'over' : ''}`}
+          onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => { e.preventDefault(); setOver(false); if (!busy) send(e.dataTransfer.files?.[0]); }}
+          onClick={() => !busy && input.current?.click()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') input.current?.click(); }}
+        >
+          <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+            onChange={(e) => { send(e.target.files?.[0]); e.target.value = ''; }} />
+          <span>{busy ? 'Envoi…' : (photo ? 'Remplacer la photo' : 'Glissez une photo ici, ou cliquez')}</span>
+        </div>
+      </div>
+      {photo && (
+        <button type="button" className="link-danger" style={{ marginTop: 6 }} onClick={() => onChange(null)}>
+          Retirer la photo
+        </button>
+      )}
+      <small className="muted">Enregistrée avec l'espace. Sans photo, celle livrée avec l'application est utilisée.</small>
     </div>
   );
 }

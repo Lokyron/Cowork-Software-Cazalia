@@ -20,6 +20,7 @@ import { adminSetPassword, createResetToken } from '../lib/passwords.js';
 import { adminUpdateUser, adminCreateUser, deleteUserAccount } from '../lib/users.js';
 import { sendPasswordResetEmail, sendReservationNotification, sendBookingConfirmation } from '../lib/mailer.js';
 import { defaultSpaceContent } from '../lib/spaceContent.js';
+import { safeName } from '../lib/media.js';
 import { getDashboardStats } from '../lib/dashboard.js';
 import { securityEvent } from '../lib/audit.js';
 import {
@@ -50,8 +51,8 @@ adminRouter.get('/dashboard', (_req, res) => {
 
 // ── Espaces : CRUD (zones et salles, une seule table) ────────────────────────
 const insertSpace = db.prepare(
-  `INSERT INTO spaces (name, kind, capacity, exclusive, privatizable, credits_per_hour, color, description, amenities, active)
-   VALUES (@name, @kind, @capacity, @exclusive, @privatizable, @credits_per_hour, @color, @description, @amenities, @active)`
+  `INSERT INTO spaces (name, kind, capacity, exclusive, privatizable, credits_per_hour, color, description, amenities, photo, active)
+   VALUES (@name, @kind, @capacity, @exclusive, @privatizable, @credits_per_hour, @color, @description, @amenities, @photo, @active)`
 );
 
 adminRouter.get('/spaces', (_req, res) => {
@@ -76,6 +77,9 @@ adminRouter.post('/spaces', (req, res) => {
       color: b.color || '#1C3155',
       description: b.description != null ? String(b.description) : defaults.description,
       amenities: b.amenities != null ? String(b.amenities) : defaults.amenities,
+      // Nom de fichier réduit à un nom nu : la valeur ne sert ensuite qu'à
+      // construire une URL /api/media, jamais un chemin de système de fichiers.
+      photo: safeName(b.photo) || null,
       active: b.active === false ? 0 : 1,
     };
     if (!space.name) return res.status(400).json({ error: 'NOM_REQUIS' });
@@ -105,12 +109,13 @@ adminRouter.put('/spaces/:id', (req, res) => {
     color: b.color ?? existing.color,
     description: b.description != null ? String(b.description) : existing.description,
     amenities: b.amenities != null ? String(b.amenities) : existing.amenities,
+    photo: b.photo !== undefined ? (safeName(b.photo) || null) : (existing.photo ?? null),
     active: b.active != null ? (b.active ? 1 : 0) : existing.active,
   };
   db.prepare(
     `UPDATE spaces SET name=@name, kind=@kind, capacity=@capacity, exclusive=@exclusive, privatizable=@privatizable,
         credits_per_hour=@credits_per_hour, color=@color,
-        description=@description, amenities=@amenities, active=@active WHERE id=@id`
+        description=@description, amenities=@amenities, photo=@photo, active=@active WHERE id=@id`
   ).run({ ...next, id });
   res.json({ space: db.prepare(`SELECT * FROM spaces WHERE id = ?`).get(id) });
 });

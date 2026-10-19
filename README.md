@@ -32,6 +32,9 @@ Interface en français. Licence **MIT**.
   de mot de passe), gestion des prospects (+ export CSV).
 - Réglages et modèles d'e-mails transactionnels (serveur SMTP ou API Brevo),
   suivi de délivrabilité et plafond d'envois quotidien.
+- **Photos du site modifiables depuis l'administration** : carrousel (ajout,
+  suppression, ordre par glisser-déposer), bandeau d'accueil, photo de
+  présentation et photo de chaque espace.
 - **Mises à jour in-app** : installation d'une nouvelle version depuis l'interface,
   canaux *stable* / *bêta* et retour arrière automatique (voir plus bas).
 
@@ -69,6 +72,22 @@ rester corrects indépendamment du fuseau de la machine.
   Brevo **chiffrés au repos** (AES-256-GCM, clé `APP_SECRET`).
 - En-têtes de sécurité, garde same-origin, et journal d'événements de sécurité
   (sans e-mail en clair).
+
+### Photos du site
+Écran **Photos** de l'administration : les images de la page d'accueil se
+remplacent par glisser-déposer, sans toucher au code ni au serveur.
+
+- carrousel : ajout, suppression, et ordre d'affichage réordonnable à la souris ;
+- bandeau du haut et photo de présentation : un emplacement chacun, qui retombe
+  sur la photo livrée avec l'application s'il est vidé ;
+- photo par espace, réglée depuis l'écran **Espaces** (elle est rattachée à la
+  salle, non à sa position dans la liste).
+
+Les photos sont **réduites dans le navigateur** avant l'envoi (2000 px max) :
+pas de dépendance de traitement d'image côté serveur, et une page d'accueil qui
+reste légère. Le format est validé par la **signature binaire** du fichier, pas
+par son nom. Les fichiers vivent dans un dossier persistant (`GALLERY_DIR`,
+volume `/gallery` en Docker) : une mise à jour de l'application ne les efface pas.
 
 ### E-mails transactionnels
 Confirmation / modification de réservation, réinitialisation de mot de passe, etc.

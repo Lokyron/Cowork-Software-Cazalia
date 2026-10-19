@@ -20,6 +20,7 @@ import AdminMembers from './pages/AdminMembers.jsx';
 import AdminPlanning from './pages/AdminPlanning.jsx';
 import AdminProspects from './pages/AdminProspects.jsx';
 import AdminEmails from './pages/AdminEmails.jsx';
+import AdminPhotos from './pages/AdminPhotos.jsx';
 import AdminUpdate from './pages/AdminUpdate.jsx';
 
 // Barre de navigation de l'application (utilisateur connecté).
@@ -69,6 +70,7 @@ function Nav() {
               <NavLink to="/admin/membres">Membres</NavLink>
               <NavLink to="/admin/prospects">Prospects</NavLink>
               <NavLink to="/admin/emails">E-mails</NavLink>
+              <NavLink to="/admin/photos">Photos</NavLink>
               <NavLink to="/admin/maj">Mises à jour</NavLink>
             </>
           )}
@@ -147,6 +149,7 @@ export default function App() {
         <Route path="/admin/membres" element={<Guard admin><Shell><AdminMembers /></Shell></Guard>} />
         <Route path="/admin/prospects" element={<Guard admin><Shell><AdminProspects /></Shell></Guard>} />
         <Route path="/admin/emails" element={<Guard admin><Shell><AdminEmails /></Shell></Guard>} />
+        <Route path="/admin/photos" element={<Guard admin><Shell><AdminPhotos /></Shell></Guard>} />
         <Route path="/admin/maj" element={<Guard admin><Shell><AdminUpdate /></Shell></Guard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

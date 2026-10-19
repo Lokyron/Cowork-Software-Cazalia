@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS spaces (
   color            TEXT    DEFAULT '#1C3155',
   description      TEXT,                                   -- descriptif public (landing)
   amenities        TEXT,                                   -- prestations incluses, 1 par ligne
+  photo            TEXT,                                   -- nom de fichier dans le dossier des médias
   active           INTEGER NOT NULL DEFAULT 1,
   created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
 );

@@ -16,7 +16,7 @@ import { reservationsRouter } from './routes/reservations.js';
 import { cartRouter } from './routes/cart.js';
 import { walletRouter } from './routes/wallet.js';
 import { leadsRouter } from './routes/leads.js';
-import { galleryRouter } from './routes/gallery.js';
+import { mediaRouter, adminMediaRouter } from './routes/media.js';
 import { adminRouter } from './routes/admin.js';
 import { emailsRouter } from './routes/emails.js';
 import { webhooksRouter } from './routes/webhooks.js';
@@ -62,13 +62,14 @@ app.use('/api', reservationsRouter);
 app.use('/api', cartRouter);
 app.use('/api', walletRouter);
 app.use('/api', leadsRouter);
-app.use('/api', galleryRouter);
+app.use('/api', mediaRouter);
 // Webhooks entrants (fournisseur d'e-mail). Authentifiés par un jeton d'URL —
 // aucune session, aucun cookie : ces appels viennent d'un serveur tiers.
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/admin/update', updateRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/admin/email', emailsRouter);
+app.use('/api/admin/media', adminMediaRouter);
 
 // Toute route /api/ non reconnue répond en JSON : sans cela, la requête
 // retomberait sur le front statique et renverrait du HTML à un client d'API.

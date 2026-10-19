@@ -50,11 +50,17 @@ export default function Landing() {
   const navigate = useNavigate();
   const [spaces, setSpaces] = useState([]);
   const [gallery, setGallery] = useState([]); // photos du carrousel (dossier dédié)
+  // Photos réglées depuis l'administration. Tant qu'aucune n'est déposée, on
+  // garde celles livrées avec l'application : la page n'est jamais vide.
+  const [media, setMedia] = useState({ hero: null, presentation: null });
   const [openSpace, setOpenSpace] = useState(null); // { space, photoSrc } pour la modale
 
   useEffect(() => {
     api.get('/spaces').then((r) => setSpaces(r.spaces)).catch(() => {});
-    api.get('/gallery').then((r) => setGallery(r.images || [])).catch(() => {});
+    api.get('/media').then((r) => {
+      setGallery(r.carousel || []);
+      setMedia({ hero: r.hero || null, presentation: r.presentation || null });
+    }).catch(() => {});
   }, []);
 
   const goReserve = () => navigate(user ? '/reserver' : '/login');
@@ -65,7 +71,7 @@ export default function Landing() {
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section className="hero">
-        <Photo src="/images/hero.jpg" alt="Notre espace de co-working" className="hero-img" caption="Photo d'ambiance à venir" />
+        <Photo src={media.hero || '/images/hero.jpg'} alt="Notre espace de co-working" className="hero-img" caption="Photo d'ambiance à venir" />
         <div className="hero-overlay" />
         <div className="hero-content">
           <span className="eyebrow">Espace de co-working</span>
@@ -98,7 +104,7 @@ export default function Landing() {
               <li>Accès souple, à la carte ou au forfait</li>
             </ul>
           </div>
-          <Photo src="/images/presentation.jpg" alt="Intérieur de l'espace" className="split-photo" caption="Photo du lieu à venir" />
+          <Photo src={media.presentation || '/images/presentation.jpg'} alt="Intérieur de l'espace" className="split-photo" caption="Photo du lieu à venir" />
         </div>
       </section>
 
@@ -111,7 +117,9 @@ export default function Landing() {
         <div className="space-cards">
           {spaces.length === 0 && <p className="muted">Les espaces seront bientôt présentés ici.</p>}
           {spaces.map((s, i) => {
-            const photoSrc = `/images/espace-${i + 1}.jpg`;
+            const photoSrc = s.photo
+              ? `/api/media/${encodeURIComponent(s.photo)}`
+              : `/images/espace-${i + 1}.jpg`;
             return (
               <article
                 key={s.id}
@@ -152,7 +160,7 @@ export default function Landing() {
           <p className="muted" style={{ textAlign: 'center' }}>Les photos seront bientôt présentées ici.</p>
         ) : (
           <div className="carousel">
-            {/* Photos lues depuis le dossier dédié (API /gallery), dupliquées pour une boucle sans couture. */}
+            {/* Photos réglées dans l'admin (API /media), dupliquées pour une boucle sans couture. */}
             <div className="carousel-track">
               {[...gallery, ...gallery].map((src, i) => (
                 <Photo key={i} src={src} alt={`Photo ${(i % gallery.length) + 1}`} className="carousel-item" caption="Photo" />

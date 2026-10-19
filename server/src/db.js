@@ -101,6 +101,8 @@ db.exec(`CREATE INDEX IF NOT EXISTS idx_email_log_message ON email_log(message_i
 const spaceCols = db.prepare(`PRAGMA table_info(spaces)`).all().map((c) => c.name);
 if (!spaceCols.includes('description')) db.exec(`ALTER TABLE spaces ADD COLUMN description TEXT`);
 if (!spaceCols.includes('amenities')) db.exec(`ALTER TABLE spaces ADD COLUMN amenities TEXT`);
+// Photo de l'espace : nom de fichier dans le dossier des médias (cf. lib/media.js).
+if (!spaceCols.includes('photo')) db.exec(`ALTER TABLE spaces ADD COLUMN photo TEXT`);
 
 // Typologie de réservation : exclusif (bloque toute la salle, tarif forfait) vs
 // inventaire de places (tarif par place) + option de privatisation.

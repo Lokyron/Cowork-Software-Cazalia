@@ -28,7 +28,7 @@ spacesRouter.get('/config', (_req, res) => {
 spacesRouter.get('/spaces', (_req, res) => {
   const rows = db
     .prepare(
-      `SELECT id, name, kind, capacity, exclusive, privatizable, credits_per_hour, color, description, amenities
+      `SELECT id, name, kind, capacity, exclusive, privatizable, credits_per_hour, color, description, amenities, photo
          FROM spaces WHERE active = 1 ORDER BY kind, name`
     )
     .all();

@@ -1138,3 +1138,51 @@ h2.big { font-size: clamp(24px, 3.4vw, 36px); letter-spacing: -0.8px; margin: 10
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 480px) { .admin-update .kv { grid-template-columns: 1fr; gap: 2px 0; } .admin-update .kv dd { margin-bottom: 8px; } }
+
+/* ── Écran Photos : dépôt de fichiers, vignettes réordonnables ────────────── */
+.dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 22px 16px; text-align: center; cursor: pointer;
+  border: 2px dashed var(--line); border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.4); color: var(--muted);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.dropzone:hover, .dropzone:focus-visible { border-color: var(--accent); color: var(--ink); }
+.dropzone.over { border-color: var(--accent); background: rgba(59, 130, 246, 0.08); color: var(--ink); }
+.dropzone.busy { cursor: progress; opacity: 0.7; }
+.dropzone small { font-size: 12px; }
+.dropzone.compact { padding: 12px; min-height: 56px; }
+.dropzone.compact small { display: none; }
+
+.photo-grid {
+  display: grid; gap: 12px; margin-top: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+.photo-tile {
+  margin: 0; padding: 8px; border-radius: 14px;
+  background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--glass-inset);
+}
+.photo-tile img, .photo-tile .photo-ph {
+  width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; display: block;
+}
+/* Le curseur de déplacement signale que la vignette est réordonnable. */
+.photo-tile[draggable="true"] { cursor: grab; }
+.photo-tile.dragging { opacity: 0.45; }
+.photo-tile.drop-target { outline: 2px solid var(--accent); outline-offset: 2px; }
+.photo-tile figcaption {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 6px; font-size: 12px;
+}
+.link-danger {
+  background: none; border: 0; padding: 0; width: auto;
+  color: var(--red); font-size: 12px; cursor: pointer; text-decoration: underline;
+}
+.link-danger:disabled { opacity: 0.5; cursor: default; }
+
+.photo-slot { display: grid; gap: 12px; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+.photo-slot img { width: 100%; max-height: 240px; object-fit: cover; border-radius: 14px; display: block; }
+@media (max-width: 680px) { .photo-slot { grid-template-columns: 1fr; } }
+
+.space-photo-field { display: grid; gap: 10px; grid-template-columns: 120px minmax(0, 1fr); align-items: center; }
+.space-photo-preview { width: 120px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; display: block; }
+@media (max-width: 520px) { .space-photo-field { grid-template-columns: 1fr; } }
