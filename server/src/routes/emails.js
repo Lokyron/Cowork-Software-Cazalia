@@ -1,13 +1,18 @@
-// Administration du module e-mail : configuration SMTP, consignes, éditeur de
-// templates, prévisualisation, envoi manuel (ciblé) et journal des envois.
+// Administration du module e-mail : choix du fournisseur (SMTP ou Brevo) et de
+// ses secrets, plafond quotidien, webhook de délivrabilité, consignes, éditeur
+// de templates, prévisualisation, envoi manuel (ciblé) et journal des envois.
 
 import { Router } from 'express';
 import { db } from '../db.js';
 import { config } from '../config.js';
 import { requireAdmin, sendBusinessError } from '../middleware.js';
-import { getSmtpPublic, setSmtp, getArrival, setArrival } from '../lib/settings.js';
+import {
+  getSmtpPublic, setSmtp, getArrival, setArrival,
+  getMail, setMail, getBrevo, getBrevoPublic, setBrevo, rotateBrevoWebhookToken,
+} from '../lib/settings.js';
 import { TEMPLATE_VARIABLES } from '../lib/emailTemplates.js';
-import { renderTemplate, renderRaw, sendTest, sendToUser, sendMail } from '../lib/mailer.js';
+import { renderTemplate, renderRaw, sendTest, sendToUser, sendMail, getQuota } from '../lib/mailer.js';
+import { declareWebhook } from '../lib/brevo.js';
 
 export const emailsRouter = Router();
 
@@ -38,31 +43,56 @@ function sampleVars() {
   };
 }
 
-// ── Réglages (SMTP + consignes) ──────────────────────────────────────────────
+// ── Réglages (fournisseur + consignes) ───────────────────────────────────────
+/** Vue des réglages d'envoi, telle que renvoyée à l'interface (sans secret). */
+function mailSettings() {
+  const m = getMail();
+  return { provider: m.provider, daily_limit: m.dailyLimit, marketing_reserve: m.marketingReserve };
+}
+
 /**
- * GET /api/admin/email/settings — réglages SMTP et consignes d'arrivée.
- * Le mot de passe SMTP n'est JAMAIS renvoyé : seul un booléen `has_pass`
- * indique qu'un secret est enregistré (`getSmtpPublic`).
+ * GET /api/admin/email/settings — fournisseur, secrets (présence seulement),
+ * quota du jour, réglages SMTP et consignes d'arrivée.
  *
- * @returns 200 `{smtp, arrival, variables}`
+ * Aucun secret ne sort : ni le mot de passe SMTP ni la clé d'API Brevo ne sont
+ * renvoyés — seuls des booléens `has_pass` / `has_api_key` en signalent
+ * l'existence (CWE-200).
+ *
+ * @returns 200 `{mail, smtp, brevo, quota, arrival, variables}`
  */
 emailsRouter.get('/settings', (_req, res) => {
-  res.json({ smtp: getSmtpPublic(), arrival: getArrival(), variables: TEMPLATE_VARIABLES });
+  res.json({
+    mail: mailSettings(),
+    smtp: getSmtpPublic(),
+    brevo: getBrevoPublic(),
+    quota: getQuota(),
+    arrival: getArrival(),
+    variables: TEMPLATE_VARIABLES,
+  });
 });
 
 /**
- * PUT /api/admin/email/settings — met à jour SMTP et/ou consignes d'arrivée.
- * Un mot de passe soumis est chiffré au repos (AES-256-GCM) avant stockage ;
- * un champ vide conserve le secret existant.
+ * PUT /api/admin/email/settings — met à jour fournisseur, SMTP, Brevo et/ou
+ * consignes d'arrivée.
  *
- * @returns 200 `{ok, smtp, arrival}`
+ * Les secrets soumis sont chiffrés au repos (AES-256-GCM) avant stockage ; un
+ * champ vide conserve le secret existant (l'interface ne l'a jamais reçu, elle
+ * ne peut donc pas le renvoyer).
+ *
+ * @returns 200 `{ok, mail, smtp, brevo, quota, arrival}`
  */
 emailsRouter.put('/settings', (req, res) => {
   try {
-    const out = {};
-    if (req.body?.smtp) out.smtp = setSmtp(req.body.smtp);
-    if (req.body?.arrival) out.arrival = setArrival(req.body.arrival);
-    res.json({ ok: true, smtp: out.smtp ?? getSmtpPublic(), arrival: out.arrival ?? getArrival() });
+    const b = req.body || {};
+    if (b.mail) setMail(b.mail);
+    if (b.smtp) setSmtp(b.smtp);
+    if (b.brevo) setBrevo(b.brevo);
+    if (b.arrival) setArrival(b.arrival);
+    res.json({
+      ok: true,
+      mail: mailSettings(), smtp: getSmtpPublic(), brevo: getBrevoPublic(),
+      quota: getQuota(), arrival: getArrival(),
+    });
   } catch (err) { sendBusinessError(res, err); }
 });
 
@@ -76,6 +106,45 @@ emailsRouter.put('/settings', (req, res) => {
 emailsRouter.post('/test', async (req, res) => {
   const r = await sendTest(req.user.email);
   res.json({ ok: r.sent, ...r, to: req.user.email });
+});
+
+/**
+ * POST /api/admin/email/brevo/webhook — (re)génère le jeton du webhook de
+ * délivrabilité et tente de le déclarer chez Brevo.
+ *
+ * L'URL complète, jeton inclus, n'est renvoyée QU'ICI et une seule fois :
+ * ensuite, seule l'existence du jeton est consultable. Régénérer invalide
+ * immédiatement l'URL précédente.
+ *
+ * La déclaration automatique échoue si l'URL publique n'est pas joignable
+ * depuis Internet (déploiement local, `PUBLIC_BASE_URL` non défini) : l'URL est
+ * alors renvoyée avec un avertissement, à recopier à la main dans Brevo.
+ *
+ * @returns 200 `{ok, url, declared, warning?}` · 400 `BREVO_NON_CONFIGURE`
+ */
+emailsRouter.post('/brevo/webhook', async (req, res) => {
+  try {
+    const { apiKey } = getBrevo();
+    if (!apiKey) return res.status(400).json({ error: 'BREVO_NON_CONFIGURE' });
+
+    const token = rotateBrevoWebhookToken();
+    const url = `${baseUrl()}/api/webhooks/brevo/${token}`;
+    // Une URL locale ou laissée au gabarit d'exemple ne sera jamais appelée par
+    // Brevo : on le dit tout de suite plutôt que de laisser croire au succès.
+    const host = (() => { try { return new URL(url).hostname; } catch { return ''; } })();
+    const unreachable = !host || host === 'localhost' || host.endsWith('.local')
+      || host.endsWith('example.com') || /^\d+\.\d+\.\d+\.\d+$/.test(host);
+
+    if (unreachable) {
+      return res.json({ ok: true, url, declared: false, warning: 'URL_NON_PUBLIQUE' });
+    }
+    try {
+      const r = await declareWebhook({ apiKey, url });
+      return res.json({ ok: true, url, declared: true, webhook_id: r.id });
+    } catch (err) {
+      return res.json({ ok: true, url, declared: false, warning: 'DECLARATION_ECHOUEE', error: err.message });
+    }
+  } catch (err) { sendBusinessError(res, err); }
 });
 
 // ── Templates ────────────────────────────────────────────────────────────────
@@ -160,7 +229,7 @@ emailsRouter.post('/send', async (req, res) => {
     if (!b.code && !(b.subject && b.body_html)) return res.status(400).json({ error: 'CONTENU_REQUIS' });
 
     // Rendu par utilisateur (vars personnalisées : prénom, lien espace) via sendToUser.
-    let sent = 0, skipped = 0, failed = 0;
+    let sent = 0, skipped = 0, failed = 0, blocked = 0;
     for (const userId of ids) {
       let r;
       if (b.code) {
@@ -169,11 +238,22 @@ emailsRouter.post('/send', async (req, res) => {
         // Sujet/corps ad hoc : on les enregistre temporairement ? Non → rendu direct.
         r = await sendCustomToUser(userId, b.subject, b.body_html);
       }
-      if (r.sent) sent++; else if (r.reason === 'OPT_OUT') skipped++; else failed++;
+      if (r.sent) sent++;
+      else if (r.reason === 'OPT_OUT') skipped++;
+      else if (QUOTA_REASONS.has(r.reason)) {
+        // Plafond du jour atteint : les destinataires suivants seraient refusés
+        // de la même façon. On arrête et on rend compte du reste à envoyer.
+        blocked = ids.length - sent - skipped - failed;
+        break;
+      } else failed++;
     }
-    res.json({ ok: true, total: ids.length, sent, skipped, failed });
+    res.json({ ok: true, total: ids.length, sent, skipped, failed, blocked, quota: getQuota() });
   } catch (err) { sendBusinessError(res, err); }
 });
+
+// Refus liés au plafond quotidien : ils interrompent un envoi de masse au lieu
+// d'être comptés en échecs individuels (cf. POST /send).
+const QUOTA_REASONS = new Set(['QUOTA_JOURNALIER_ATTEINT', 'QUOTA_RESERVE_TRANSACTIONNEL']);
 
 const getUser = db.prepare(`SELECT id, email, display_name, first_name, notify_marketing FROM users WHERE id = ?`);
 /**
@@ -190,17 +270,27 @@ async function sendCustomToUser(userId, subject, bodyHtml) {
   if (!u.notify_marketing) return { sent: false, reason: 'OPT_OUT' };
   const vars = { client_name: u.display_name, first_name: u.first_name || u.display_name, dashboard_url: `${baseUrl()}/mon-espace`, site_name: 'Cazalia' };
   const rendered = renderRaw(subject, bodyHtml, vars);
-  return sendMail({ to: u.email, toUserId: u.id, subject: rendered.subject, html: rendered.html, templateCode: 'manual' });
+  return sendMail({ to: u.email, toUserId: u.id, subject: rendered.subject, html: rendered.html, templateCode: 'manual', marketing: true });
 }
 
 // ── Journal ──────────────────────────────────────────────────────────────────
 /**
  * GET /api/admin/email/log — 100 derniers envois.
  * Le journal ne contient ni corps de message ni pièce jointe : uniquement le
- * destinataire, le gabarit, le sujet et le statut.
+ * destinataire, le gabarit, le sujet, le fournisseur et le statut — ce dernier
+ * étant enrichi par les webhooks de délivrabilité (remis, rejeté, spam…).
  *
- * @returns 200 `{log}`
+ * L'identifiant de message du fournisseur n'est PAS exposé : il ne sert qu'au
+ * recollage interne des événements.
+ *
+ * @returns 200 `{log, quota}`
  */
 emailsRouter.get('/log', (_req, res) => {
-  res.json({ log: db.prepare(`SELECT id, to_email, template_code, subject, status, error, created_at FROM email_log ORDER BY id DESC LIMIT 100`).all() });
+  res.json({
+    log: db.prepare(
+      `SELECT id, to_email, template_code, subject, status, error, provider, updated_at, created_at
+         FROM email_log ORDER BY id DESC LIMIT 100`
+    ).all(),
+    quota: getQuota(),
+  });
 });

@@ -1,15 +1,21 @@
-// Module d'envoi d'e-mails : transport SMTP (nodemailer) construit depuis les réglages
-// (app_settings, mot de passe déchiffré), moteur de templates {{variable}}, layout
-// responsive, journalisation (email_log) et respect des préférences de notification.
+// Module d'envoi d'e-mails : deux fournisseurs interchangeables (relais SMTP via
+// nodemailer, ou API HTTP Brevo), moteur de templates {{variable}}, layout
+// responsive, plafond d'envois quotidien, journalisation (email_log) et respect
+// des préférences de notification.
 //
-// DÉGRADABLE : un échec SMTP ne lève jamais vers l'appelant métier (réservation, etc.).
+// Le choix du fournisseur se fait dans /admin/emails ; TOUT passe par `sendMail`,
+// unique point de sortie — c'est là que se branchent le quota et le journal.
+//
+// DÉGRADABLE : un échec d'envoi ne lève jamais vers l'appelant métier (réservation, etc.).
 
 import nodemailer from 'nodemailer';
 import { db } from '../db.js';
 import { config } from '../config.js';
-import { getSmtp, getArrival } from './settings.js';
+import { getSmtp, getArrival, getMail, getBrevo, getSender } from './settings.js';
 import { wrapHtml, voucherBox } from './emailTemplates.js';
 import { escapeHtml, headerSafe } from './html.js';
+import { parisDayStartUtc } from './time.js';
+import * as brevo from './brevo.js';
 
 const PARIS = 'Europe/Paris';
 const dateFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: PARIS, weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -23,7 +29,13 @@ const baseUrl = () => (config.publicBaseUrl || 'https://cowork.example.com').rep
 const logoUrl = () => `${baseUrl()}/images/logo-email.png`;
 
 // ── Transport ────────────────────────────────────────────────────────────────
+/**
+ * Indique si le fournisseur sélectionné est exploitable.
+ * @returns {boolean}
+ */
 export function isMailConfigured() {
+  const { provider } = getMail();
+  if (provider === 'brevo') return Boolean(getBrevo().configured && getSender().fromEmail);
   return getSmtp().configured;
 }
 
@@ -38,7 +50,7 @@ function buildTransport() {
 }
 
 function fromHeader() {
-  const s = getSmtp();
+  const s = getSender();
   return s.fromName ? `${s.fromName} <${s.fromEmail}>` : s.fromEmail;
 }
 
@@ -126,55 +138,163 @@ export function renderRaw(subject, bodyHtml, vars = {}) {
 
 // ── Journalisation ───────────────────────────────────────────────────────────
 const logStmt = db.prepare(
-  `INSERT INTO email_log (to_email, to_user_id, template_code, subject, status, error)
-   VALUES (@to_email, @to_user_id, @template_code, @subject, @status, @error)`
+  `INSERT INTO email_log (to_email, to_user_id, template_code, subject, status, error, provider, message_id)
+   VALUES (@to_email, @to_user_id, @template_code, @subject, @status, @error, @provider, @message_id)`
 );
-const logEmail = (row) => { try { logStmt.run({ to_user_id: null, template_code: null, subject: null, error: null, ...row }); } catch { /* ignore */ } };
+const logEmail = (row) => {
+  try {
+    logStmt.run({ to_user_id: null, template_code: null, subject: null, error: null, provider: null, message_id: null, ...row });
+  } catch { /* ignore */ }
+};
+
+// ── Plafond d'envois quotidien ───────────────────────────────────────────────
+// Motivation : l'offre gratuite Brevo plafonne à 300 e-mails par jour. Sans
+// garde-fou, une campagne de 300 messages épuiserait le quota et le PREMIER
+// client à demander une réinitialisation de mot de passe se retrouverait bloqué
+// dehors, sans trace visible. On réserve donc une part du plafond aux messages
+// non commerciaux, et on refuse les envois de masse avant d'atteindre le mur.
+const countSentTodayStmt = db.prepare(
+  // 'skipped' n'a jamais quitté l'application ; 'failed' n'a pas été accepté par
+  // le fournisseur : ni l'un ni l'autre ne consomme le quota.
+  `SELECT COUNT(*) AS n FROM email_log WHERE created_at >= ? AND status NOT IN ('skipped', 'failed')`
+);
+
+/**
+ * Classe un message pour l'application du plafond.
+ * `password_reset` est « critique » : il doit partir même quand le quota du jour
+ * est entamé, sous peine de verrouiller un client hors de son compte.
+ *
+ * @param {string | null} templateCode Code du gabarit.
+ * @param {boolean} marketing Envoi commercial (campagne, envoi manuel de masse).
+ * @returns {'critical' | 'marketing' | 'transactional'}
+ */
+function mailKind(templateCode, marketing) {
+  if (templateCode === 'password_reset') return 'critical';
+  if (marketing || templateCode === 'manual') return 'marketing';
+  return 'transactional';
+}
+
+/**
+ * État du quota du jour (jour civil de Paris).
+ *
+ * @returns {{provider: string, dailyLimit: number, marketingReserve: number,
+ *            sentToday: number, remaining: number | null, marketingRemaining: number | null}}
+ *          `remaining` vaut `null` quand aucun plafond n'est fixé.
+ */
+export function getQuota() {
+  const { provider, dailyLimit, marketingReserve } = getMail();
+  const sentToday = countSentTodayStmt.get(parisDayStartUtc()).n;
+  return {
+    provider, dailyLimit, marketingReserve, sentToday,
+    remaining: dailyLimit ? Math.max(0, dailyLimit - sentToday) : null,
+    marketingRemaining: dailyLimit ? Math.max(0, dailyLimit - marketingReserve - sentToday) : null,
+  };
+}
+
+/**
+ * Vérifie le plafond avant un envoi.
+ *
+ * @param {'critical' | 'marketing' | 'transactional'} kind Nature du message.
+ * @returns {string | null} Code de refus, ou `null` si l'envoi est autorisé.
+ */
+function quotaRefusal(kind) {
+  const { dailyLimit, marketingReserve, sentToday } = getQuota();
+  if (!dailyLimit) return null;
+  if (sentToday >= dailyLimit) return 'QUOTA_JOURNALIER_ATTEINT';
+  if (kind === 'marketing' && sentToday >= dailyLimit - marketingReserve) return 'QUOTA_RESERVE_TRANSACTIONNEL';
+  return null;
+}
 
 /**
  * Envoi bas niveau d'un message déjà rendu, avec journalisation systématique.
- * Ne lève jamais : un incident SMTP ne doit pas faire échouer une réservation.
+ *
+ * Unique point de sortie des e-mails : le plafond quotidien, le choix du
+ * fournisseur et le journal sont appliqués ici, pour tous les appelants.
+ * Ne lève jamais : un incident d'envoi ne doit pas faire échouer une réservation.
  *
  * @param {object} params
  * @param {string} params.to Destinataire.
  * @param {number | null} [params.toUserId] Utilisateur associé (journal).
  * @param {string} params.subject Sujet rendu.
  * @param {string} params.html Corps HTML rendu.
- * @param {string | null} [params.templateCode] Code du gabarit (journal).
- * @returns {Promise<{sent: boolean, reason?: string, error?: string}>}
+ * @param {string | null} [params.templateCode] Code du gabarit (journal, étiquette Brevo).
+ * @param {boolean} [params.marketing] Envoi commercial : soumis à la réserve de quota.
+ * @returns {Promise<{sent: boolean, reason?: string, error?: string, messageId?: string | null}>}
  */
-export async function sendMail({ to, toUserId = null, subject, html, templateCode = null }) {
-  const transport = buildTransport();
-  if (!transport) {
-    console.log(`[mailer:STUB] SMTP non configuré — « ${subject} » NON envoyé à ${to}`);
-    logEmail({ to_email: to, to_user_id: toUserId, template_code: templateCode, subject, status: 'skipped', error: 'SMTP_NON_CONFIGURE' });
-    return { sent: false, reason: 'SMTP_NON_CONFIGURE' };
+export async function sendMail({ to, toUserId = null, subject, html, templateCode = null, marketing = false }) {
+  const { provider } = getMail();
+  const base = { to_email: to, to_user_id: toUserId, template_code: templateCode, subject, provider };
+
+  if (!isMailConfigured()) {
+    const reason = provider === 'brevo' ? 'BREVO_NON_CONFIGURE' : 'SMTP_NON_CONFIGURE';
+    console.log(`[mailer:STUB] ${provider} non configuré — « ${subject} » NON envoyé à ${to}`);
+    logEmail({ ...base, status: 'skipped', error: reason });
+    return { sent: false, reason };
   }
+
+  const refusal = quotaRefusal(mailKind(templateCode, marketing));
+  if (refusal) {
+    console.warn(`[mailer] plafond du jour — « ${subject} » NON envoyé à ${to} (${refusal})`);
+    logEmail({ ...base, status: 'skipped', error: refusal });
+    return { sent: false, reason: refusal };
+  }
+
   try {
-    await transport.sendMail({ from: fromHeader(), to, subject, html });
-    logEmail({ to_email: to, to_user_id: toUserId, template_code: templateCode, subject, status: 'sent' });
-    return { sent: true };
+    let messageId = null;
+    if (provider === 'brevo') {
+      const sender = getSender();
+      const out = await brevo.sendEmail({
+        apiKey: getBrevo().apiKey,
+        sender: { name: sender.fromName, email: sender.fromEmail },
+        to, subject, html, tag: templateCode,
+      });
+      messageId = out.messageId;
+    } else {
+      const info = await buildTransport().sendMail({ from: fromHeader(), to, subject, html });
+      messageId = info?.messageId ? String(info.messageId).replace(/^<|>$/g, '') : null;
+    }
+    logEmail({ ...base, status: 'sent', message_id: messageId });
+    return { sent: true, messageId };
   } catch (err) {
-    console.warn(`[mailer] échec envoi à ${to} : ${err.message}`);
-    logEmail({ to_email: to, to_user_id: toUserId, template_code: templateCode, subject, status: 'failed', error: err.message });
+    console.warn(`[mailer] échec envoi à ${to} via ${provider} : ${err.message}`);
+    logEmail({ ...base, status: 'failed', error: err.message });
     return { sent: false, reason: 'ENVOI_ECHOUE', error: err.message };
   }
 }
 
-// Test de connexion : envoie un e-mail immédiat à l'admin.
+/**
+ * Test de configuration : vérifie l'accès au fournisseur, puis envoie un e-mail
+ * à l'administrateur. La vérification précède l'envoi pour distinguer « mauvais
+ * identifiants » (diagnostic immédiat) de « message refusé » (domaine non
+ * authentifié, destinataire invalide).
+ *
+ * @param {string} toEmail Adresse de l'administrateur connecté.
+ * @returns {Promise<{sent: boolean, reason?: string, error?: string, account?: string}>}
+ */
 export async function sendTest(toEmail) {
-  const transport = buildTransport();
-  if (!transport) return { sent: false, reason: 'SMTP_NON_CONFIGURE' };
-  const { subject, html } = renderRaw('Test SMTP Cazalia ✅',
-    `<h1 style="font-size:20px;margin:0 0 12px;">Configuration SMTP opérationnelle</h1>
+  const { provider } = getMail();
+  if (!isMailConfigured()) {
+    return { sent: false, reason: provider === 'brevo' ? 'BREVO_NON_CONFIGURE' : 'SMTP_NON_CONFIGURE' };
+  }
+  const label = provider === 'brevo' ? 'Brevo' : 'SMTP';
+  const { subject, html } = renderRaw(`Test ${label} Cazalia ✅`,
+    `<h1 style="font-size:20px;margin:0 0 12px;">Envoi ${label} opérationnel</h1>
      <p style="line-height:1.6;margin:0;">Cet e-mail confirme que l'envoi depuis {{site_name}} fonctionne.</p>`, {});
+  let account = null;
   try {
-    await transport.verify();
-    return await sendMail({ to: toEmail, subject, html, templateCode: 'smtp_test' });
+    if (provider === 'brevo') {
+      // Appel de lecture : il valide la clé sans entamer le quota du jour.
+      const info = await brevo.getAccount(getBrevo().apiKey);
+      account = info?.email || null;
+    } else {
+      await buildTransport().verify();
+    }
   } catch (err) {
-    logEmail({ to_email: toEmail, subject, status: 'failed', error: err.message, template_code: 'smtp_test' });
+    logEmail({ to_email: toEmail, subject, status: 'failed', error: err.message, template_code: 'mail_test', provider });
     return { sent: false, reason: 'CONNEXION_ECHOUEE', error: err.message };
   }
+  const r = await sendMail({ to: toEmail, subject, html, templateCode: 'mail_test' });
+  return { ...r, account };
 }
 
 // ── Envois orientés utilisateur (préférences + vars) ─────────────────────────
@@ -197,7 +317,7 @@ export async function sendToUser({ userId, code, vars = {}, marketing = false })
   const merged = { client_name: user.display_name, first_name: user.first_name || user.display_name, dashboard_url: `${baseUrl()}/mon-espace`, ...vars };
   const rendered = renderTemplate(code, merged);
   if (!rendered) return { sent: false, reason: 'TEMPLATE_INTROUVABLE' };
-  return sendMail({ to: user.email, toUserId: user.id, subject: rendered.subject, html: rendered.html, templateCode: code });
+  return sendMail({ to: user.email, toUserId: user.id, subject: rendered.subject, html: rendered.html, templateCode: code, marketing });
 }
 
 // ── Helpers réservation (chargent la résa + composent les variables) ─────────

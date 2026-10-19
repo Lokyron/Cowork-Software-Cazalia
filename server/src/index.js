@@ -19,6 +19,7 @@ import { leadsRouter } from './routes/leads.js';
 import { galleryRouter } from './routes/gallery.js';
 import { adminRouter } from './routes/admin.js';
 import { emailsRouter } from './routes/emails.js';
+import { webhooksRouter } from './routes/webhooks.js';
 import { updateRouter } from './routes/update.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -62,6 +63,9 @@ app.use('/api', cartRouter);
 app.use('/api', walletRouter);
 app.use('/api', leadsRouter);
 app.use('/api', galleryRouter);
+// Webhooks entrants (fournisseur d'e-mail). Authentifiés par un jeton d'URL —
+// aucune session, aucun cookie : ces appels viennent d'un serveur tiers.
+app.use('/api/webhooks', webhooksRouter);
 app.use('/api/admin/update', updateRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/admin/email', emailsRouter);

@@ -90,6 +90,14 @@ if (!txCols.includes('amount_eur_cents')) {
   db.exec(`ALTER TABLE credit_transactions ADD COLUMN amount_eur_cents INTEGER`);
 }
 
+// Journal des e-mails : traçabilité du fournisseur et recollage des événements
+// de délivrabilité reçus par webhook (cf. routes/webhooks.js).
+const emailLogCols = db.prepare(`PRAGMA table_info(email_log)`).all().map((c) => c.name);
+if (!emailLogCols.includes('provider')) db.exec(`ALTER TABLE email_log ADD COLUMN provider TEXT`);
+if (!emailLogCols.includes('message_id')) db.exec(`ALTER TABLE email_log ADD COLUMN message_id TEXT`);
+if (!emailLogCols.includes('updated_at')) db.exec(`ALTER TABLE email_log ADD COLUMN updated_at TEXT`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_email_log_message ON email_log(message_id)`);
+
 const spaceCols = db.prepare(`PRAGMA table_info(spaces)`).all().map((c) => c.name);
 if (!spaceCols.includes('description')) db.exec(`ALTER TABLE spaces ADD COLUMN description TEXT`);
 if (!spaceCols.includes('amenities')) db.exec(`ALTER TABLE spaces ADD COLUMN amenities TEXT`);

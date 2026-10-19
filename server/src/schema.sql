@@ -125,11 +125,18 @@ CREATE TABLE IF NOT EXISTS email_log (
   to_user_id    INTEGER REFERENCES users(id),
   template_code TEXT,
   subject       TEXT,
-  status        TEXT    NOT NULL,                         -- 'sent' | 'failed' | 'skipped'
+  -- Statut à l'envoi : 'sent' | 'failed' | 'skipped'
+  -- Enrichi ensuite par les webhooks de délivrabilité du fournisseur :
+  -- 'delivered' | 'bounced' | 'blocked' | 'spam' | 'deferred' | 'unsubscribed'
+  status        TEXT    NOT NULL,
   error         TEXT,
+  provider      TEXT,                                     -- 'smtp' | 'brevo'
+  message_id    TEXT,                                     -- identifiant fournisseur (recollage des webhooks)
+  updated_at    TEXT,                                     -- dernier événement de délivrabilité reçu
   created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_email_log_created ON email_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_email_log_message ON email_log(message_id);
 
 -- Panier de réservation : verrous temporaires (10 min) posés en attendant le paiement.
 --   user_id    = bénéficiaire de la réservation (client)

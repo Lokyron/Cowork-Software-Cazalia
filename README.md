@@ -30,7 +30,8 @@ Interface en français. Licence **MIT**.
 - Tableau de bord, planning global, gestion des espaces.
 - Gestion des membres (création de compte, recharge de crédits, réinitialisation
   de mot de passe), gestion des prospects (+ export CSV).
-- Réglages et modèles d'e-mails transactionnels (SMTP).
+- Réglages et modèles d'e-mails transactionnels (serveur SMTP ou API Brevo),
+  suivi de délivrabilité et plafond d'envois quotidien.
 - **Mises à jour in-app** : installation d'une nouvelle version depuis l'interface,
   canaux *stable* / *bêta* et retour arrière automatique (voir plus bas).
 
@@ -64,15 +65,29 @@ rester corrects indépendamment du fuseau de la machine.
 - Mots de passe hachés en **scrypt**, **sessions côté serveur** (cookie `httpOnly`,
   `SameSite=Lax`), throttling anti-brute-force sur le login.
 - Deux rôles : `member` et `admin` ; le rôle est relu en base à chaque requête.
-- Jetons de réinitialisation hachés, secrets TOTP et SMTP **chiffrés au repos**
-  (AES-256-GCM, clé `APP_SECRET`).
+- Jetons de réinitialisation hachés, secrets TOTP, mot de passe SMTP et clé d'API
+  Brevo **chiffrés au repos** (AES-256-GCM, clé `APP_SECRET`).
 - En-têtes de sécurité, garde same-origin, et journal d'événements de sécurité
   (sans e-mail en clair).
 
 ### E-mails transactionnels
 Confirmation / modification de réservation, réinitialisation de mot de passe, etc.
-SMTP configurable depuis l'admin ; modèles HTML responsive avec interpolation
-`{{variable}}` ; mot de passe SMTP chiffré au repos.
+Modèles HTML responsive avec interpolation `{{variable}}`, éditables depuis l'admin.
+
+Deux fournisseurs d'envoi au choix dans `/admin/emails`, interchangeables sans
+redéploiement :
+
+- **Serveur SMTP** (nodemailer) — pour un relais maison ou celui d'un hébergeur ;
+- **Brevo** (API HTTPS, hébergé en Union européenne) — aucun port SMTP sortant à
+  ouvrir, et un **suivi de délivrabilité** : un webhook authentifié par un jeton secret remonte
+  dans le journal le statut réel de chaque message (remis, rejeté, signalé en
+  spam, désabonné). Un désabonnement coupe automatiquement les communications
+  commerciales du membre, jamais ses e-mails de réservation.
+
+Un **plafond d'envois quotidien** (300/jour sur l'offre gratuite Brevo) est
+appliqué à la sortie, avec une part réservée aux messages non commerciaux : une
+campagne ne peut pas épuiser le quota et empêcher l'envoi d'une réinitialisation
+de mot de passe.
 
 ---
 
@@ -125,7 +140,10 @@ en production ils vivent dans un fichier d'environnement hors du dépôt.
 | `APP_SECRET` | Clé de chiffrement au repos (AES-256-GCM) — **obligatoire en prod** |
 | `DEFAULT_USER_PASSWORD` | Mot de passe initial des comptes créés par l'admin |
 | `PUBLIC_BASE_URL` | URL publique (liens dans les e-mails) |
-| `SMTP_*` | Serveur d'envoi d'e-mails |
+| `MAIL_PROVIDER` | Fournisseur d'amorçage : `smtp` ou `brevo` (le réglage admin prime) |
+| `MAIL_DAILY_LIMIT`, `MAIL_MARKETING_RESERVE` | Plafond d'envois par jour et part réservée au transactionnel |
+| `SMTP_*` | Serveur d'envoi d'e-mails (fournisseur `smtp`) |
+| `BREVO_API_KEY`, `BREVO_WEBHOOK_TOKEN` | Secrets d'amorçage Brevo (sinon saisis dans l'admin) |
 | `UNIFI_*` | Intégration bons Wi-Fi UniFi (optionnelle) |
 | `UPDATE_*` | Mises à jour in-app (voir ci-dessous) |
 

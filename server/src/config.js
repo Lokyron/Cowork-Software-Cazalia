@@ -61,6 +61,28 @@ export const config = {
   resetTokenTtlMs: Number(process.env.RESET_TOKEN_TTL_MS) || 1000 * 60 * 60 * 2, // 2 h
   // URL publique utilisée pour construire le lien de reset (sinon dérivée de la requête).
   publicBaseUrl: process.env.PUBLIC_BASE_URL || null,
+  // Fournisseur d'envoi d'e-mails : 'smtp' (nodemailer) ou 'brevo' (API HTTP).
+  // Valeur d'AMORÇAGE seulement : le réglage enregistré en base (app_settings →
+  // clé `mail`, éditable dans /admin/emails) prime dès qu'il existe.
+  mail: {
+    provider: process.env.MAIL_PROVIDER || null, // null => 'smtp'
+    // Plafond d'envois par jour civil (heure de Paris). 0 = aucun plafond.
+    // `null` laisse le défaut dépendre du fournisseur : 300/jour pour Brevo
+    // (plafond de l'offre gratuite), aucun plafond pour un SMTP maison.
+    dailyLimit: process.env.MAIL_DAILY_LIMIT ? Number(process.env.MAIL_DAILY_LIMIT) : null,
+    // Part du plafond réservée aux messages non commerciaux. Une campagne ne peut
+    // pas consommer les derniers envois du jour : il doit toujours rester de quoi
+    // envoyer une réinitialisation de mot de passe ou une confirmation de résa.
+    marketingReserve: process.env.MAIL_MARKETING_RESERVE ? Number(process.env.MAIL_MARKETING_RESERVE) : null,
+  },
+  // Brevo (ex-Sendinblue) — fournisseur transactionnel hébergé en UE.
+  // Secrets d'amorçage ; en exploitation ils sont saisis dans /admin/emails et
+  // stockés CHIFFRÉS en base (cf. lib/crypto.js).
+  brevo: {
+    apiKey: process.env.BREVO_API_KEY || null,
+    // Jeton de l'URL de webhook (authentifie les appels entrants de Brevo).
+    webhookToken: process.env.BREVO_WEBHOOK_TOKEN || null,
+  },
   // SMTP : tant que SMTP_HOST n'est pas défini, le mailer reste en STUB (rien n'est envoyé).
   smtp: {
     host: process.env.SMTP_HOST || null,

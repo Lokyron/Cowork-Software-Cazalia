@@ -59,6 +59,33 @@ export function parisMinutes(iso) {
   return h * 60 + m;
 }
 
+const _dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: PARIS, year: 'numeric', month: '2-digit', day: '2-digit' });
+const _utcPartsFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: PARIS, hour12: false,
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+});
+
+/**
+ * Début du jour civil de Paris (minuit local), exprimé en UTC.
+ *
+ * Sert à compter les envois « du jour » : les horodatages du journal sont en
+ * UTC, les comparer à `date('now')` compterait le jour UTC — décalé d'une à deux
+ * heures, donc faux en soirée (un envoi de 23 h 30 serait compté le lendemain).
+ *
+ * @param {Date} [ref] Instant de référence (injectable pour les tests).
+ * @returns {string} Horodatage SQLite UTC `YYYY-MM-DD HH:MM:SS`.
+ */
+export function parisDayStartUtc(ref = new Date()) {
+  // Décalage de Paris à cet instant (gère l'heure d'été sans table de fuseaux).
+  const p = Object.fromEntries(
+    _utcPartsFmt.formatToParts(ref).filter((x) => x.type !== 'literal').map((x) => [x.type, Number(x.value)])
+  );
+  const offsetMs = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second) - ref.getTime();
+  const [y, m, d] = _dayFmt.format(ref).split('-').map(Number);
+  const start = new Date(Date.UTC(y, m - 1, d) - offsetMs);
+  return start.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 /**
  * Indique si une annulation ouvre droit à remboursement, c'est-à-dire si elle
  * intervient plus de `windowHours` avant le début du créneau.

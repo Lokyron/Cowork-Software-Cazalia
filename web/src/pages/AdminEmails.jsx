@@ -11,32 +11,32 @@ function Section({ title, children, aside }) {
 }
 
 export default function AdminEmails() {
-  const [smtp, setSmtp] = useState(null);
+  const [settings, setSettings] = useState(null);
   const [arrival, setArrival] = useState(null);
   const [variables, setVariables] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [members, setMembers] = useState([]);
   const [feedback, setFeedback] = useState(null);
 
-  const flash = (type, text) => { setFeedback({ type, text }); setTimeout(() => setFeedback(null), 4000); };
+  const flash = (type, text) => { setFeedback({ type, text }); setTimeout(() => setFeedback(null), 6000); };
 
   const loadAll = async () => {
     const s = await api.get('/admin/email/settings');
-    setSmtp(s.smtp); setArrival(s.arrival); setVariables(s.variables || []);
+    setSettings(s); setArrival(s.arrival); setVariables(s.variables || []);
     setTemplates((await api.get('/admin/email/templates')).templates);
     api.get('/admin/members').then((r) => setMembers(r.members)).catch(() => {});
   };
   useEffect(() => { loadAll().catch(() => {}); }, []);
 
-  if (!smtp) return <p className="muted">Chargement…</p>;
+  if (!settings) return <p className="muted">Chargement…</p>;
 
   return (
     <div>
       <h1>E-mails</h1>
-      <p className="subtitle">Configuration SMTP, templates et envois.</p>
+      <p className="subtitle">Fournisseur d'envoi, templates et envois.</p>
       {feedback && <div className={`alert ${feedback.type === 'ok' ? 'ok' : 'error'}`}>{feedback.text}</div>}
 
-      <SmtpSection smtp={smtp} setSmtp={setSmtp} flash={flash} />
+      <ProviderSection settings={settings} setSettings={setSettings} flash={flash} />
       <ArrivalSection arrival={arrival} setArrival={setArrival} flash={flash} />
       <TemplatesSection templates={templates} variables={variables} flash={flash} onSaved={loadAll} />
       <ManualSection templates={templates} members={members} flash={flash} />
@@ -45,54 +45,141 @@ export default function AdminEmails() {
   );
 }
 
-// ── SMTP ─────────────────────────────────────────────────────────────────────
-function SmtpSection({ smtp, setSmtp, flash }) {
+// ── Fournisseur d'envoi (SMTP ou Brevo) ──────────────────────────────────────
+function ProviderSection({ settings, setSettings, flash }) {
+  const { smtp, brevo, mail, quota } = settings;
   const [f, setF] = useState({ ...smtp, pass: '' });
+  const [m, setM] = useState({ ...mail });
+  const [apiKey, setApiKey] = useState('');
+  const [webhook, setWebhook] = useState(null); // URL affichée une seule fois
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((c) => ({ ...c, [k]: e.target.value }));
+  const setMail = (k) => (e) => setM((c) => ({ ...c, [k]: e.target.value }));
+  const isBrevo = m.provider === 'brevo';
+  const configured = isBrevo ? (brevo.configured && !!smtp.from_email) : smtp.configured;
+
+  const apply = (r) => {
+    setSettings((c) => ({ ...c, ...r, arrival: c.arrival, variables: c.variables }));
+    setF({ ...r.smtp, pass: '' }); setM({ ...r.mail }); setApiKey('');
+  };
 
   const save = async () => {
     setBusy(true);
     try {
-      const r = await api.put('/admin/email/settings', { smtp: f });
-      setSmtp(r.smtp); setF({ ...r.smtp, pass: '' });
-      flash('ok', 'Configuration SMTP enregistrée.');
+      const body = { smtp: f, mail: m };
+      // Une clé vide CONSERVE celle déjà enregistrée : on ne l'envoie pas.
+      if (apiKey.trim()) body.brevo = { api_key: apiKey.trim() };
+      apply(await api.put('/admin/email/settings', body));
+      flash('ok', 'Configuration enregistrée.');
     } catch (err) { flash('error', msg(err.code)); } finally { setBusy(false); }
   };
+
   const test = async () => {
     setBusy(true);
     try {
       const r = await api.post('/admin/email/test', {});
-      if (r.ok) flash('ok', `E-mail de test envoyé à ${r.to}.`);
+      if (r.ok) flash('ok', `E-mail de test envoyé à ${r.to}${r.account ? ` (compte Brevo : ${r.account})` : ''}.`);
       else flash('error', `Échec : ${r.error || msg(r.reason)}`);
     } catch (err) { flash('error', msg(err.code)); } finally { setBusy(false); }
   };
 
+  const makeWebhook = async () => {
+    setBusy(true);
+    try {
+      const r = await api.post('/admin/email/brevo/webhook', {});
+      setWebhook(r);
+      if (r.declared) flash('ok', 'Webhook déclaré chez Brevo : le journal recevra les statuts de délivrabilité.');
+      else flash('error', msg(r.warning));
+    } catch (err) { flash('error', msg(err.code)); } finally { setBusy(false); }
+  };
+
   return (
-    <Section title="Configuration SMTP" aside={<span className={`badge ${smtp.configured ? 'green' : 'red'}`}>{smtp.configured ? 'configuré' : 'non configuré'}</span>}>
+    <Section
+      title="Fournisseur d'envoi"
+      aside={<span className={`badge ${configured ? 'green' : 'red'}`}>{configured ? 'configuré' : 'non configuré'}</span>}
+    >
       <div className="row">
-        <div className="field" style={{ flex: 2 }}><label>Hôte SMTP</label><input value={f.host || ''} onChange={set('host')} placeholder="smtp.exemple.com" /></div>
-        <div className="field"><label>Port</label><input type="number" value={f.port || ''} onChange={set('port')} /></div>
-        <div className="field"><label>Sécurité</label>
-          <select value={f.secure_mode || 'starttls'} onChange={set('secure_mode')}>
-            <option value="starttls">STARTTLS</option>
-            <option value="ssl">SSL/TLS</option>
-            <option value="none">Aucune</option>
+        <div className="field" style={{ maxWidth: 260 }}><label>Fournisseur</label>
+          <select value={m.provider} onChange={setMail('provider')}>
+            <option value="smtp">Serveur SMTP</option>
+            <option value="brevo">Brevo (API, hébergé en UE)</option>
           </select>
         </div>
-      </div>
-      <div className="row">
-        <div className="field"><label>Utilisateur</label><input value={f.user || ''} onChange={set('user')} /></div>
-        <div className="field"><label>Mot de passe {smtp.has_pass && <span className="muted">(déjà défini)</span>}</label>
-          <input type="password" value={f.pass} onChange={set('pass')} placeholder={smtp.has_pass ? '•••••• (laisser vide pour conserver)' : ''} /></div>
-      </div>
-      <div className="row">
         <div className="field"><label>Nom expéditeur</label><input value={f.from_name || ''} onChange={set('from_name')} placeholder="Cazalia" /></div>
         <div className="field"><label>E-mail expéditeur</label><input type="email" value={f.from_email || ''} onChange={set('from_email')} placeholder="no-reply@cazalia.fr" /></div>
       </div>
+
+      {isBrevo ? (
+        <>
+          <div className="row">
+            <div className="field" style={{ flex: 2 }}>
+              <label>Clé d'API Brevo {brevo.has_api_key && <span className="muted">(déjà définie)</span>}</label>
+              <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                placeholder={brevo.has_api_key ? '•••••• (laisser vide pour conserver)' : 'xkeysib-…'} />
+            </div>
+          </div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+            Le domaine de l'adresse d'expédition doit être authentifié chez Brevo (SPF, DKIM et DMARC),
+            sinon les envois sont refusés. L'offre gratuite autorise 300 e-mails par jour.
+          </p>
+          <div style={{ marginTop: 8 }}>
+            <button className="outline" onClick={makeWebhook} disabled={busy || !brevo.has_api_key}>
+              {brevo.has_webhook_token ? "Régénérer l'URL de délivrabilité" : "Activer le suivi de délivrabilité"}
+            </button>
+            {brevo.has_webhook_token && !webhook && (
+              <span className="muted" style={{ fontSize: 12, marginLeft: 8 }}>Suivi actif. Régénérer invalide l'URL précédente.</span>
+            )}
+          </div>
+          {webhook && (
+            <div className="alert" style={{ marginTop: 8 }}>
+              <p style={{ margin: '0 0 6px' }}>
+                <strong>URL du webhook — copiez-la maintenant</strong>, elle ne sera plus affichée.
+                {webhook.declared
+                  ? ' Elle a déjà été déclarée automatiquement chez Brevo.'
+                  : ' À coller dans Brevo → Transactionnel → Paramètres → Webhooks.'}
+              </p>
+              <code style={{ wordBreak: 'break-all', fontSize: 12 }}>{webhook.url}</code>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="row">
+            <div className="field" style={{ flex: 2 }}><label>Hôte SMTP</label><input value={f.host || ''} onChange={set('host')} placeholder="smtp.exemple.com" /></div>
+            <div className="field"><label>Port</label><input type="number" value={f.port || ''} onChange={set('port')} /></div>
+            <div className="field"><label>Sécurité</label>
+              <select value={f.secure_mode || 'starttls'} onChange={set('secure_mode')}>
+                <option value="starttls">STARTTLS</option>
+                <option value="ssl">SSL/TLS</option>
+                <option value="none">Aucune</option>
+              </select>
+            </div>
+          </div>
+          <div className="row">
+            <div className="field"><label>Utilisateur</label><input value={f.user || ''} onChange={set('user')} /></div>
+            <div className="field"><label>Mot de passe {smtp.has_pass && <span className="muted">(déjà défini)</span>}</label>
+              <input type="password" value={f.pass} onChange={set('pass')} placeholder={smtp.has_pass ? '•••••• (laisser vide pour conserver)' : ''} /></div>
+          </div>
+        </>
+      )}
+
+      <div className="row" style={{ marginTop: 4 }}>
+        <div className="field" style={{ maxWidth: 200 }}><label>Plafond par jour <span className="muted">(0 = illimité)</span></label>
+          <input type="number" min="0" value={m.daily_limit ?? 0} onChange={setMail('daily_limit')} /></div>
+        <div className="field" style={{ maxWidth: 260 }}><label>Dont réservé au transactionnel</label>
+          <input type="number" min="0" value={m.marketing_reserve ?? 0} onChange={setMail('marketing_reserve')} /></div>
+      </div>
+      <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+        {quota.dailyLimit
+          ? <>Aujourd'hui : <strong>{quota.sentToday} / {quota.dailyLimit}</strong> envois.
+            Les envois commerciaux s'arrêtent à {quota.dailyLimit - quota.marketingReserve} pour garder
+            {' '}{quota.marketingReserve} e-mails aux confirmations de réservation et aux mots de passe oubliés.</>
+          : <>Aujourd'hui : <strong>{quota.sentToday}</strong> envois. Aucun plafond appliqué.</>}
+      </p>
+
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button onClick={save} disabled={busy}>Enregistrer</button>
-        <button className="outline" onClick={test} disabled={busy}>Tester la connexion</button>
+        <button className="outline" onClick={test} disabled={busy}>Envoyer un e-mail de test</button>
       </div>
     </Section>
   );
@@ -192,7 +279,13 @@ function ManualSection({ templates, members, flash }) {
       const target = mode === 'all' ? { type: 'all' } : mode === 'user' ? { type: 'user', user_id: selected[0]?.id } : { type: 'users', user_ids: selected.map((s) => s.id) };
       const payload = useTemplate ? { code, target } : { subject, body_html: body, target };
       const r = await api.post('/admin/email/send', payload);
-      flash('ok', `Envoi terminé : ${r.sent} envoyé(s), ${r.skipped} exclu(s) (opt-out), ${r.failed} échec(s).`);
+      const base = `Envoi terminé : ${r.sent} envoyé(s), ${r.skipped} exclu(s) (opt-out), ${r.failed} échec(s).`;
+      if (r.blocked) {
+        // Arrêt sur plafond : le reste n'est pas perdu, il est à relancer demain.
+        flash('error', `${base} ${r.blocked} non envoyé(s) : plafond du jour atteint (${r.quota?.sentToday}/${r.quota?.dailyLimit}). Relancez l'envoi demain.`);
+      } else {
+        flash('ok', base);
+      }
       setSelected([]);
     } catch (err) { flash('error', msg(err.code)); } finally { setBusy(false); }
   };
@@ -251,22 +344,35 @@ function LogSection() {
   const [log, setLog] = useState(null);
   useEffect(() => { api.get('/admin/email/log').then((r) => setLog(r.log)).catch(() => setLog([])); }, []);
   if (!log) return null;
-  const STY = { sent: 'green', failed: 'red', skipped: 'amber' };
+  // 'sent' = accepté par le fournisseur ; les statuts suivants viennent du
+  // webhook de délivrabilité et disent ce qui est VRAIMENT arrivé.
+  const STY = {
+    sent: '', delivered: 'green', deferred: 'amber', skipped: 'amber',
+    failed: 'red', bounced: 'red', blocked: 'red', spam: 'red', unsubscribed: 'amber',
+  };
+  const LABEL = {
+    sent: 'accepté', delivered: 'remis', deferred: 'différé', skipped: 'non envoyé',
+    failed: 'échec', bounced: 'rejeté', blocked: 'bloqué', spam: 'signalé en spam', unsubscribed: 'désabonné',
+  };
   return (
     <Section title="Journal des envois">
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Destinataire</th><th>Template</th><th>Statut</th></tr></thead>
+          <thead><tr><th>Date</th><th>Destinataire</th><th>Template</th><th>Via</th><th>Statut</th></tr></thead>
           <tbody>
             {log.map((l) => (
               <tr key={l.id}>
                 <td>{new Date(l.created_at + 'Z').toLocaleString('fr-FR')}</td>
                 <td>{l.to_email}</td>
                 <td className="muted">{l.template_code || '—'}</td>
-                <td><span className={`badge ${STY[l.status] || ''}`}>{l.status}</span>{l.error && <span className="muted" style={{ fontSize: 11 }}> · {l.error}</span>}</td>
+                <td className="muted">{l.provider || '—'}</td>
+                <td>
+                  <span className={`badge ${STY[l.status] ?? ''}`}>{LABEL[l.status] || l.status}</span>
+                  {l.error && <span className="muted" style={{ fontSize: 11 }}> · {msg(l.error) !== 'Une erreur est survenue.' ? msg(l.error) : l.error}</span>}
+                </td>
               </tr>
             ))}
-            {log.length === 0 && <tr><td colSpan={4} className="muted">Aucun envoi.</td></tr>}
+            {log.length === 0 && <tr><td colSpan={5} className="muted">Aucun envoi.</td></tr>}
           </tbody>
         </table>
       </div>
