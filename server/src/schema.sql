@@ -136,7 +136,11 @@ CREATE TABLE IF NOT EXISTS email_log (
   created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_email_log_created ON email_log(created_at);
-CREATE INDEX IF NOT EXISTS idx_email_log_message ON email_log(message_id);
+-- ⚠️ L'index sur `message_id` est créé dans db.js, APRÈS les migrations : ce
+-- fichier est rejoué à chaque démarrage, y compris sur une base antérieure où
+-- `CREATE TABLE IF NOT EXISTS` n'ajoute pas la colonne — l'index échouerait ici
+-- avec « no such column », et l'application ne démarrerait pas. Tout index
+-- portant sur une colonne ajoutée par migration se déclare donc dans db.js.
 
 -- Panier de réservation : verrous temporaires (10 min) posés en attendant le paiement.
 --   user_id    = bénéficiaire de la réservation (client)
