@@ -6,7 +6,7 @@ d'administration, landing publique et e-mails transactionnels. Tout est centrali
 dans un seul outil, pensé pour tourner sur une petite infrastructure (un conteneur
 Linux derrière un reverse proxy).
 
-Interface en français. Licence **MIT**.
+Interface en français. Licence **AGPL-3.0**.
 
 ---
 
@@ -227,4 +227,4 @@ une référence arbitraire.
 
 ## Licence
 
-[MIT](LICENSE) © 2026 Cazalia.
+[AGPL-3.0-or-later](LICENSE) © 2026 Cazalia.
