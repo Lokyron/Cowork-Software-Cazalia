@@ -15,7 +15,7 @@
 
 import https from 'node:https';
 import { db } from '../db.js';
-import { config } from './config.js';
+import { config } from '../config.js';
 
 const BASE_PATH = '/api/v1/developer';
 
