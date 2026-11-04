@@ -115,6 +115,12 @@ if (!resPayCols.includes('payment_intent')) db.exec(`ALTER TABLE reservations AD
 const holdTarifCols = db.prepare(`PRAGMA table_info(reservation_holds)`).all().map((c) => c.name);
 if (!holdTarifCols.includes('tarif_type')) db.exec(`ALTER TABLE reservation_holds ADD COLUMN tarif_type TEXT`);
 
+// UniFi Access : PIN de porte temporaire par réservation (cf. lib/unifiAccess.js).
+const accessCols = db.prepare(`PRAGMA table_info(reservations)`).all().map((c) => c.name);
+if (!accessCols.includes('access_pin')) db.exec(`ALTER TABLE reservations ADD COLUMN access_pin TEXT`);
+if (!accessCols.includes('access_visitor_id')) db.exec(`ALTER TABLE reservations ADD COLUMN access_visitor_id TEXT`);
+if (!accessCols.includes('access_expires_at')) db.exec(`ALTER TABLE reservations ADD COLUMN access_expires_at TEXT`);
+
 // Abandon du système de crédits : remise à zéro des portefeuilles (une seule fois).
 // Les réservations ne sont PAS touchées ; seul le grand-livre de crédits est purgé.
 const eurosReset = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_euros_reset_v1');
@@ -133,6 +139,19 @@ if (!eurosTmpl) {
     db.prepare(`UPDATE email_templates SET body_html = ?, updated_at = datetime('now') WHERE code = 'booking_confirmation'`).run(patched);
   }
   db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_euros_tmpl_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
+}
+
+// Gabarit de confirmation : insère le bloc PIN de porte + la ligne café/thé
+// (devant le bloc Wi-Fi) pour les bases dont le template a été semé avant Access.
+const accessTmpl = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_access_block_v1');
+if (!accessTmpl) {
+  const row = db.prepare(`SELECT body_html FROM email_templates WHERE code = 'booking_confirmation'`).get();
+  if (row && row.body_html.includes('{{wifi_block}}') && !row.body_html.includes('{{access_block}}')) {
+    const insert = `<p style="margin:0 0 16px;line-height:1.6;color:#5b6577;">☕ Café &amp; thé inclus dans votre réservation.</p>\n{{access_block}}\n{{wifi_block}}`;
+    const patched = row.body_html.replace('{{wifi_block}}', insert);
+    db.prepare(`UPDATE email_templates SET body_html = ?, updated_at = datetime('now') WHERE code = 'booking_confirmation'`).run(patched);
+  }
+  db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_access_block_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
 }
 
 // « Café & thé inclus » ajouté aux prestations des espaces qui ne le mentionnent pas.

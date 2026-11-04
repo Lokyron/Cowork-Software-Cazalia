@@ -9,8 +9,19 @@
 import { constructEvent } from '../lib/stripe.js';
 import { fulfillOrder } from '../lib/orders.js';
 import { ensureVoucherForReservation } from '../lib/unifi.js';
+import { ensureAccessPinForReservation } from '../lib/unifiAccess.js';
 import { sendBookingConfirmation } from '../lib/mailer.js';
 import { securityEvent } from '../lib/audit.js';
+
+// Post-traitement (hors réponse webhook) : voucher Wi-Fi + PIN de porte d'abord
+// (pour qu'ils figurent dans l'e-mail), puis e-mail de confirmation. Best-effort.
+async function finalizeReservations(ids) {
+  for (const id of ids) {
+    await ensureVoucherForReservation(id).catch(() => {});
+    await ensureAccessPinForReservation(id).catch(() => {});
+    sendBookingConfirmation(id).catch(() => {});
+  }
+}
 
 /**
  * Handler Express brut pour POST /api/webhooks/stripe.
@@ -40,11 +51,8 @@ export function stripeWebhookHandler(req, res) {
         securityEvent('stripe_reservation_payee', {
           session: s.id, created: r.created?.length || 0, deja: r.alreadyProcessed, inconnu: r.unknown,
         });
-        // Best-effort, hors transaction : voucher Wi-Fi + e-mail de confirmation.
-        for (const id of r.created || []) {
-          ensureVoucherForReservation(id).catch(() => {});
-          sendBookingConfirmation(id).catch(() => {});
-        }
+        // Hors transaction et hors réponse : voucher Wi-Fi + PIN porte + e-mail.
+        if (r.created?.length) finalizeReservations(r.created);
       }
     }
     // Les événements non traités sont acquittés (Stripe cesse de les renvoyer).

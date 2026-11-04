@@ -14,6 +14,7 @@ export const TEMPLATE_VARIABLES = [
   ['booking_time', 'Plage horaire (ex. 09:00 – 12:00)'],
   ['credits_cost', 'Crédits consommés'],
   ['wifi_voucher', 'Code voucher Wi-Fi'],
+  ['access_pin', "Code d'accès porte (PIN)"],
   ['wifi_ssid', 'Nom du réseau Wi-Fi'],
   ['arrival_instructions', "Consignes d'arrivée / plan d'accès"],
   ['refund_info', "Information de remboursement (annulation)"],
@@ -73,6 +74,14 @@ const voucherBox = `
     <div style="font-size:12px;color:#5b6577;margin-top:6px;">Utilisable sur tous vos appareils, valable 24&nbsp;h après la première connexion.</div>
   </div>`;
 
+// Encart « PIN de porte » (rendu uniquement si {{access_pin}} est fourni).
+const accessBox = `
+  <div style="border:1px solid rgba(28,49,85,.15);border-radius:10px;padding:14px 16px;background:#f5f8ff;margin:16px 0;">
+    <div style="font-size:12px;font-weight:700;color:#5b6577;text-transform:uppercase;letter-spacing:.03em;">Code d'accès porte</div>
+    <div style="font-size:26px;font-weight:800;letter-spacing:.18em;font-family:ui-monospace,Menlo,monospace;margin:6px 0;">{{access_pin}}</div>
+    <div style="font-size:12px;color:#5b6577;">À composer sur le digicode. Valable uniquement pendant votre créneau réservé.</div>
+  </div>`;
+
 // Templates par défaut. `{{wifi_block}}` est un bloc conditionnel géré par le mailer.
 export const DEFAULT_TEMPLATES = [
   {
@@ -90,6 +99,7 @@ export const DEFAULT_TEMPLATES = [
   <tr><td style="padding:6px 0;color:#5b6577;">Montant</td><td style="padding:6px 0;text-align:right;font-weight:600;">{{price}}</td></tr>
 </table>
 <p style="margin:0 0 16px;line-height:1.6;color:#5b6577;">☕ Café &amp; thé inclus dans votre réservation.</p>
+{{access_block}}
 {{wifi_block}}
 <div style="margin:16px 0;line-height:1.6;">{{arrival_instructions}}</div>
 <p style="margin:18px 0 0;">${btn('{{dashboard_url}}', 'Voir ma réservation')}&nbsp;&nbsp;${calendarBtn}</p>`,
@@ -141,4 +151,4 @@ export const DEFAULT_TEMPLATES = [
   },
 ];
 
-export { voucherBox };
+export { voucherBox, accessBox };

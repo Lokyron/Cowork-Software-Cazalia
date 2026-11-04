@@ -182,6 +182,23 @@ export const config = {
     insecureTls: process.env.UNIFI_INSECURE_TLS === '1',
     tlsFingerprint: process.env.UNIFI_TLS_FINGERPRINT || null,
   },
+  // ── UniFi Access (controle de porte - PIN temporaire par reservation) ────────
+  // API LOCALE de la console Access (port 12445, token Bearer cree dans l'app
+  // Access). N'est PAS joignable via le cloud api.ui.com : le serveur doit
+  // atteindre la console sur le LAN. Inactif tant que host + token + door ne sont
+  // pas definis (une reservation n'echoue jamais faute d'Access : best-effort).
+  unifiAccess: {
+    host: process.env.UNIFI_ACCESS_HOST || null,
+    port: Number(process.env.UNIFI_ACCESS_PORT) || 12445,
+    token: process.env.UNIFI_ACCESS_TOKEN || null,
+    door: process.env.UNIFI_ACCESS_DOOR || null,
+    graceBeforeMin: Number(process.env.UNIFI_ACCESS_GRACE_BEFORE_MIN) || 10,
+    graceAfterMin: Number(process.env.UNIFI_ACCESS_GRACE_AFTER_MIN) || 15,
+    // Certificat auto-signe (API locale) : meme politique TLS que le mode local
+    // Network - strict par defaut, a desactiver explicitement ou a epingler.
+    insecureTls: process.env.UNIFI_ACCESS_INSECURE_TLS === '1',
+    tlsFingerprint: process.env.UNIFI_ACCESS_TLS_FINGERPRINT || null,
+  },
   // Mot de passe par défaut des comptes créés par l'admin — DOIT être défini via
   // l'env `DEFAULT_USER_PASSWORD` (secret du service). À défaut, on génère une
   // valeur aléatoire par démarrage (jamais de mot de passe faible en dur dans le repo).

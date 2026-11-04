@@ -4,6 +4,7 @@ import { cancelReservation, listMyReservations } from '../lib/booking.js';
 import { addHold, startBookingCheckout } from '../lib/cart.js';
 import { getStripe } from '../lib/settings.js';
 import { revokeVoucherForReservation } from '../lib/unifi.js';
+import { revokeAccessForReservation } from '../lib/unifiAccess.js';
 import { sendBookingCancelled, sendRefundRequestToAdmin } from '../lib/mailer.js';
 import { requireAuth, sendBusinessError } from '../middleware.js';
 
@@ -81,6 +82,7 @@ reservationsRouter.delete('/reservations/:id', requireAuth, async (req, res) => 
     const id = Number(req.params.id);
     const result = cancelReservation(id, req.user);
     await revokeVoucherForReservation(id); // best-effort
+    await revokeAccessForReservation(id);  // révoque le PIN de porte (best-effort)
     sendBookingCancelled(id, { refunded: result.refunded, amount: result.amount }).catch(() => {});
     if (result.refunded) sendRefundRequestToAdmin(id, { amount: result.amount }).catch(() => {});
     res.json(result);

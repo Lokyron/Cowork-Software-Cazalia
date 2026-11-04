@@ -12,7 +12,7 @@ import nodemailer from 'nodemailer';
 import { db } from '../db.js';
 import { config } from '../config.js';
 import { getSmtp, getArrival, getMail, getBrevo, getSender } from './settings.js';
-import { wrapHtml, voucherBox } from './emailTemplates.js';
+import { wrapHtml, voucherBox, accessBox } from './emailTemplates.js';
 import { escapeHtml, headerSafe } from './html.js';
 import { parisDayStartUtc } from './time.js';
 import * as brevo from './brevo.js';
@@ -109,7 +109,13 @@ export function renderTemplate(code, vars = {}) {
   if (!t) return null;
   const full = { site_name: 'Cazalia', wifi_ssid: getArrival().wifi_ssid, ...vars };
   const wifiBlock = full.wifi_voucher ? interpolate(voucherBox, full) : '';
-  const bodyRaw = interpolate(t.body_html.replace(/\{\{\s*wifi_block\s*\}\}/g, wifiBlock), full);
+  const accessBlock = full.access_pin ? interpolate(accessBox, full) : '';
+  const bodyRaw = interpolate(
+    t.body_html
+      .replace(/\{\{\s*wifi_block\s*\}\}/g, wifiBlock)
+      .replace(/\{\{\s*access_block\s*\}\}/g, accessBlock),
+    full,
+  );
   const subject = interpolateText(t.subject, full);
   const html = wrapHtml({ title: subject, content: bodyRaw, siteName: full.site_name, logoUrl: logoUrl() });
   return { subject, html };
@@ -128,7 +134,13 @@ export function renderTemplate(code, vars = {}) {
 export function renderRaw(subject, bodyHtml, vars = {}) {
   const full = { site_name: 'Cazalia', wifi_ssid: getArrival().wifi_ssid, ...vars };
   const wifiBlock = full.wifi_voucher ? interpolate(voucherBox, full) : '';
-  const body = interpolate(String(bodyHtml).replace(/\{\{\s*wifi_block\s*\}\}/g, wifiBlock), full);
+  const accessBlock = full.access_pin ? interpolate(accessBox, full) : '';
+  const body = interpolate(
+    String(bodyHtml)
+      .replace(/\{\{\s*wifi_block\s*\}\}/g, wifiBlock)
+      .replace(/\{\{\s*access_block\s*\}\}/g, accessBlock),
+    full,
+  );
   const renderedSubject = interpolateText(subject, full);
   return {
     subject: renderedSubject,
@@ -357,6 +369,7 @@ function reservationVars(r) {
     price: eurFromCents(r.price_cents),
     credits_cost: eurFromCents(r.price_cents), // compat templates : affiche désormais des euros
     wifi_voucher: r.voucher_code || '',
+    access_pin: r.access_pin || '',
     arrival_instructions: getArrival().instructions,
     calendar_url: googleCalendarUrl(r),
   };

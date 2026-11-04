@@ -13,6 +13,7 @@ import {
 } from '../lib/booking.js';
 import { toUtcIso, parsePeriod } from '../lib/time.js';
 import { ensureVoucherForReservation, revokeVoucherForReservation } from '../lib/unifi.js';
+import { ensureAccessPinForReservation, revokeAccessForReservation } from '../lib/unifiAccess.js';
 import { addHold, listCart, removeHold, checkout } from '../lib/cart.js';
 import { requireAdmin, sendBusinessError } from '../middleware.js';
 import { config } from '../config.js';
@@ -195,7 +196,7 @@ adminRouter.post('/members/:id/reservations', async (req, res) => {
       return res.status(404).json({ error: 'UTILISATEUR_INTROUVABLE' });
     }
     const result = reserveBatch(userId, spaceId, slots);
-    await Promise.allSettled((result.reservations || []).map((r) => ensureVoucherForReservation(r.reservationId)));
+    await Promise.allSettled((result.reservations || []).flatMap((r) => [ensureVoucherForReservation(r.reservationId), ensureAccessPinForReservation(r.reservationId)]));
     (result.reservations || []).forEach((r) => sendBookingConfirmation(r.reservationId).catch(() => {}));
     res.status(201).json(result);
   } catch (err) {
@@ -225,6 +226,7 @@ adminRouter.post('/reservations', async (req, res) => {
     };
     const result = reserve(userId, spaceId, b.start_at, b.end_at, b.seats, opts);
     result.voucher_code = await ensureVoucherForReservation(result.reservationId);
+    await ensureAccessPinForReservation(result.reservationId).catch(() => {});
     sendBookingConfirmation(result.reservationId).catch(() => {}); // confirmation au client (best-effort)
     res.status(201).json(result);
   } catch (err) {
@@ -270,7 +272,7 @@ adminRouter.post('/cart/checkout', async (req, res) => {
     const userId = Number(req.body?.user_id);
     if (!userId) return res.status(400).json({ error: 'CHAMPS_INVALIDES' });
     const result = checkout(userId);
-    await Promise.allSettled(result.reservations.map((r) => ensureVoucherForReservation(r.reservationId)));
+    await Promise.allSettled(result.reservations.flatMap((r) => [ensureVoucherForReservation(r.reservationId), ensureAccessPinForReservation(r.reservationId)]));
     result.reservations.forEach((r) => sendBookingConfirmation(r.reservationId).catch(() => {}));
     res.status(201).json(result);
   } catch (err) { sendBusinessError(res, err); }
@@ -447,6 +449,7 @@ adminRouter.post('/reservations/:id/cancel', async (req, res) => {
     const reservation = getReservationDetail(id); // avant annulation, pour l'email
     const result = adminCancelReservation(id, req.user.id);
     await revokeVoucherForReservation(id); // révoque le voucher sur le UDM (best-effort)
+    await revokeAccessForReservation(id); // révoque le PIN de porte (best-effort)
 
     let notifyResult = null;
     if (req.body?.notify && reservation) {

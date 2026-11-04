@@ -4,6 +4,7 @@ import { api, msg } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { fmtDateTime } from '../time.js';
 import VoucherBlock from '../components/VoucherBlock.jsx';
+import AccessPinBlock from '../components/AccessPinBlock.jsx';
 import GoogleCalendarLink from '../components/GoogleCalendarLink.jsx';
 
 const dFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' });
@@ -100,6 +101,7 @@ export default function MemberDashboard() {
             </div>
           </div>
 
+          <AccessPinBlock reservation={next} />
           <VoucherBlock reservation={next} />
 
           {arrival?.arrival_instructions && (
