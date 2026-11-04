@@ -77,6 +77,8 @@ const MESSAGES = {
   EMAIL_DEJA_PRIS: 'Cet email est déjà utilisé.',
   CHAMPS_INVALIDES: 'Champs manquants ou invalides.',
   CGU_NON_ACCEPTEES: 'Vous devez accepter les CGU pour créer un compte.',
+  STRIPE_NON_CONFIGURE: 'Le paiement en ligne n’est pas disponible pour le moment.',
+  PACK_INVALIDE: 'Formule de recharge invalide.',
   TROP_DE_TENTATIVES: 'Trop de tentatives. Réessayez plus tard.',
   NON_AUTHENTIFIE: 'Veuillez vous connecter.',
   INTERDIT: 'Action non autorisée.',

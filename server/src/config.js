@@ -83,6 +83,16 @@ export const config = {
     // Jeton de l'URL de webhook (authentifie les appels entrants de Brevo).
     webhookToken: process.env.BREVO_WEBHOOK_TOKEN || null,
   },
+  // Stripe — paiement en ligne (recharge de crédits par Checkout hébergé).
+  // Secrets d'amorçage ; peuvent aussi être saisis en base (app_settings → `stripe`,
+  // chiffrés via lib/crypto.js). La clé publiable n'est pas secrète. Tant que la
+  // clé secrète ET le secret de webhook ne sont pas définis, le paiement en ligne
+  // reste désactivé (le membre recharge sur place). Utiliser des clés de TEST en beta.
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY || null,
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || null,
+  },
   // SMTP : tant que SMTP_HOST n'est pas défini, le mailer reste en STUB (rien n'est envoyé).
   smtp: {
     host: process.env.SMTP_HOST || null,

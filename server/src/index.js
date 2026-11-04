@@ -15,6 +15,8 @@ import { spacesRouter } from './routes/spaces.js';
 import { reservationsRouter } from './routes/reservations.js';
 import { cartRouter } from './routes/cart.js';
 import { walletRouter } from './routes/wallet.js';
+import { paymentsRouter } from './routes/payments.js';
+import { stripeWebhookHandler } from './routes/stripeWebhook.js';
 import { leadsRouter } from './routes/leads.js';
 import { claimsRouter } from './routes/claims.js';
 import { mediaRouter, adminMediaRouter } from './routes/media.js';
@@ -49,6 +51,13 @@ app.disable('x-powered-by');
 app.set('trust proxy', config.trustProxy);
 
 app.use(securityHeaders);
+
+// Webhook Stripe : monté AVANT express.json, car la vérification de signature
+// exige le corps BRUT. Il court-circuite donc le parseur JSON, la garde CSRF et
+// `attachUser` (ajoutés ensuite) : c'est voulu — l'appel vient de Stripe, est
+// authentifié par signature, et ne porte ni cookie ni session.
+app.post('/api/webhooks/stripe', express.raw({ type: '*/*', limit: '1mb' }), stripeWebhookHandler);
+
 // Corps JSON borné : au-delà, Express répond 413 sans charger la charge utile.
 app.use(express.json({ limit: config.jsonBodyLimit }));
 app.use(cookieParser());
@@ -62,6 +71,7 @@ app.use('/api', spacesRouter);
 app.use('/api', reservationsRouter);
 app.use('/api', cartRouter);
 app.use('/api', walletRouter);
+app.use('/api', paymentsRouter);
 app.use('/api', leadsRouter);
 app.use('/api', claimsRouter);
 app.use('/api', mediaRouter);

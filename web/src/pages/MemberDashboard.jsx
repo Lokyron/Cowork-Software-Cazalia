@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, msg } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { fmtDateTime } from '../time.js';
@@ -18,6 +18,10 @@ export default function MemberDashboard() {
   const [reservations, setReservations] = useState([]);
   const [arrival, setArrival] = useState(null);
   const [feedback, setFeedback] = useState(null);
+  const [packs, setPacks] = useState([]);           // formules de recharge (vide = paiement en ligne indispo)
+  const [showPacks, setShowPacks] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const load = useCallback(async () => {
     const [w, r] = await Promise.all([api.get('/wallet/me'), api.get('/reservations/me')]);
@@ -25,6 +29,40 @@ export default function MemberDashboard() {
     setReservations(r.reservations);
   }, []);
   useEffect(() => { load(); api.get('/config').then(setArrival).catch(() => {}); }, [load]);
+
+  // Formules de recharge (affichées seulement si le paiement en ligne est actif).
+  useEffect(() => {
+    api.get('/wallet/packs').then((r) => { if (r.enabled) setPacks(r.packs || []); }).catch(() => {});
+  }, []);
+
+  // Retour depuis Stripe Checkout : le crédit réel arrive par webhook, on relit
+  // donc le solde peu après et on informe le membre.
+  useEffect(() => {
+    const status = searchParams.get('recharge');
+    if (!status) return;
+    if (status === 'success') {
+      setFeedback({ type: 'ok', text: 'Paiement reçu ! Vos crédits apparaissent dès la confirmation (quelques secondes).' });
+      const t1 = setTimeout(load, 1500);
+      const t2 = setTimeout(load, 5000);
+      searchParams.delete('recharge'); setSearchParams(searchParams, { replace: true });
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+    if (status === 'cancel') {
+      setFeedback({ type: 'error', text: 'Recharge annulée. Aucun montant n’a été débité.' });
+      searchParams.delete('recharge'); setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, load]);
+
+  const buyPack = async (packId) => {
+    setPaying(true); setFeedback(null);
+    try {
+      const { url } = await api.post('/wallet/checkout', { pack_id: packId });
+      window.location.assign(url); // redirection vers la page de paiement Stripe
+    } catch (err) {
+      setFeedback({ type: 'error', text: msg(err.code) });
+      setPaying(false);
+    }
+  };
 
   const now = Date.now();
   const { next, upcoming, past } = useMemo(() => {
@@ -117,8 +155,45 @@ export default function MemberDashboard() {
         <div className="card">
           <h2>Solde de crédits</h2>
           <div className="balance">{wallet.balance} <span style={{ fontSize: 16, fontWeight: 500 }} className="muted">crédits</span></div>
-          <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Rechargez vos crédits à l'accueil (virement / CB).</p>
-          <Link to="/reserver"><button className="outline small">Réserver un espace</button></Link>
+
+          {packs.length > 0 ? (
+            <>
+              {!showPacks ? (
+                <button className="small" style={{ marginTop: 10 }} onClick={() => setShowPacks(true)}>
+                  ＋ Recharger en ligne
+                </button>
+              ) : (
+                <div style={{ marginTop: 10 }}>
+                  <p className="muted" style={{ fontSize: 13, margin: '0 0 8px' }}>Choisissez une formule :</p>
+                  <div className="stack">
+                    {packs.map((p) => (
+                      <button
+                        key={p.id}
+                        className="outline small"
+                        disabled={paying}
+                        style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}
+                        onClick={() => buyPack(p.id)}
+                      >
+                        <span>{p.label}</span>
+                        <span>{(p.eur_cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                    Paiement sécurisé par Stripe. Les crédits n'ont pas de valeur monétaire
+                    (voir les <Link to="/cgv">CGV</Link>).
+                  </p>
+                  <button className="ghost small" style={{ marginTop: 4 }} onClick={() => setShowPacks(false)}>Annuler</button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Rechargez vos crédits à l'accueil (virement / CB).</p>
+          )}
+
+          <div style={{ marginTop: 10 }}>
+            <Link to="/reserver"><button className="outline small">Réserver un espace</button></Link>
+          </div>
         </div>
       </div>
 

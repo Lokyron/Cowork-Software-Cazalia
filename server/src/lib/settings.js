@@ -231,6 +231,95 @@ export function rotateBrevoWebhookToken() {
   return token;
 }
 
+// ── Stripe (paiement en ligne) ───────────────────────────────────────────────
+// Formules d'achat de crédits par défaut. ⚠️ TARIFS À CONFIRMER par la gérante :
+// ces valeurs sont des repères (1 crédit ≈ 1 €) tant que la grille réelle n'est
+// pas fixée. Elles sont surchargeables via le réglage `stripe.packs` en base.
+export const DEFAULT_CREDIT_PACKS = [
+  { id: 'p10', credits: 10, eur_cents: 1000, label: '10 crédits' },
+  { id: 'p25', credits: 25, eur_cents: 2500, label: '25 crédits' },
+  { id: 'p50', credits: 50, eur_cents: 5000, label: '50 crédits' },
+  { id: 'p100', credits: 100, eur_cents: 10000, label: '100 crédits' },
+];
+
+/**
+ * Normalise une liste de formules (filtre les entrées invalides).
+ * @param {unknown} packs
+ * @returns {Array<{id:string,credits:number,eur_cents:number,label:string}>}
+ */
+function sanitizePacks(packs) {
+  if (!Array.isArray(packs)) return [];
+  return packs
+    .map((p) => ({
+      id: String(p?.id ?? '').trim(),
+      credits: Math.trunc(Number(p?.credits)),
+      eur_cents: Math.trunc(Number(p?.eur_cents)),
+      label: String(p?.label ?? '').trim(),
+    }))
+    .filter((p) => p.id && Number.isInteger(p.credits) && p.credits > 0
+      && Number.isInteger(p.eur_cents) && p.eur_cents >= 50 && p.label);
+}
+
+/**
+ * Configuration Stripe effective, secrets DÉCHIFFRÉS.
+ *
+ * ⚠️ Usage strictement INTERNE (création de session Checkout, vérification du
+ * webhook) : la vue destinée à l'interface est `getStripePublic`.
+ *
+ * @returns {{secretKey:string, publishableKey:string, webhookSecret:string,
+ *            packs:Array, enabled:boolean}}
+ */
+export function getStripe() {
+  const s = getSetting('stripe', {}) || {};
+  const secretKey = s.secret_key_enc ? decryptSecret(s.secret_key_enc) : (config.stripe.secretKey ?? '');
+  const webhookSecret = s.webhook_secret_enc ? decryptSecret(s.webhook_secret_enc) : (config.stripe.webhookSecret ?? '');
+  const publishableKey = s.publishable_key ?? config.stripe.publishableKey ?? '';
+  const packsCustom = sanitizePacks(s.packs);
+  const packs = packsCustom.length ? packsCustom : DEFAULT_CREDIT_PACKS;
+  // Le paiement en ligne n'est actif qu'avec clé secrète ET secret de webhook :
+  // sans vérification de signature, un POST forgé pourrait créditer un compte.
+  return { secretKey, publishableKey, webhookSecret, packs, enabled: Boolean(secretKey && webhookSecret) };
+}
+
+/**
+ * Vue Stripe destinée à l'interface d'administration : AUCUN secret.
+ * @returns {{has_secret_key:boolean, has_webhook_secret:boolean,
+ *            publishable_key:string, packs:Array, enabled:boolean}}
+ */
+export function getStripePublic() {
+  const c = getStripe();
+  return {
+    has_secret_key: Boolean(c.secretKey),
+    has_webhook_secret: Boolean(c.webhookSecret),
+    publishable_key: c.publishableKey,
+    packs: c.packs,
+    enabled: c.enabled,
+  };
+}
+
+/**
+ * Met à jour la configuration Stripe. Les clés soumises sont chiffrées au repos ;
+ * un champ vide CONSERVE le secret existant. `clear_*` efface explicitement.
+ *
+ * @param {Record<string, unknown>} b Champs soumis par l'administrateur.
+ * @returns {object} Vue publique après mise à jour.
+ */
+export function setStripe(b) {
+  const cur = getSetting('stripe', {}) || {};
+  const next = {
+    secret_key_enc: cur.secret_key_enc || null,
+    webhook_secret_enc: cur.webhook_secret_enc || null,
+    publishable_key: (b.publishable_key ?? cur.publishable_key ?? '').trim(),
+    packs: Array.isArray(b.packs) ? sanitizePacks(b.packs) : (cur.packs ?? null),
+  };
+  if (b.secret_key != null && b.secret_key !== '') next.secret_key_enc = encryptSecret(String(b.secret_key).trim());
+  if (b.clear_secret_key) next.secret_key_enc = null;
+  if (b.webhook_secret != null && b.webhook_secret !== '') next.webhook_secret_enc = encryptSecret(String(b.webhook_secret).trim());
+  if (b.clear_webhook_secret) next.webhook_secret_enc = null;
+  setSetting('stripe', next);
+  return getStripePublic();
+}
+
 // ── Consignes d'arrivée / réseau ─────────────────────────────────────────────
 /**
  * Consignes d'arrivée et SSID Wi-Fi affichés au client.
