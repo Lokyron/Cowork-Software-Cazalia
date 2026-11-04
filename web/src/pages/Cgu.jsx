@@ -52,7 +52,7 @@ export default function Cgu() {
 
       <h2 id="definitions">1. Définitions</h2>
       <ul>
-        <li><strong>Service</strong> : la plateforme en ligne accessible à l'adresse cowork.lokyron.fr,
+        <li><strong>Service</strong> : la plateforme en ligne accessible à l'adresse cazalia.fr,
           permettant de découvrir l'espace, créer un compte, réserver des espaces et gérer un solde de crédits.</li>
         <li><strong>Éditeur</strong> / <strong>Exploitant</strong> : la structure identifiée à l'article
           « Mentions légales », qui édite le Service et exploite l'espace de coworking.</li>

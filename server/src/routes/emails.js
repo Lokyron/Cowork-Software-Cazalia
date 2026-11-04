@@ -21,7 +21,7 @@ export const emailsRouter = Router();
 // qu'aucune route ajoutée ensuite ne puisse rester ouverte par oubli.
 emailsRouter.use(requireAdmin);
 
-const baseUrl = () => (config.publicBaseUrl || 'https://cowork.example.com').replace(/\/$/, '');
+const baseUrl = () => (config.publicBaseUrl || 'https://cazalia.fr').replace(/\/$/, '');
 
 /**
  * Jeu de variables factices pour la prévisualisation d'un gabarit.

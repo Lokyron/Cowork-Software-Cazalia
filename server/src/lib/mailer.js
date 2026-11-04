@@ -23,7 +23,7 @@ const hmFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: PARIS, hour: '2-digit
 const fmtDate = (iso) => dateFmt.format(new Date(iso));
 const fmtTime = (iso) => hmFmt.format(new Date(iso));
 
-const baseUrl = () => (config.publicBaseUrl || 'https://cowork.example.com').replace(/\/$/, '');
+const baseUrl = () => (config.publicBaseUrl || 'https://cazalia.fr').replace(/\/$/, '');
 // Logo d'en-tête des e-mails : PNG transparent (SVG non supporté par la plupart des
 // clients mail), servi en URL absolue depuis le front.
 const logoUrl = () => `${baseUrl()}/images/logo-email.png`;

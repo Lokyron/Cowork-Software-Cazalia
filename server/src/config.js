@@ -99,7 +99,7 @@ export const config = {
     port: Number(process.env.SMTP_PORT) || 587,
     user: process.env.SMTP_USER || null,
     pass: process.env.SMTP_PASS || null,
-    from: process.env.SMTP_FROM || 'Cazalia <no-reply@cowork.example.com>',
+    from: process.env.SMTP_FROM || 'Cazalia <no-reply@cazalia.fr>',
   },
   // Anti-brute-force login (cf. brief §3).
   login: {
