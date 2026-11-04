@@ -16,6 +16,7 @@ import { reservationsRouter } from './routes/reservations.js';
 import { cartRouter } from './routes/cart.js';
 import { walletRouter } from './routes/wallet.js';
 import { leadsRouter } from './routes/leads.js';
+import { claimsRouter } from './routes/claims.js';
 import { mediaRouter, adminMediaRouter } from './routes/media.js';
 import { adminRouter } from './routes/admin.js';
 import { emailsRouter } from './routes/emails.js';
@@ -62,6 +63,7 @@ app.use('/api', reservationsRouter);
 app.use('/api', cartRouter);
 app.use('/api', walletRouter);
 app.use('/api', leadsRouter);
+app.use('/api', claimsRouter);
 app.use('/api', mediaRouter);
 // Webhooks entrants (fournisseur d'e-mail). Authentifiés par un jeton d'URL —
 // aucune session, aucun cookie : ces appels viennent d'un serveur tiers.

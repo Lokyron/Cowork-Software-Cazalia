@@ -166,3 +166,20 @@ CREATE TABLE IF NOT EXISTS reservation_holds (
 CREATE INDEX IF NOT EXISTS idx_holds_space_time ON reservation_holds(space_id, start_at, end_at);
 CREATE INDEX IF NOT EXISTS idx_holds_user ON reservation_holds(user_id);
 CREATE INDEX IF NOT EXISTS idx_holds_expires ON reservation_holds(expires_at);
+
+-- Réclamations consommateur (art. L612-1 s. C. conso.) : formulaire public de
+-- réclamation / demande de remboursement. Trace durable, doublée d'une
+-- notification e-mail à la gérante. `user_id` renseigné si l'auteur est connecté.
+CREATE TABLE IF NOT EXISTS claims (
+  id              INTEGER PRIMARY KEY,
+  user_id         INTEGER REFERENCES users(id),
+  first_name      TEXT    NOT NULL,
+  last_name       TEXT    NOT NULL,
+  email           TEXT    NOT NULL,
+  reservation_ref TEXT,                                 -- n° de réservation (facultatif)
+  kind            TEXT    NOT NULL,                      -- 'annulation' | 'remboursement' | 'autre'
+  message         TEXT    NOT NULL,
+  status          TEXT    NOT NULL DEFAULT 'nouveau',    -- 'nouveau' | 'en_cours' | 'resolu'
+  created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_claims_status ON claims(status);

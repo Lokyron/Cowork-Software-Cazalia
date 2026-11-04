@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { msg } from '../api.js';
 import PasswordInput from '../components/PasswordInput.jsx';
@@ -13,6 +13,7 @@ export default function Login() {
   const [form, setForm] = useState({
     email: '', password: '', first_name: '', last_name: '', phone: '',
   });
+  const [cguAccepted, setCguAccepted] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [mfa, setMfa] = useState(false); // étape code 2FA
@@ -35,7 +36,8 @@ export default function Login() {
       // politique (`assertStrongPassword`) et reste seul juge.
       const faiblesse = checkPassword(form.password);
       if (faiblesse) { setError(faiblesse); return; }
-      await register(form);
+      if (!cguAccepted) { setError(msg('CGU_NON_ACCEPTEES')); return; }
+      await register({ ...form, cgu_accepted: true });
       navigate('/mon-espace');
     } catch (err) {
       setError(msg(err.code));
@@ -114,6 +116,15 @@ export default function Login() {
             <PasswordInput value={form.password} onChange={set('password')} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required />
             {mode !== 'login' && <small className="hint">{PASSWORD_RULE}</small>}
           </div>
+          {mode === 'register' && (
+            <label className="consent">
+              <input type="checkbox" checked={cguAccepted} onChange={(e) => setCguAccepted(e.target.checked)} />
+              <span>
+                J'ai lu et j'accepte les <Link to="/cgu" target="_blank">CGU</Link> et la{' '}
+                <Link to="/cgu#confidentialite" target="_blank">politique de confidentialité</Link>.
+              </span>
+            </label>
+          )}
           {error && <div className="alert error">{error}</div>}
           <button type="submit" disabled={busy} style={{ width: '100%' }}>
             {busy ? '…' : mode === 'login' ? 'Se connecter' : 'Créer le compte'}

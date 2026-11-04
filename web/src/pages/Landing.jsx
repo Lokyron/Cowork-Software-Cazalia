@@ -179,11 +179,19 @@ export default function Landing() {
           </div>
           <div className="card info-card">
             <h3>Adresse</h3>
-            <p>99 rue du Faubourg Boutonnet<br />34090 Montpellier</p>
+            <p>
+              <a
+                href="https://www.google.com/maps/search/?api=1&query=99%20rue%20du%20Faubourg%20Boutonnet%2C%2034090%20Montpellier"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                99 rue du Faubourg Boutonnet<br />34090 Montpellier
+              </a>
+            </p>
           </div>
           <div className="card info-card">
             <h3>Contact</h3>
-            <p>[Téléphone]<br />[email@exemple.fr]</p>
+            <p><a href="tel:+33766211483">07 66 21 14 83</a><br /><a href="mailto:contact@cazalia.fr">contact@cazalia.fr</a></p>
           </div>
         </div>
       </section>
@@ -202,7 +210,9 @@ export default function Landing() {
         <span>Cazalia</span>
         <nav className="footer-links">
           <Link to="/cgu">CGU &amp; mentions légales</Link>
+          <Link to="/cgv">CGV</Link>
           <Link to="/cgu#confidentialite">Confidentialité</Link>
+          <Link to="/reclamation">Réclamation</Link>
         </nav>
         <span className="muted">© {new Date().getFullYear()} — Espace de co-working</span>
       </footer>

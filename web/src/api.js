@@ -76,6 +76,7 @@ const MESSAGES = {
   IDENTIFIANTS_INVALIDES: 'Email ou mot de passe incorrect.',
   EMAIL_DEJA_PRIS: 'Cet email est déjà utilisé.',
   CHAMPS_INVALIDES: 'Champs manquants ou invalides.',
+  CGU_NON_ACCEPTEES: 'Vous devez accepter les CGU pour créer un compte.',
   TROP_DE_TENTATIVES: 'Trop de tentatives. Réessayez plus tard.',
   NON_AUTHENTIFIE: 'Veuillez vous connecter.',
   INTERDIT: 'Action non autorisée.',

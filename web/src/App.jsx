@@ -7,6 +7,8 @@ import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import Rejoindre from './pages/Rejoindre.jsx';
 import Cgu from './pages/Cgu.jsx';
+import Cgv from './pages/Cgv.jsx';
+import Reclamation from './pages/Reclamation.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import ForcePasswordChange from './pages/ForcePasswordChange.jsx';
 import Booking from './pages/Booking.jsx';
@@ -101,7 +103,9 @@ function SiteFooter() {
     <footer className="site-footer">
       <nav className="footer-links">
         <Link to="/cgu">CGU &amp; mentions légales</Link>
+        <Link to="/cgv">CGV</Link>
         <Link to="/cgu#confidentialite">Confidentialité</Link>
+        <Link to="/reclamation">Réclamation</Link>
       </nav>
       <span className="muted">© {new Date().getFullYear()} CAZALIA — Coworking Boutonnet</span>
     </footer>
@@ -136,6 +140,8 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/rejoindre" element={<Shell><Rejoindre /></Shell>} />
         <Route path="/cgu" element={<Shell><Cgu /></Shell>} />
+        <Route path="/cgv" element={<Shell><Cgv /></Shell>} />
+        <Route path="/reclamation" element={<Shell><Reclamation /></Shell>} />
         <Route path="/login" element={user ? <Navigate to="/mon-espace" replace /> : <Shell><Login /></Shell>} />
         <Route path="/reset-password" element={<Shell><ResetPassword /></Shell>} />
         <Route path="/mot-de-passe-oublie" element={<Shell><ForgotPassword /></Shell>} />

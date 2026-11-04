@@ -103,8 +103,8 @@ function publicUser(u) {
 
 const findByEmail = db.prepare(`SELECT * FROM users WHERE email = ?`);
 const insertUser = db.prepare(
-  `INSERT INTO users (email, display_name, first_name, last_name, phone, password_hash, role)
-   VALUES (@email, @display_name, @first_name, @last_name, @phone, @password_hash, @role)`
+  `INSERT INTO users (email, display_name, first_name, last_name, phone, password_hash, role, cgu_accepted_at)
+   VALUES (@email, @display_name, @first_name, @last_name, @phone, @password_hash, @role, @cgu_accepted_at)`
 );
 const countUsers = db.prepare(`SELECT COUNT(*) AS n FROM users`);
 
@@ -121,11 +121,17 @@ authRouter.post('/register', registerLimiter, (req, res) => {
     const lastName = String(req.body?.last_name || '').trim();
     const phone = String(req.body?.phone || '').trim();
     const password = String(req.body?.password || '');
+    const cguAccepted = req.body?.cgu_accepted === true;
 
     // Tous les champs sont obligatoires ; longueurs bornées (insertion directe en base).
     if (!EMAIL_RE.test(email) || email.length > 160 || !firstName || !lastName || !phone ||
         firstName.length > 80 || lastName.length > 80 || phone.length > 30) {
       return res.status(400).json({ error: 'CHAMPS_INVALIDES' });
+    }
+    // L'acceptation des CGU est un prérequis contractuel : pas de compte sans opt-in
+    // explicite. Le front bloque déjà, le serveur reste seul juge.
+    if (!cguAccepted) {
+      return res.status(400).json({ error: 'CGU_NON_ACCEPTEES' });
     }
     // Politique de mot de passe commune à tous les points d'entrée (cf. lib/passwords.js).
     assertStrongPassword(password);
@@ -143,6 +149,7 @@ authRouter.post('/register', registerLimiter, (req, res) => {
       phone,
       password_hash: hashPassword(password),
       role,
+      cgu_accepted_at: new Date().toISOString(),
     });
     const user = { id: info.lastInsertRowid, email, display_name: displayName, role };
 

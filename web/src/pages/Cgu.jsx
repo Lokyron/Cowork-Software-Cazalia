@@ -1,16 +1,16 @@
 import BackLink from '../components/BackLink.jsx';
 
 // Conditions Générales d'Utilisation + mentions légales + politique de confidentialité (RGPD).
-// Mentions légales renseignées (CAZALIA, SIREN 109 422 121).
-// Reste à compléter plus tard : l'adresse e-mail de contact (en cours de création),
-// définie à l'article 3 et référencée partout ailleurs.
+// Mentions légales renseignées (CAZALIA, SIREN 109 422 121), contact contact@cazalia.fr.
+// Reste à compléter : coordonnées du médiateur de la consommation (art. 24) une fois
+// l'adhésion souscrite — cf. docs/juridique/AUDIT-JURIDIQUE.md §5.6.
 export default function Cgu() {
   return (
     <div className="legal">
       <BackLink to="/" label="Retour à l'accueil" />
       <img src="/images/logo-cazalia.svg" className="legal-logo" alt="CAZALIA — Coworking Boutonnet" />
       <h1>Conditions générales d'utilisation</h1>
-      <p className="muted">Dernière mise à jour : octobre 2026.</p>
+      <p className="muted">Dernière mise à jour : novembre 2026.</p>
 
       <p>
         Les présentes conditions générales d'utilisation (les « <strong>CGU</strong> ») regroupent
@@ -91,7 +91,8 @@ export default function Cgu() {
       </p>
       <p>
         Directrice de la publication : <strong>Lucie Cazanave Pin</strong>.
-        Contact : <em>adresse e-mail en cours de création (sera précisée ici prochainement)</em>.
+        Contact : <a href="mailto:contact@cazalia.fr">contact@cazalia.fr</a>
+        {' '}— téléphone : <a href="tel:+33766211483">07&nbsp;66&nbsp;21&nbsp;14&nbsp;83</a>.
       </p>
       <p>
         Le Service est hébergé par <strong>CAZALIA</strong> en auto-hébergement, dans ses locaux au
@@ -168,10 +169,13 @@ export default function Cgu() {
         relevé est mis à disposition du Membre.
       </p>
       <p>
-        À ce jour, le rechargement des crédits est effectué par l'Éditeur selon les modalités convenues sur
-        place. En cas de mise en place ultérieure d'un paiement en ligne, celui-ci serait assuré par un
-        prestataire de paiement sécurisé et l'Éditeur n'aurait pas accès aux données complètes de carte
-        bancaire&nbsp;; les présentes CGU seraient mises à jour en conséquence.
+        Le rechargement des crédits peut être réglé en ligne ou sur place. Les paiements en ligne sont
+        assurés par <strong>Stripe</strong> (Stripe Payments Europe, Ltd), prestataire de paiement
+        sécurisé. Les données de carte bancaire sont saisies directement sur l'infrastructure de Stripe et
+        ne transitent ni ne sont stockées sur les serveurs de l'Éditeur. Les paiements font l'objet d'une
+        authentification forte conforme à la directive DSP2 (3-D&nbsp;Secure). Un justificatif (facture ou
+        relevé) est mis à disposition du Membre après chaque opération. L'Éditeur peut aussi créditer un
+        compte à réception d'un règlement effectué sur place.
       </p>
 
       <h2 id="annulation">9. Annulation, modification et remboursement</h2>
@@ -294,13 +298,23 @@ export default function Cgu() {
         (exécution du contrat) ; facturation et relevés (obligation légale) ; recontact des personnes
         pré-inscrites et envoi d'éventuelles communications (consentement) ; sécurité, prévention de la
         fraude et amélioration du Service (intérêt légitime).</p>
-      <p><strong>Destinataires :</strong> les données sont destinées à l'usage interne de CAZALIA.
-        Elles ne sont ni vendues ni cédées à des tiers à des fins commerciales. Interviennent, le cas
-        échéant, des prestataires techniques (hébergement, envoi d'e-mails, paiement) agissant comme
-        <strong> sous-traitants</strong> sur instruction de l'Éditeur et tenus à la confidentialité.</p>
-      <p><strong>Transferts hors UE :</strong> les données sont hébergées au sein de l'Union européenne.
-        En l'absence de transfert hors UE, aucune garantie spécifique n'est requise ; dans le cas
-        contraire, des garanties appropriées (clauses contractuelles types) seraient mises en place.</p>
+      <p><strong>Destinataires et sous-traitants :</strong> les données sont destinées à l'usage interne
+        de CAZALIA et ne sont ni vendues ni cédées à des tiers à des fins commerciales. L'Éditeur recourt
+        aux sous-traitants suivants, agissant sur ses instructions et tenus à la confidentialité
+        (art. 28 RGPD)&nbsp;:</p>
+      <ul>
+        <li><strong>Hébergement</strong> : l'application et la base de données sont
+          <strong> auto-hébergées</strong> par CAZALIA dans ses locaux à Montpellier (Union européenne) ;</li>
+        <li><strong>Envoi d'e-mails</strong> : <strong>Brevo</strong> (Sendinblue SAS), prestataire d'e-mails
+          transactionnels hébergé dans l'Union européenne ;</li>
+        <li><strong>Paiement en ligne</strong> : <strong>Stripe</strong> (Stripe Payments Europe, Ltd),
+          qui traite les données de paiement sans que l'Éditeur n'ait accès aux coordonnées bancaires
+          complètes.</li>
+      </ul>
+      <p><strong>Transferts hors UE :</strong> l'hébergement et l'envoi d'e-mails sont réalisés au sein de
+        l'Union européenne. Stripe peut, pour certaines opérations, traiter des données hors UE&nbsp;;
+        ces transferts sont encadrés par les clauses contractuelles types de la Commission européenne et
+        les garanties prévues par ce prestataire.</p>
       <p><strong>Durée de conservation :</strong> les données de compte sont conservées tant que le
         compte est actif, puis archivées selon les durées légales applicables (notamment comptables) ;
         les données de pré-inscription sont conservées jusqu'au retrait du consentement ou à l'issue de la
@@ -319,9 +333,13 @@ export default function Cgu() {
       <h2 id="cookies">19. Cookies</h2>
       <p>
         Le Service utilise un cookie de session strictement nécessaire au maintien de la connexion, qui ne
-        requiert pas de consentement préalable. Aucun cookie publicitaire n'est déposé. Si des outils de
-        mesure d'audience ou de tiers étaient ajoutés ultérieurement, un bandeau de consentement serait
-        mis en place conformément à la réglementation et aux recommandations de la CNIL.
+        requiert pas de consentement préalable. Lors d'un paiement en ligne, le prestataire
+        <strong> Stripe</strong> dépose des cookies strictement nécessaires à la réalisation de la
+        transaction et à la prévention de la fraude, également exemptés de consentement. Aucun cookie
+        publicitaire ni de mesure d'audience n'est déposé&nbsp;; aucune bannière de consentement n'est donc
+        requise. Si de tels outils étaient ajoutés ultérieurement, un bandeau de consentement conforme aux
+        recommandations de la CNIL (choix libre, bouton «&nbsp;Tout refuser&nbsp;» aussi accessible que
+        «&nbsp;Tout accepter&nbsp;») serait mis en place.
       </p>
 
       <h2 id="pi">20. Propriété intellectuelle</h2>
@@ -361,13 +379,20 @@ export default function Cgu() {
       <h2 id="mediation">24. Réclamations et médiation</h2>
       <p>
         Pour toute réclamation, l'utilisateur peut contacter l'Éditeur aux coordonnées figurant à
-        l'article 3 «&nbsp;Mentions légales&nbsp;». Une solution amiable sera recherchée
-        en priorité. Conformément au Code de la consommation, le consommateur a le droit de recourir
-        gratuitement à un médiateur de la consommation en vue de la résolution amiable du litige&nbsp;; les
-        coordonnées du médiateur compétent lui seront communiquées par l'Éditeur sur simple demande. La
-        plateforme européenne de règlement en ligne des litiges est par ailleurs accessible à l'adresse
+        l'article 3 «&nbsp;Mentions légales&nbsp;». Une solution amiable sera recherchée en priorité.
+        Conformément aux articles L.612-1 et suivants du Code de la consommation, le consommateur a le
+        droit de recourir gratuitement à un médiateur de la consommation. L'Éditeur a désigné le médiateur
+        suivant&nbsp;:
+      </p>
+      <p>
+        <strong>[Médiateur de la consommation — à compléter : nom, adresse postale et site internet]</strong>
+        {' '}<em>(dispositif de médiation en cours de souscription ; coordonnées communiquées ici dès
+        finalisation).</em>
+      </p>
+      <p>
+        La plateforme européenne de règlement en ligne des litiges est par ailleurs accessible à l'adresse
         <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener noreferrer">
-        ec.europa.eu/consumers/odr</a>.
+        {' '}ec.europa.eu/consumers/odr</a>.
       </p>
 
       <h2 id="litiges">25. Droit applicable et litiges</h2>

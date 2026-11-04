@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, msg } from '../api.js';
 import { parisLocalToUtcIso } from '../time.js';
 import TimeSelect from './TimeSelect.jsx';
@@ -29,6 +30,9 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
   const [feedback, setFeedback] = useState(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
+  // Opt-in consommateur avant paiement (côté client uniquement).
+  const [cgvAccepted, setCgvAccepted] = useState(false);
+  const [retractationAck, setRetractationAck] = useState(false);
 
   const reload = () => adapter.list().then(setCart).catch(() => {});
   useEffect(() => { api.get('/spaces').then((r) => setSpaces(r.spaces)).catch(() => {}); }, []);
@@ -194,7 +198,26 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
                 Solde : {cart.balance} crédits {insufficient && <span className="badge red" style={{ marginLeft: 6 }}>Solde insuffisant</span>}
               </div>
             )}
-            <button style={{ marginTop: 12, width: '100%' }} disabled={busy || insufficient} onClick={doCheckout}>
+            {!admin && (
+              <div style={{ marginTop: 12 }}>
+                <label className="consent">
+                  <input type="checkbox" checked={cgvAccepted} onChange={(e) => setCgvAccepted(e.target.checked)} />
+                  <span>J'accepte les <Link to="/cgv" target="_blank">conditions générales de vente</Link>.</span>
+                </label>
+                <label className="consent">
+                  <input type="checkbox" checked={retractationAck} onChange={(e) => setRetractationAck(e.target.checked)} />
+                  <span>
+                    Je demande l'exécution immédiate de la prestation et reconnais perdre mon droit de
+                    rétractation pour les prestations pleinement exécutées (art. L221-25 C. conso.).
+                  </span>
+                </label>
+              </div>
+            )}
+            <button
+              style={{ marginTop: 12, width: '100%' }}
+              disabled={busy || insufficient || (!admin && (!cgvAccepted || !retractationAck))}
+              onClick={doCheckout}
+            >
               Valider et payer ({total} cr.)
             </button>
           </>

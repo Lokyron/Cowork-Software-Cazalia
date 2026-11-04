@@ -64,6 +64,9 @@ if (!userCols.includes('billing_address')) db.exec(`ALTER TABLE users ADD COLUMN
 // notify_marketing pilote uniquement les envois manuels/marketing.
 if (!userCols.includes('notify_booking')) db.exec(`ALTER TABLE users ADD COLUMN notify_booking INTEGER NOT NULL DEFAULT 1`);
 if (!userCols.includes('notify_marketing')) db.exec(`ALTER TABLE users ADD COLUMN notify_marketing INTEGER NOT NULL DEFAULT 1`);
+// Acceptation des CGU à l'inscription : horodatage de preuve (RGPD / consentement
+// documenté). NULL pour les comptes créés avant la mise en place de l'opt-in.
+if (!userCols.includes('cgu_accepted_at')) db.exec(`ALTER TABLE users ADD COLUMN cgu_accepted_at TEXT`);
 
 // Migration ponctuelle : chiffrement des secrets TOTP restés en clair.
 // Le secret TOTP est un facteur d'authentification à part entière ; stocké en
