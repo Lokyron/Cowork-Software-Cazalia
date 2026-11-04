@@ -116,6 +116,8 @@ export const DEFAULT_TEMPLATES = [
   <tr><td style="padding:6px 0;color:#5b6577;">Date</td><td style="padding:6px 0;text-align:right;font-weight:600;">{{booking_date}}</td></tr>
   <tr><td style="padding:6px 0;color:#5b6577;">Horaire</td><td style="padding:6px 0;text-align:right;font-weight:600;">{{booking_time}}</td></tr>
 </table>
+{{access_block}}
+{{wifi_block}}
 <p style="margin:18px 0 0;">${btn('{{dashboard_url}}', 'Voir ma réservation')}&nbsp;&nbsp;${calendarBtn}</p>`,
   },
   {
@@ -127,6 +129,7 @@ export const DEFAULT_TEMPLATES = [
 <p style="margin:0 0 16px;line-height:1.6;">Bonjour {{first_name}},</p>
 <p style="margin:0 0 16px;line-height:1.6;">Votre réservation <strong>{{space_name}}</strong> du {{booking_date}} ({{booking_time}}) a été annulée.</p>
 <p style="margin:0 0 16px;line-height:1.6;">{{refund_info}}</p>
+<p style="margin:0 0 16px;line-height:1.6;color:#5b6577;">🔒 Votre code d'accès à la porte et votre code Wi-Fi pour ce créneau ont été désactivés.</p>
 <p style="margin:18px 0 0;">${btn('{{dashboard_url}}', 'Réserver un nouveau créneau')}</p>`,
   },
   {

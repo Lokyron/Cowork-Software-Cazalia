@@ -154,6 +154,24 @@ if (!accessTmpl) {
   db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_access_block_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
 }
 
+// E-mails « modification » et « annulation » : ajoute le bloc PIN de porte au
+// mail de modification, et la mention de désactivation des codes à l'annulation.
+const resaMailsV2 = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_resa_mails_v2');
+if (!resaMailsV2) {
+  const BTN_MARK = '<p style="margin:18px 0 0;">';
+  const upd = db.prepare(`UPDATE email_templates SET body_html = ?, updated_at = datetime('now') WHERE code = ?`);
+  const mod = db.prepare(`SELECT body_html FROM email_templates WHERE code = 'booking_modified'`).get();
+  if (mod && !mod.body_html.includes('{{access_block}}') && mod.body_html.includes(BTN_MARK)) {
+    upd.run(mod.body_html.replace(BTN_MARK, `{{access_block}}\n{{wifi_block}}\n${BTN_MARK}`), 'booking_modified');
+  }
+  const can = db.prepare(`SELECT body_html FROM email_templates WHERE code = 'booking_cancelled'`).get();
+  if (can && !can.body_html.includes('désactivés') && can.body_html.includes(BTN_MARK)) {
+    const note = `<p style="margin:0 0 16px;line-height:1.6;color:#5b6577;">🔒 Votre code d'accès à la porte et votre code Wi-Fi pour ce créneau ont été désactivés.</p>\n${BTN_MARK}`;
+    upd.run(can.body_html.replace(BTN_MARK, note), 'booking_cancelled');
+  }
+  db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_resa_mails_v2', ?, datetime('now'))`).run(JSON.stringify('done'));
+}
+
 // « Café & thé inclus » ajouté aux prestations des espaces qui ne le mentionnent pas.
 const cafeFlag = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_cafe_the_v1');
 if (!cafeFlag) {

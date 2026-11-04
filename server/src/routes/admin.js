@@ -418,6 +418,10 @@ adminRouter.patch('/reservations/:id', async (req, res) => {
     if (start_at && end_at) {
       moveReservation(id, start_at, end_at);
       changed.push('horaire');
+      // Le créneau a changé : on régénère le PIN de porte sur la nouvelle fenêtre
+      // (révocation de l'ancien visiteur puis recréation). Best-effort.
+      await revokeAccessForReservation(id);
+      await ensureAccessPinForReservation(id);
     }
     if (note !== undefined) {
       setReservationNote(id, note);
