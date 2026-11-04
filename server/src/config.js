@@ -183,34 +183,22 @@ export const config = {
     tlsFingerprint: process.env.UNIFI_TLS_FINGERPRINT || null,
   },
   // ── UniFi Access (controle de porte - PIN temporaire par reservation) ────────
-  // API d'INTEGRATION Access (meme famille que Network) : en-tete X-API-KEY,
-  // base `/proxy/access/integration/v1/developer`. Deux acces possibles, comme
-  // Network :
-  //  - CLOUD : via le connecteur api.ui.com (UNIFI_ACCESS_CONSOLE_ID, a defaut
-  //    UNIFI_CONSOLE_ID — meme console que Network). Prioritaire s'il est defini.
-  //  - LOCAL : la console sur le LAN en 443 (UNIFI_ACCESS_HOST), certificat
-  //    auto-signe (politique TLS identique au mode local Network).
-  // La cle depend du mode (verifie en conditions reelles) :
-  //  - CLOUD (connecteur api.ui.com) : la cle CLOUD (UNIFI_API_KEY, creee sur
-  //    unifi.ui.com) — la meme que Network, MAIS elle doit avoir le peRimetre
-  //    « Access » (sinon 403 insufficient permissions). Surcharge possible via
-  //    UNIFI_ACCESS_API_KEY.
-  //  - LOCAL : le token de l'application Access (UNIFI_ACCESS_TOKEN), qui n'est
-  //    PAS valable sur le cloud (401). Suppose la console joignable en 443 sur
-  //    le LAN (actuellement filtre depuis le CT → mode local indisponible).
-  // Inactif tant que cle + (console cloud OU host local) + porte ne sont pas
-  // definis (best-effort : une reservation n'echoue jamais faute d'Access).
+  // API OFFICIELLE UniFi Access (reference constructeur) : serveur LOCAL sur le
+  // port 12445 en HTTPS, base `/api/v1/developer`, authentification
+  // `Authorization: Bearer <token>`. Le token est cree dans l'app Access
+  // (Access > Settings > General > Advanced > API Token) avec les perimetres
+  // view:space (portes), edit:visitor (visiteurs), view:credential (PIN).
+  // Certificat auto-signe → TLS strict par defaut (poser UNIFI_ACCESS_INSECURE_TLS=1
+  // ou epingler l'empreinte). Le serveur doit JOINDRE la console sur le LAN en
+  // 12445 (regle pare-feu entre VLAN requise). Inactif tant que host + token +
+  // porte ne sont pas definis (best-effort : une reservation n'echoue jamais).
   unifiAccess: {
-    consoleId: process.env.UNIFI_ACCESS_CONSOLE_ID || process.env.UNIFI_CONSOLE_ID || null,
-    apiKey: (process.env.UNIFI_ACCESS_CONSOLE_ID || process.env.UNIFI_CONSOLE_ID)
-      ? (process.env.UNIFI_ACCESS_API_KEY || process.env.UNIFI_API_KEY || null) // cloud → clé cloud
-      : (process.env.UNIFI_ACCESS_TOKEN || process.env.UNIFI_ACCESS_API_KEY || null), // local → token Access
     host: process.env.UNIFI_ACCESS_HOST || null,
+    port: Number(process.env.UNIFI_ACCESS_PORT) || 12445,
+    token: process.env.UNIFI_ACCESS_TOKEN || null, // Authorization: Bearer
     door: process.env.UNIFI_ACCESS_DOOR || null,
     graceBeforeMin: Number(process.env.UNIFI_ACCESS_GRACE_BEFORE_MIN) || 10,
     graceAfterMin: Number(process.env.UNIFI_ACCESS_GRACE_AFTER_MIN) || 15,
-    // Certificat auto-signe (mode local) : strict par defaut, a desactiver
-    // explicitement (UNIFI_ACCESS_INSECURE_TLS=1) ou a epingler (empreinte).
     insecureTls: process.env.UNIFI_ACCESS_INSECURE_TLS === '1',
     tlsFingerprint: process.env.UNIFI_ACCESS_TLS_FINGERPRINT || null,
   },
