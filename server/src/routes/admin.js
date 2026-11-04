@@ -14,7 +14,7 @@ import {
 import { toUtcIso, parsePeriod } from '../lib/time.js';
 import { ensureVoucherForReservation, revokeVoucherForReservation } from '../lib/unifi.js';
 import { ensureAccessPinForReservation, revokeAccessForReservation } from '../lib/unifiAccess.js';
-import { addHold, listCart, removeHold, checkout } from '../lib/cart.js';
+import { addHold, listCart, removeHold, checkoutFree } from '../lib/cart.js';
 import { requireAdmin, sendBusinessError } from '../middleware.js';
 import { config } from '../config.js';
 import { adminSetPassword, createResetToken } from '../lib/passwords.js';
@@ -271,9 +271,7 @@ adminRouter.post('/cart/checkout', async (req, res) => {
   try {
     const userId = Number(req.body?.user_id);
     if (!userId) return res.status(400).json({ error: 'CHAMPS_INVALIDES' });
-    const result = checkout(userId);
-    await Promise.allSettled(result.reservations.flatMap((r) => [ensureVoucherForReservation(r.reservationId), ensureAccessPinForReservation(r.reservationId)]));
-    result.reservations.forEach((r) => sendBookingConfirmation(r.reservationId).catch(() => {}));
+    const result = await checkoutFree(userId);
     res.status(201).json(result);
   } catch (err) { sendBusinessError(res, err); }
 });

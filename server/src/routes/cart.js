@@ -1,7 +1,7 @@
 // Panier de réservation — côté client (pour soi-même).
 import { Router } from 'express';
 import { config } from '../config.js';
-import { addHold, listCart, removeHold, startBookingCheckout } from '../lib/cart.js';
+import { addHold, listCart, removeHold, startBookingCheckout, checkoutFree } from '../lib/cart.js';
 import { getStripe } from '../lib/settings.js';
 import { requireAuth, sendBusinessError } from '../middleware.js';
 
@@ -43,14 +43,20 @@ cartRouter.delete('/cart/:id', requireAuth, (req, res) => {
 });
 
 /**
- * POST /api/cart/checkout — lance le PAIEMENT CB du panier (session Stripe).
- * Les réservations sont créées à la confirmation du paiement (webhook) : on
- * renvoie l'URL de paiement, le client y est redirigé.
+ * POST /api/cart/checkout — valide le panier de l'utilisateur connecté.
+ *   • Membre : lance le PAIEMENT CB (session Stripe) ; les réservations sont
+ *     créées à la confirmation du paiement (webhook). On renvoie l'URL Stripe.
+ *   • Admin : réservation GRATUITE immédiate (un admin n'est jamais facturé,
+ *     quel que soit le parcours utilisé). On renvoie `{free:true, ...}`.
  *
- * @returns 200 `{url}` · 400 `PANIER_VIDE`/`HORS_HORAIRES` · 409 `COMPLET`/`PAIEMENT_INDISPONIBLE`
+ * @returns 200 `{url}` ou `{free, reservations, count}` · 400 `PANIER_VIDE`/`HORS_HORAIRES`
+ *          · 409 `COMPLET`/`PAIEMENT_INDISPONIBLE`
  */
 cartRouter.post('/cart/checkout', requireAuth, async (req, res) => {
   try {
+    if (req.user.role === 'admin') {
+      return res.json(await checkoutFree(req.user.id));
+    }
     if (!getStripe().enabled) return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });
     const baseUrl = config.publicBaseUrl || `${req.protocol}://${req.get('host')}`;
     const result = await startBookingCheckout(req.user.id, baseUrl);

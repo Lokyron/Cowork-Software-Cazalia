@@ -13,6 +13,9 @@ import { config } from '../config.js';
 import { fail } from './errors.js';
 import { createBookingCheckoutSession } from './stripe.js';
 import { createPendingOrder } from './orders.js';
+import { ensureVoucherForReservation } from './unifi.js';
+import { ensureAccessPinForReservation } from './unifiAccess.js';
+import { sendBookingConfirmation } from './mailer.js';
 import {
   getActiveSpace, resolveSeats, quoteCost, validateSlot, withinOpeningHours, availableSeats, insertReservation,
 } from './booking.js';
@@ -148,6 +151,31 @@ export function checkout(userId) {
     return { reservations: created, total, count: created.length };
   });
   return tx();
+}
+
+/**
+ * Checkout GRATUIT complet : convertit le panier en réservations gratuites puis
+ * déclenche le post-traitement (voucher Wi-Fi + PIN de porte + e-mail de
+ * confirmation), exactement comme une réservation payée.
+ *
+ * Utilisé pour toute réservation NON facturée : back-office admin (pour un
+ * client) et — surtout — un utilisateur de rôle `admin` qui réserve pour
+ * lui-même via le parcours membre (il ne doit jamais voir de paiement).
+ *
+ * @param {number} userId Bénéficiaire du panier.
+ * @returns {Promise<{free:true, reservations:Array, total:number, count:number}>}
+ * @throws {Error} `PANIER_VIDE`, `HORS_HORAIRES`, `COMPLET`.
+ */
+export async function checkoutFree(userId) {
+  const result = checkout(userId); // crée les réservations gratuites (transaction)
+  await Promise.allSettled(
+    result.reservations.flatMap((r) => [
+      ensureVoucherForReservation(r.reservationId),
+      ensureAccessPinForReservation(r.reservationId),
+    ]),
+  );
+  result.reservations.forEach((r) => sendBookingConfirmation(r.reservationId).catch(() => {}));
+  return { free: true, ...result };
 }
 
 // ── Checkout MEMBRE (paiement CB via Stripe) ─────────────────────────────────

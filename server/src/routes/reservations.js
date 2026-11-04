@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { config } from '../config.js';
 import { cancelReservation, listMyReservations } from '../lib/booking.js';
-import { addHold, startBookingCheckout } from '../lib/cart.js';
+import { addHold, startBookingCheckout, checkoutFree } from '../lib/cart.js';
 import { getStripe } from '../lib/settings.js';
 import { revokeVoucherForReservation } from '../lib/unifi.js';
 import { revokeAccessForReservation } from '../lib/unifiAccess.js';
@@ -19,7 +19,12 @@ export const reservationsRouter = Router();
  * Le bénéficiaire est TOUJOURS `req.user.id` ; aucune option de contournement
  * n'est transmise (apanage des routes `/api/admin`, OWASP A01).
  *
- * @returns 200 `{url}` · 400 `CHAMPS_INVALIDES`/`HORS_HORAIRES`/`CRENEAU_FORFAIT_INVALIDE`
+ * Un utilisateur de rôle `admin` n'est jamais facturé : sa réservation est
+ * créée gratuitement et immédiatement (pas de passage par Stripe), on renvoie
+ * `{free:true, ...}`.
+ *
+ * @returns 200 `{url}` ou `{free, reservations, count}`
+ *          · 400 `CHAMPS_INVALIDES`/`HORS_HORAIRES`/`CRENEAU_FORFAIT_INVALIDE`
  *          · 409 `COMPLET`/`PAIEMENT_INDISPONIBLE`
  */
 reservationsRouter.post('/reservations', requireAuth, async (req, res) => {
@@ -27,8 +32,10 @@ reservationsRouter.post('/reservations', requireAuth, async (req, res) => {
     const spaceId = Number(req.body?.space_id);
     const { start_at, end_at, seats, tarif_type } = req.body || {};
     if (!spaceId || !start_at || !end_at) return res.status(400).json({ error: 'CHAMPS_INVALIDES' });
-    if (!getStripe().enabled) return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });
+    const isAdmin = req.user.role === 'admin';
+    if (!isAdmin && !getStripe().enabled) return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });
     addHold(req.user.id, spaceId, start_at, end_at, seats, { tarifType: tarif_type });
+    if (isAdmin) return res.json(await checkoutFree(req.user.id));
     const baseUrl = config.publicBaseUrl || `${req.protocol}://${req.get('host')}`;
     const result = await startBookingCheckout(req.user.id, baseUrl);
     res.json(result);
@@ -42,15 +49,21 @@ reservationsRouter.post('/reservations', requireAuth, async (req, res) => {
  * POST /api/reservations/batch — réserve+paie plusieurs créneaux en un seul
  * paiement : pose un verrou par créneau puis crée une session Stripe du panier.
  *
- * @returns 200 `{url}` · 400 `CHAMPS_INVALIDES` · 409 `COMPLET`/`PAIEMENT_INDISPONIBLE`
+ * Comme `/reservations`, un utilisateur de rôle `admin` n'est jamais facturé :
+ * réservations créées gratuitement et immédiatement, réponse `{free:true, ...}`.
+ *
+ * @returns 200 `{url}` ou `{free, reservations, count}`
+ *          · 400 `CHAMPS_INVALIDES` · 409 `COMPLET`/`PAIEMENT_INDISPONIBLE`
  */
 reservationsRouter.post('/reservations/batch', requireAuth, async (req, res) => {
   try {
     const spaceId = Number(req.body?.space_id);
     const slots = req.body?.slots;
     if (!spaceId || !Array.isArray(slots) || slots.length === 0) return res.status(400).json({ error: 'CHAMPS_INVALIDES' });
-    if (!getStripe().enabled) return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });
+    const isAdmin = req.user.role === 'admin';
+    if (!isAdmin && !getStripe().enabled) return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });
     slots.forEach((s, i) => addHold(req.user.id, spaceId, s.start_at, s.end_at, s.seats, { tarifType: s.tarif_type }));
+    if (isAdmin) return res.json(await checkoutFree(req.user.id));
     const baseUrl = config.publicBaseUrl || `${req.protocol}://${req.get('host')}`;
     const result = await startBookingCheckout(req.user.id, baseUrl);
     res.json(result);
