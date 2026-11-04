@@ -5,9 +5,10 @@
 // PIN, et on l'autorise sur la porte. UniFi expire le visiteur à la fin : le PIN
 // ne fonctionne que pendant le créneau. À l'annulation, on supprime le visiteur.
 //
-// API LOCALE uniquement : https://{host}:{port}/api/v1/developer (port 12445),
-// authentification `Authorization: Bearer <token>`, certificat auto-signé.
-// Enveloppe de réponse : { code: 'SUCCESS', data, msg }.
+// API d'INTÉGRATION Access (même famille que Network), base
+// `/proxy/access/integration/v1/developer`, authentification `X-API-KEY`.
+// Accès CLOUD via le connecteur api.ui.com (consoleId) ou LOCAL sur le LAN en
+// 443 (host, certificat auto-signé). Enveloppe de réponse : { code, data, msg }.
 //
 // Best-effort : les appels réseau se font APRÈS le commit de la réservation ; un
 // échec (console injoignable, etc.) n'invalide JAMAIS la réservation — on log un
@@ -17,52 +18,81 @@ import https from 'node:https';
 import { db } from '../db.js';
 import { config } from '../config.js';
 
-const BASE_PATH = '/api/v1/developer';
+// Ressources sous `.../integration/v1/developer` (ex. /doors, /visitors).
+const DEV = '/developer';
 
-/** L'intégration est active si host + token + porte sont configurés. */
+/** L'intégration est active si clé + (console cloud OU host local) + porte. */
 export function isConfigured() {
   const c = config.unifiAccess;
-  return Boolean(c.host && c.token && c.door);
+  return Boolean(c.apiKey && (c.consoleId || c.host) && c.door);
 }
 
-// Agent TLS : certificat auto-signé de la console. Validation standard sauf si
-// l'exploitant la désactive (UNIFI_ACCESS_INSECURE_TLS=1) ou épingle l'empreinte.
-function agent() {
+// Agent TLS du mode LOCAL : la console présente un certificat auto-signé.
+// `null` (donc validation standard) en mode cloud, ou en local tant qu'aucune
+// politique n'est posée — auquel cas `request` refuse plutôt que de se connecter
+// en aveugle (CWE-295). Épinglage d'empreinte prioritaire, sinon désactivation
+// explicite (UNIFI_ACCESS_INSECURE_TLS=1).
+function localAgent() {
   const c = config.unifiAccess;
-  const opts = { rejectUnauthorized: !c.insecureTls };
+  if (!c.insecureTls && !c.tlsFingerprint) return null;
+  const opts = { rejectUnauthorized: false, keepAlive: true };
   if (c.tlsFingerprint) {
-    opts.rejectUnauthorized = false;
     const want = c.tlsFingerprint.replace(/:/g, '').toLowerCase();
     opts.checkServerIdentity = (_host, cert) => {
-      const got = cert.fingerprint256?.replace(/:/g, '').toLowerCase();
-      if (got !== want) return new Error('UniFi Access : empreinte de certificat inattendue');
-      return undefined;
+      const got = (cert.fingerprint256 || '').replace(/:/g, '').toLowerCase();
+      return got === want ? undefined : new Error('UniFi Access : empreinte de certificat inattendue');
     };
   }
   return new https.Agent(opts);
 }
 
 /**
- * Appel JSON à l'API Access. Renvoie `data` de l'enveloppe, ou lève si `code`
- * n'est pas 'SUCCESS' ou si le transport échoue.
+ * Cible HTTP selon le mode (comme lib/unifi.js). CLOUD si `consoleId` (appels
+ * relayés par le connecteur api.ui.com), sinon LOCAL (console sur le LAN en 443).
+ * @returns {{host:string, basePath:string, secure:boolean}}
+ */
+function target() {
+  const c = config.unifiAccess;
+  if (c.consoleId) {
+    return {
+      host: 'api.ui.com',
+      basePath: `/v1/connector/consoles/${encodeURIComponent(c.consoleId)}/proxy/access/integration/v1${DEV}`,
+      secure: true,
+    };
+  }
+  return { host: c.host, basePath: `/proxy/access/integration/v1${DEV}`, secure: false };
+}
+
+/**
+ * Appel JSON à l'API d'intégration Access. Authentification `X-API-KEY`.
+ * Renvoie `data` de l'enveloppe (ou le corps brut), ou lève si le transport
+ * échoue, si le statut n'est pas 2xx, ou si l'enveloppe signale une erreur.
  * @param {string} method
- * @param {string} pathname Sous `/api/v1/developer`.
+ * @param {string} pathname Sous `/proxy/access/integration/v1/developer`.
  * @param {object} [body]
  * @returns {Promise<any>}
  */
 function request(method, pathname, body) {
   const c = config.unifiAccess;
+  const t = target();
+  const agent = t.secure ? undefined : localAgent();
+  if (!t.secure && !agent) {
+    return Promise.reject(new Error(
+      'UniFi Access (mode local) : définir UNIFI_ACCESS_TLS_FINGERPRINT (recommandé) ou ' +
+      'UNIFI_ACCESS_INSECURE_TLS=1 pour accepter le certificat auto-signé de la console.'
+    ));
+  }
   const payload = body != null ? JSON.stringify(body) : null;
   const options = {
-    host: c.host,
-    port: c.port,
-    path: `${BASE_PATH}${pathname}`,
+    host: t.host,
+    port: 443,
+    path: `${t.basePath}${pathname}`,
     method,
-    agent: agent(),
+    ...(agent ? { agent } : {}),
     headers: {
-      Authorization: `Bearer ${c.token}`,
+      'X-API-KEY': c.apiKey,
       accept: 'application/json',
-      'content-type': 'application/json',
+      ...(payload ? { 'content-type': 'application/json' } : {}),
     },
   };
   return new Promise((resolve, reject) => {
@@ -72,18 +102,19 @@ function request(method, pathname, body) {
       res.on('end', () => {
         let json = null;
         try { json = raw ? JSON.parse(raw) : {}; } catch { /* non-JSON */ }
-        if (res.statusCode >= 200 && res.statusCode < 300 && json && json.code === 'SUCCESS') {
-          resolve(json.data);
+        const code = json?.code != null ? String(json.code).toUpperCase() : null;
+        const codeOk = code === null || code === 'SUCCESS' || code === 'CODE_SUCCESS';
+        if (res.statusCode >= 200 && res.statusCode < 300 && codeOk) {
+          resolve(json && 'data' in json ? json.data : json);
         } else {
           reject(new Error(`UniFi Access ${method} ${pathname} → HTTP ${res.statusCode} ${json?.code || ''} ${json?.msg || raw.slice(0, 120)}`));
         }
       });
     });
     req.on('error', reject);
-    // API LOCALE (LAN) : une réponse saine arrive en <1 s. Un délai court borne
-    // l'attente quand la console est injoignable (port filtré/pare-feu), pour ne
-    // pas retarder l'e-mail de confirmation qui attend le PIN.
-    req.setTimeout(5000, () => req.destroy(new Error('UniFi Access : délai dépassé')));
+    // Réponse saine : <1 s en LAN, quelques secondes via le cloud. Un délai court
+    // borne l'attente si la console est injoignable (pour ne pas retarder l'e-mail).
+    req.setTimeout(6000, () => req.destroy(new Error('UniFi Access : délai dépassé')));
     if (payload) req.write(payload);
     req.end();
   });

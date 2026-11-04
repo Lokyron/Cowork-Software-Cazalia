@@ -183,19 +183,25 @@ export const config = {
     tlsFingerprint: process.env.UNIFI_TLS_FINGERPRINT || null,
   },
   // ── UniFi Access (controle de porte - PIN temporaire par reservation) ────────
-  // API LOCALE de la console Access (port 12445, token Bearer cree dans l'app
-  // Access). N'est PAS joignable via le cloud api.ui.com : le serveur doit
-  // atteindre la console sur le LAN. Inactif tant que host + token + door ne sont
-  // pas definis (une reservation n'echoue jamais faute d'Access : best-effort).
+  // API d'INTEGRATION Access (meme famille que Network) : en-tete X-API-KEY,
+  // base `/proxy/access/integration/v1/developer`. Deux acces possibles, comme
+  // Network :
+  //  - CLOUD : via le connecteur api.ui.com (UNIFI_ACCESS_CONSOLE_ID, a defaut
+  //    UNIFI_CONSOLE_ID — meme console que Network). Prioritaire s'il est defini.
+  //  - LOCAL : la console sur le LAN en 443 (UNIFI_ACCESS_HOST), certificat
+  //    auto-signe (politique TLS identique au mode local Network).
+  // La cle peut etre la MEME que Network (UNIFI_API_KEY) si elle a les droits
+  // Access. Inactif tant que cle + (console cloud OU host local) + porte ne sont
+  // pas definis (best-effort : une reservation n'echoue jamais faute d'Access).
   unifiAccess: {
+    apiKey: process.env.UNIFI_ACCESS_TOKEN || process.env.UNIFI_API_KEY || null, // X-API-KEY
+    consoleId: process.env.UNIFI_ACCESS_CONSOLE_ID || process.env.UNIFI_CONSOLE_ID || null,
     host: process.env.UNIFI_ACCESS_HOST || null,
-    port: Number(process.env.UNIFI_ACCESS_PORT) || 12445,
-    token: process.env.UNIFI_ACCESS_TOKEN || null,
     door: process.env.UNIFI_ACCESS_DOOR || null,
     graceBeforeMin: Number(process.env.UNIFI_ACCESS_GRACE_BEFORE_MIN) || 10,
     graceAfterMin: Number(process.env.UNIFI_ACCESS_GRACE_AFTER_MIN) || 15,
-    // Certificat auto-signe (API locale) : meme politique TLS que le mode local
-    // Network - strict par defaut, a desactiver explicitement ou a epingler.
+    // Certificat auto-signe (mode local) : strict par defaut, a desactiver
+    // explicitement (UNIFI_ACCESS_INSECURE_TLS=1) ou a epingler (empreinte).
     insecureTls: process.env.UNIFI_ACCESS_INSECURE_TLS === '1',
     tlsFingerprint: process.env.UNIFI_ACCESS_TLS_FINGERPRINT || null,
   },
