@@ -324,6 +324,17 @@ export async function sendToUser({ userId, code, vars = {}, marketing = false })
 const getResStmt = db.prepare(
   `SELECT r.*, s.name AS space_name FROM reservations r JOIN spaces s ON s.id = r.space_id WHERE r.id = ?`
 );
+// Résa enrichie (membre) pour les notifications admin.
+const getResFullStmt = db.prepare(
+  `SELECT r.*, s.name AS space_name, u.display_name AS member_name, u.email AS member_email
+     FROM reservations r JOIN spaces s ON s.id = r.space_id JOIN users u ON u.id = r.user_id
+    WHERE r.id = ?`
+);
+const adminEmailsStmt = db.prepare(`SELECT email FROM users WHERE role = 'admin'`);
+
+// Montant en centimes → chaîne « 12,00 € » (France).
+const eurFromCents = (cents) =>
+  ((Number(cents) || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 
 // Lien « Ajouter à Google Agenda » (même format que le front GoogleCalendarLink).
 const toGCalDate = (iso) => new Date(iso).toISOString().replace(/[-:]|\.\d{3}/g, '');
@@ -332,7 +343,7 @@ function googleCalendarUrl(r) {
     action: 'TEMPLATE',
     text: `Cazalia — ${r.space_name}`,
     dates: `${toGCalDate(r.start_at)}/${toGCalDate(r.end_at)}`,
-    details: `Réservation — ${r.space_name} (${r.credits_cost} crédits) chez Cazalia.`,
+    details: `Réservation — ${r.space_name} (${eurFromCents(r.price_cents)}) chez Cazalia.`,
     location: 'Cazalia',
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
@@ -343,7 +354,8 @@ function reservationVars(r) {
     space_name: r.space_name,
     booking_date: fmtDate(r.start_at),
     booking_time: `${fmtTime(r.start_at)} – ${fmtTime(r.end_at)}`,
-    credits_cost: r.credits_cost,
+    price: eurFromCents(r.price_cents),
+    credits_cost: eurFromCents(r.price_cents), // compat templates : affiche désormais des euros
     wifi_voucher: r.voucher_code || '',
     arrival_instructions: getArrival().instructions,
     calendar_url: googleCalendarUrl(r),
@@ -365,8 +377,43 @@ export async function sendBookingModified(reservationId) {
 export async function sendBookingCancelled(reservationId, { refunded, amount } = {}) {
   const r = getResStmt.get(reservationId);
   if (!r) return { sent: false, reason: 'RESA_INTROUVABLE' };
-  const refund_info = refunded ? `Vos ${amount} crédits ont été recrédités sur votre compte.` : "Cette annulation n'ouvre pas droit à remboursement (hors délai).";
+  const refund_info = refunded
+    ? `Votre annulation est dans les délais : un remboursement de ${eurFromCents(amount)} vous sera effectué sous quelques jours.`
+    : "Cette annulation n'ouvre pas droit à remboursement (hors délai).";
   return sendToUser({ userId: r.user_id, code: 'booking_cancelled', vars: { ...reservationVars(r), refund_info } });
+}
+
+/**
+ * Notifie les administrateurs qu'un REMBOURSEMENT est à effectuer dans Stripe
+ * (annulation d'une résa payée en ligne, dans les délais). Aucun remboursement
+ * automatique : l'admin le réalise manuellement depuis le tableau de bord Stripe.
+ *
+ * @param {number} reservationId Réservation annulée.
+ * @param {{amount:number}} [p] Montant à rembourser (centimes).
+ * @returns {Promise<object>}
+ */
+export async function sendRefundRequestToAdmin(reservationId, { amount } = {}) {
+  const r = getResFullStmt.get(reservationId);
+  if (!r) return { sent: false, reason: 'RESA_INTROUVABLE' };
+  const admins = adminEmailsStmt.all().map((a) => a.email).filter(Boolean);
+  if (!admins.length) return { sent: false, reason: 'AUCUN_ADMIN' };
+  const subject = `Remboursement à effectuer — ${eurFromCents(amount ?? r.price_cents)} (${r.member_name})`;
+  const body =
+    `<p>Une réservation payée en ligne a été annulée <strong>dans les délais</strong>. ` +
+    `Un remboursement est à effectuer manuellement depuis le tableau de bord Stripe.</p>` +
+    `<ul>` +
+    `<li><strong>Membre :</strong> ${r.member_name} (${r.member_email})</li>` +
+    `<li><strong>Espace :</strong> ${r.space_name}</li>` +
+    `<li><strong>Créneau :</strong> ${fmtDate(r.start_at)} ${fmtTime(r.start_at)} – ${fmtTime(r.end_at)}</li>` +
+    `<li><strong>Montant à rembourser :</strong> ${eurFromCents(amount ?? r.price_cents)}</li>` +
+    (r.payment_intent ? `<li><strong>Paiement Stripe :</strong> ${r.payment_intent}</li>` : '') +
+    `</ul>`;
+  const { subject: s, html } = renderRaw(subject, body, {});
+  const results = [];
+  for (const to of admins) {
+    results.push(await sendMail({ to, subject: s, html, templateCode: 'refund_request' }));
+  }
+  return { sent: results.some((x) => x?.sent), results };
 }
 
 // ── Compat / réutilisés par les routes existantes ────────────────────────────

@@ -22,7 +22,13 @@ CREATE TABLE IF NOT EXISTS spaces (
   capacity         INTEGER NOT NULL CHECK (capacity >= 1),  -- inventaire: nb de places ; exclusif: nb d'occupants max
   exclusive        INTEGER NOT NULL DEFAULT 0,              -- 1 = réservation bloque toute la salle (forfait), sinon inventaire de places
   privatizable     INTEGER NOT NULL DEFAULT 0,             -- 1 = espace inventaire offrant l'option "privatiser" (prendre toute la capacité)
-  credits_per_hour INTEGER NOT NULL CHECK (credits_per_hour >= 0),  -- inventaire: prix PAR place/h ; exclusif: forfait salle/h
+  credits_per_hour INTEGER NOT NULL CHECK (credits_per_hour >= 0),  -- LEGACY (crédits) — conservé, plus utilisé pour le prix
+  -- Tarification en EUROS (centimes). price_per_hour_cents : tarif horaire (par
+  -- place en inventaire, forfait salle en exclusif). Les forfaits demi-journée /
+  -- journée sont facultatifs (NULL = non proposé pour cet espace).
+  price_per_hour_cents  INTEGER,
+  price_half_day_cents  INTEGER,
+  price_day_cents       INTEGER,
   color            TEXT    DEFAULT '#1C3155',
   description      TEXT,                                   -- descriptif public (landing)
   amenities        TEXT,                                   -- prestations incluses, 1 par ligne
@@ -38,8 +44,15 @@ CREATE TABLE IF NOT EXISTS reservations (
   start_at     TEXT    NOT NULL,                       -- ISO 8601 / UTC
   end_at       TEXT    NOT NULL,
   status       TEXT    NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed','cancelled')),
-  credits_cost INTEGER NOT NULL,
+  credits_cost INTEGER NOT NULL DEFAULT 0,            -- LEGACY (crédits) — conservé, plus alimenté
   seats        INTEGER NOT NULL DEFAULT 1,             -- places consommées (inventaire) ; 1 pour un espace exclusif
+  -- Paiement en EUROS. price_cents = montant dû/payé. tarif_type = heure | demi_journee | journee.
+  -- payment_status : 'paid' (payé Stripe ou résa admin gratuite 'free'), 'pending' (en attente du webhook), 'free'.
+  price_cents       INTEGER NOT NULL DEFAULT 0,
+  tarif_type        TEXT,
+  payment_status    TEXT    NOT NULL DEFAULT 'paid',
+  stripe_session_id TEXT,
+  payment_intent    TEXT,
   note         TEXT,                                  -- note libre (admin)
   created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
   CHECK (end_at > start_at)
@@ -155,7 +168,8 @@ CREATE TABLE IF NOT EXISTS reservation_holds (
   start_at          TEXT    NOT NULL,
   end_at            TEXT    NOT NULL,
   seats             INTEGER NOT NULL DEFAULT 1,
-  cost              INTEGER NOT NULL,
+  cost              INTEGER NOT NULL,                 -- montant en EUROS (centimes) pour ce verrou
+  tarif_type        TEXT,                             -- heure | demi_journee | journee
   ignore_hours      INTEGER NOT NULL DEFAULT 0,
   allow_overbooking INTEGER NOT NULL DEFAULT 0,
   created_by        INTEGER REFERENCES users(id),
@@ -201,3 +215,19 @@ CREATE TABLE IF NOT EXISTS credit_purchases (
   updated_at       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_credit_purchases_user ON credit_purchases(user_id);
+
+-- Commandes de réservation payées en ligne (euros). Une session Checkout Stripe
+-- porte un « panier » de créneaux ; à la confirmation du paiement (webhook), les
+-- créneaux du `payload` deviennent des réservations. Idempotent via session_id.
+CREATE TABLE IF NOT EXISTS reservation_orders (
+  id             INTEGER PRIMARY KEY,
+  user_id        INTEGER NOT NULL REFERENCES users(id),
+  session_id     TEXT    NOT NULL UNIQUE,              -- id de la session Checkout Stripe
+  payment_intent TEXT,
+  total_cents    INTEGER NOT NULL,
+  payload        TEXT    NOT NULL,                     -- JSON: [{space_id,start_at,end_at,seats,tarif_type,price_cents}]
+  status         TEXT    NOT NULL DEFAULT 'pending',   -- 'pending' | 'paid'
+  created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+  updated_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_reservation_orders_user ON reservation_orders(user_id);

@@ -69,7 +69,10 @@ export const api = {
 // Messages d'erreur FR à partir des codes renvoyés par l'API (brief §8).
 const MESSAGES = {
   COMPLET: 'Ce créneau est complet.',
-  CREDITS_INSUFFISANTS: 'Crédits insuffisants pour cette réservation.',
+  PAIEMENT_INDISPONIBLE: 'Le paiement en ligne n’est pas disponible pour le moment.',
+  PANIER_VIDE: 'Votre panier est vide.',
+  TARIF_INDISPONIBLE: 'Cette formule n’est pas proposée pour cet espace.',
+  CRENEAU_FORFAIT_INVALIDE: 'Ce créneau ne correspond pas au forfait choisi (demi-journée / journée).',
   CRENEAU_INVALIDE: 'Créneau invalide (fin avant début).',
   CRENEAU_PASSE: 'Ce créneau est déjà passé.',
   DATE_INVALIDE: 'Date invalide.',

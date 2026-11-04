@@ -2,8 +2,15 @@ import Photo from './Photo.jsx';
 
 // Fenêtre détaillée d'un espace (depuis la landing) : photo, descriptif complet,
 // prestations incluses, et bouton pour réserver.
+const eur = (cents) => ((Number(cents) || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+
 export default function SpaceModal({ space, photoSrc, onClose, onReserve }) {
   const amenities = (space.amenities || '').split('\n').map((s) => s.trim()).filter(Boolean);
+  // Tarifs : horaire + forfaits éventuels (demi-journée / journée).
+  const priceParts = [];
+  if (space.price_per_hour_cents != null) priceParts.push(`${eur(space.price_per_hour_cents)}/h`);
+  if (space.price_half_day_cents != null) priceParts.push(`${eur(space.price_half_day_cents)} la demi-journée`);
+  if (space.price_day_cents != null) priceParts.push(`${eur(space.price_day_cents)} la journée`);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -21,7 +28,7 @@ export default function SpaceModal({ space, photoSrc, onClose, onReserve }) {
           <span className="badge grey">{space.kind === 'room' ? 'Salle privative' : 'Open-space'}</span>
           <span className="muted seats">
             {space.kind === 'room' ? 'Réservation exclusive' : `Jusqu'à ${space.capacity} places`} ·{' '}
-            <strong style={{ color: 'var(--navy)' }}>{space.credits_per_hour} crédits/h</strong>
+            <strong style={{ color: 'var(--navy)' }}>{priceParts.join(' · ') || '—'}</strong>
           </span>
         </div>
 

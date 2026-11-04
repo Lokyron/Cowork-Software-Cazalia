@@ -28,6 +28,7 @@ const ROOM = {
     'Visioconférence (webcam HD + micro)',
     'Tableau blanc et marqueurs',
     'Wi-Fi fibre dédié',
+    'Café & thé inclus',
     'Bouteilles d\'eau offertes',
     'Réservable à l\'heure selon vos besoins',
   ].join('\n'),

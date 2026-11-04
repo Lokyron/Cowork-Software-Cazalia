@@ -18,7 +18,6 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
   const [end, setEnd] = useState(initial?.endHM || '10:00');
   const [seats, setSeats] = useState(1);
   const [avail, setAvail] = useState(null);
-  const [balance, setBalance] = useState(null); // client courant
   const [feedback, setFeedback] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -33,7 +32,6 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
 
   useEffect(() => { api.get('/spaces').then((r) => setSpaces(r.spaces)).catch(() => {}); }, []);
   useEffect(() => { if (isAdmin) api.get('/admin/members').then((r) => setMembers(r.members)).catch(() => {}); }, [isAdmin]);
-  useEffect(() => { if (!isAdmin) api.get('/wallet/me').then((r) => setBalance(r.balance)).catch(() => {}); }, [isAdmin]);
 
   const space = spaces.find((s) => String(s.id) === String(spaceId));
   useEffect(() => { setSeats(1); }, [spaceId]);
@@ -59,15 +57,16 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
     return members.filter((m) => `${m.display_name} ${m.email} ${m.phone || ''}`.toLowerCase().includes(qq)).slice(0, 8);
   }, [members, q]);
 
-  const cost = avail?.cost;
-  const effectiveCost = isAdmin && customCost !== '' ? Number(customCost) : cost;
+  const eur = (cents) => (cents == null ? '—' : ((Number(cents)) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
+  const costCents = avail?.cost; // centimes (tarif horaire)
+  const customCents = customCost !== '' ? Math.round(Number(customCost) * 100) : null;
+  const effectiveCents = isAdmin && customCents != null ? customCents : costCents;
   const full = avail && avail.seats_left < seats;
-  const clientInsufficient = !isAdmin && balance != null && effectiveCost != null && effectiveCost > balance;
 
   const canSubmit = () => {
     if (!space || !iso || !iso.valid || busy) return false;
     if (isAdmin && !client) return false;
-    if (!isAdmin && (full || clientInsufficient)) return false; // règles strictes côté client
+    if (!isAdmin && full) return false; // règles strictes côté client
     return true;
   };
 
@@ -82,7 +81,9 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
         });
         onCreated?.(`Réservation créée pour ${client.display_name}.`);
       } else {
-        await api.post('/reservations', { space_id: space.id, start_at: iso.s, end_at: iso.e, seats });
+        // Membre : paiement CB → on redirige vers Stripe. La résa est créée au webhook.
+        const { url } = await api.post('/reservations', { space_id: space.id, start_at: iso.s, end_at: iso.e, seats, tarif_type: 'heure' });
+        if (url) { window.location.assign(url); return; }
         onCreated?.('Réservation confirmée.');
       }
     } catch (err) {
@@ -115,7 +116,7 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
               <label>Client</label>
               {client ? (
                 <div className="flex-between" style={{ gap: 8 }}>
-                  <span><span className="dot" style={{ background: 'var(--accent)' }} />{client.display_name} · <span className="muted">{client.balance} cr.</span></span>
+                  <span><span className="dot" style={{ background: 'var(--accent)' }} />{client.display_name}</span>
                   <button className="outline small" onClick={() => { setClient(null); setQ(''); }}>Changer</button>
                 </div>
               ) : (
@@ -126,7 +127,7 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
                       <div className="ac-menu">
                         {filtered.map((m) => (
                           <button key={m.id} type="button" className="ac-item" onClick={() => { setClient(m); setQ(''); }}>
-                            {m.display_name} <span className="muted">· {m.email} · {m.balance} cr.</span>
+                            {m.display_name} <span className="muted">· {m.email}</span>
                           </button>
                         ))}
                       </div>
@@ -169,8 +170,7 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
                   {avail.exclusive
                     ? <span className={`badge ${full ? 'red' : 'green'}`}>{full ? 'Réservé' : 'Disponible'}</span>
                     : <span className={`badge ${full ? 'red' : 'green'}`}>{avail.seats_left} place{avail.seats_left > 1 ? 's' : ''} restante{avail.seats_left > 1 ? 's' : ''}</span>}
-                  {' '}<span className="muted">≈ {effectiveCost} crédits</span>
-                  {clientInsufficient && <span className="badge red" style={{ marginLeft: 8 }}>Solde insuffisant</span>}
+                  {' '}<span className="muted">{effectiveCents != null ? eur(effectiveCents) : 'tarif indisponible'}</span>
                 </>}
           </div>
 
@@ -186,8 +186,8 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
                 Autoriser le surbooking (dépasser la capacité)
               </label>
               <div className="field" style={{ marginTop: 8, maxWidth: 240 }}>
-                <label>Tarif personnalisé / remise (crédits)</label>
-                <input type="number" min="0" placeholder={cost != null ? `défaut ${cost}` : 'défaut'} value={customCost}
+                <label>Tarif personnalisé / remise (euros)</label>
+                <input type="number" min="0" step="0.01" placeholder={costCents != null ? `défaut ${(costCents / 100).toFixed(2)}` : 'défaut'} value={customCost}
                   onChange={(e) => setCustomCost(e.target.value)} />
               </div>
             </div>
@@ -195,10 +195,9 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
 
           <div className="flex-between">
             <div className="muted seats">
-              Coût : <strong>{effectiveCost ?? '—'} crédits</strong>
-              {!isAdmin && balance != null && <> · solde {balance}</>}
+              {isAdmin ? 'Montant' : 'À payer'} : <strong>{effectiveCents != null ? eur(effectiveCents) : '—'}</strong>
             </div>
-            <button disabled={!canSubmit()} onClick={submit}>Réserver</button>
+            <button disabled={!canSubmit()} onClick={submit}>{isAdmin ? 'Réserver' : 'Payer et réserver'}</button>
           </div>
         </div>
       </div>

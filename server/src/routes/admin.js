@@ -51,9 +51,16 @@ adminRouter.get('/dashboard', (_req, res) => {
 
 // ── Espaces : CRUD (zones et salles, une seule table) ────────────────────────
 const insertSpace = db.prepare(
-  `INSERT INTO spaces (name, kind, capacity, exclusive, privatizable, credits_per_hour, color, description, amenities, photo, active)
-   VALUES (@name, @kind, @capacity, @exclusive, @privatizable, @credits_per_hour, @color, @description, @amenities, @photo, @active)`
+  `INSERT INTO spaces (name, kind, capacity, exclusive, privatizable, credits_per_hour,
+                       price_per_hour_cents, price_half_day_cents, price_day_cents,
+                       color, description, amenities, photo, active)
+   VALUES (@name, @kind, @capacity, @exclusive, @privatizable, @credits_per_hour,
+           @price_per_hour_cents, @price_half_day_cents, @price_day_cents,
+           @color, @description, @amenities, @photo, @active)`
 );
+
+// Euros (saisis dans l'admin) → centimes. '' ou absent → null (forfait non proposé).
+const eurToCents = (v) => (v == null || v === '' ? null : Math.max(0, Math.round(Number(v) * 100)));
 
 adminRouter.get('/spaces', (_req, res) => {
   res.json({ spaces: db.prepare(`SELECT * FROM spaces ORDER BY kind, name`).all() });
@@ -73,7 +80,10 @@ adminRouter.post('/spaces', (req, res) => {
       capacity,
       exclusive,
       privatizable: !exclusive && b.privatizable ? 1 : 0,
-      credits_per_hour: Math.max(0, Number(b.credits_per_hour) || 0),
+      price_per_hour_cents: eurToCents(b.price_per_hour) ?? 0,
+      price_half_day_cents: eurToCents(b.price_half_day),
+      price_day_cents: eurToCents(b.price_day),
+      credits_per_hour: 0, // LEGACY (plus utilisé)
       color: b.color || '#1C3155',
       description: b.description != null ? String(b.description) : defaults.description,
       amenities: b.amenities != null ? String(b.amenities) : defaults.amenities,
@@ -105,7 +115,10 @@ adminRouter.put('/spaces/:id', (req, res) => {
     capacity,
     exclusive,
     privatizable: exclusive ? 0 : (b.privatizable != null ? (b.privatizable ? 1 : 0) : existing.privatizable),
-    credits_per_hour: b.credits_per_hour != null ? Math.max(0, Number(b.credits_per_hour)) : existing.credits_per_hour,
+    price_per_hour_cents: b.price_per_hour !== undefined ? (eurToCents(b.price_per_hour) ?? 0) : existing.price_per_hour_cents,
+    price_half_day_cents: b.price_half_day !== undefined ? eurToCents(b.price_half_day) : existing.price_half_day_cents,
+    price_day_cents: b.price_day !== undefined ? eurToCents(b.price_day) : existing.price_day_cents,
+    credits_per_hour: existing.credits_per_hour, // LEGACY
     color: b.color ?? existing.color,
     description: b.description != null ? String(b.description) : existing.description,
     amenities: b.amenities != null ? String(b.amenities) : existing.amenities,
@@ -114,7 +127,9 @@ adminRouter.put('/spaces/:id', (req, res) => {
   };
   db.prepare(
     `UPDATE spaces SET name=@name, kind=@kind, capacity=@capacity, exclusive=@exclusive, privatizable=@privatizable,
-        credits_per_hour=@credits_per_hour, color=@color,
+        credits_per_hour=@credits_per_hour,
+        price_per_hour_cents=@price_per_hour_cents, price_half_day_cents=@price_half_day_cents, price_day_cents=@price_day_cents,
+        color=@color,
         description=@description, amenities=@amenities, photo=@photo, active=@active WHERE id=@id`
   ).run({ ...next, id });
   res.json({ space: db.prepare(`SELECT * FROM spaces WHERE id = ?`).get(id) });
@@ -202,7 +217,10 @@ adminRouter.post('/reservations', async (req, res) => {
     const opts = {
       ignoreHours: !!b.ignore_hours,
       allowOverbooking: !!b.allow_overbooking,
-      customCost: b.custom_cost != null && b.custom_cost !== '' ? Number(b.custom_cost) : undefined,
+      tarifType: b.tarif_type || 'heure',
+      // Tarif / remise personnalisé saisi en EUROS → centimes.
+      customCostCents: b.custom_cost != null && b.custom_cost !== '' ? Math.max(0, Math.round(Number(b.custom_cost) * 100)) : undefined,
+      paymentStatus: 'free', // résa admin : gratuite (paiement géré hors ligne)
       createdBy: req.user.id,
     };
     const result = reserve(userId, spaceId, b.start_at, b.end_at, b.seats, opts);
@@ -233,7 +251,8 @@ adminRouter.post('/cart', (req, res) => {
     const opts = {
       ignoreHours: !!b.ignore_hours,
       allowOverbooking: !!b.allow_overbooking,
-      customCost: b.custom_cost != null && b.custom_cost !== '' ? Number(b.custom_cost) : undefined,
+      tarifType: b.tarif_type || 'heure',
+      customCostCents: b.custom_cost != null && b.custom_cost !== '' ? Math.max(0, Math.round(Number(b.custom_cost) * 100)) : undefined,
       createdBy: req.user.id,
     };
     const hold = addHold(userId, spaceId, b.start_at, b.end_at, b.seats, opts);
@@ -250,7 +269,7 @@ adminRouter.post('/cart/checkout', async (req, res) => {
   try {
     const userId = Number(req.body?.user_id);
     if (!userId) return res.status(400).json({ error: 'CHAMPS_INVALIDES' });
-    const result = checkout(userId, req.user);
+    const result = checkout(userId);
     await Promise.allSettled(result.reservations.map((r) => ensureVoucherForReservation(r.reservationId)));
     result.reservations.forEach((r) => sendBookingConfirmation(r.reservationId).catch(() => {}));
     res.status(201).json(result);

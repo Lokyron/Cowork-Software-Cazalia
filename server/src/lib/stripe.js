@@ -66,6 +66,41 @@ export async function createCheckoutSession({ userId, pack, baseUrl }) {
 }
 
 /**
+ * Crée une session Checkout pour PAYER une réservation (ou un panier de créneaux).
+ * Une ligne par créneau ; le crédit du portefeuille n'existe plus — on paie le
+ * montant réel en euros. La réservation est créée au webhook (cf. lib/orders.js).
+ *
+ * @param {object} params
+ * @param {number} params.userId Membre qui réserve.
+ * @param {Array<{price_cents:number,label:string}>} params.items Lignes à facturer.
+ * @param {string} params.baseUrl Origine publique (URL de retour).
+ * @returns {Promise<import('stripe').Stripe.Checkout.Session>}
+ * @throws {Error} `STRIPE_NON_CONFIGURE`.
+ */
+export async function createBookingCheckoutSession({ userId, items, baseUrl }) {
+  const stripe = client();
+  if (!stripe) { const e = new Error('STRIPE_NON_CONFIGURE'); e.code = 'STRIPE_NON_CONFIGURE'; throw e; }
+  const base = String(baseUrl || '').replace(/\/$/, '');
+  const line_items = items.map((it) => ({
+    quantity: 1,
+    price_data: {
+      currency: 'eur',
+      unit_amount: it.price_cents,
+      product_data: { name: it.label || 'Réservation Cazalia' },
+    },
+  }));
+  return stripe.checkout.sessions.create({
+    mode: 'payment',
+    payment_method_types: ['card'],
+    client_reference_id: String(userId),
+    metadata: { kind: 'booking', user_id: String(userId) },
+    line_items,
+    success_url: `${base}/mon-espace?reservation=success`,
+    cancel_url: `${base}/mon-espace?reservation=cancel`,
+  });
+}
+
+/**
  * Vérifie et décode un événement de webhook Stripe à partir du CORPS BRUT.
  * La signature garantit que l'appel provient bien de Stripe (et non d'un POST forgé).
  *

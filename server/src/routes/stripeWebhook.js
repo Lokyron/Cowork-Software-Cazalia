@@ -7,11 +7,16 @@
 // serveurs de Stripe. Un POST forgé sans signature valide est rejeté en 400.
 
 import { constructEvent } from '../lib/stripe.js';
-import { fulfillPurchase } from '../lib/purchases.js';
+import { fulfillOrder } from '../lib/orders.js';
+import { ensureVoucherForReservation } from '../lib/unifi.js';
+import { sendBookingConfirmation } from '../lib/mailer.js';
 import { securityEvent } from '../lib/audit.js';
 
 /**
  * Handler Express brut pour POST /api/webhooks/stripe.
+ * À la confirmation d'un paiement de réservation, convertit la commande en
+ * réservations (idempotent) puis déclenche voucher Wi-Fi + e-mail de confirmation.
+ *
  * @param {import('express').Request} req `req.body` est un Buffer (express.raw).
  * @param {import('express').Response} res
  */
@@ -21,7 +26,6 @@ export function stripeWebhookHandler(req, res) {
   try {
     event = constructEvent(req.body, signature);
   } catch (err) {
-    // Signature invalide / Stripe non configuré : on refuse sans rien traiter.
     securityEvent('stripe_webhook_rejet', { raison: err.message });
     return res.status(400).json({ error: 'SIGNATURE_INVALIDE' });
   }
@@ -29,29 +33,24 @@ export function stripeWebhookHandler(req, res) {
   try {
     if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
-      // On ne crédite que si le paiement est effectivement encaissé.
-      if (s.payment_status === 'paid') {
-        const userId = Number(s.metadata?.user_id);
-        const credits = Number(s.metadata?.credits);
-        const amountEurCents = Number(s.amount_total);
-        if (Number.isInteger(userId) && Number.isInteger(credits) && credits > 0) {
-          const r = fulfillPurchase({
-            sessionId: s.id,
-            paymentIntent: typeof s.payment_intent === 'string' ? s.payment_intent : null,
-            userId,
-            credits,
-            amountEurCents,
-          });
-          securityEvent('stripe_recharge', { session: s.id, credited: r.credited, deja: r.alreadyProcessed });
-        } else {
-          securityEvent('stripe_webhook_metadonnees', { session: s.id });
+      // On ne crée les réservations que si le paiement est réellement encaissé.
+      if (s.payment_status === 'paid' && s.metadata?.kind === 'booking') {
+        const paymentIntent = typeof s.payment_intent === 'string' ? s.payment_intent : null;
+        const r = fulfillOrder(s.id, paymentIntent);
+        securityEvent('stripe_reservation_payee', {
+          session: s.id, created: r.created?.length || 0, deja: r.alreadyProcessed, inconnu: r.unknown,
+        });
+        // Best-effort, hors transaction : voucher Wi-Fi + e-mail de confirmation.
+        for (const id of r.created || []) {
+          ensureVoucherForReservation(id).catch(() => {});
+          sendBookingConfirmation(id).catch(() => {});
         }
       }
     }
     // Les événements non traités sont acquittés (Stripe cesse de les renvoyer).
     return res.json({ received: true });
   } catch (err) {
-    // Échec de traitement : on renvoie 500 pour que Stripe RÉESSAIE la livraison.
+    // Échec de traitement : 500 pour que Stripe RÉESSAIE la livraison.
     console.error('[stripe:webhook]', event?.type, err);
     return res.status(500).json({ error: 'TRAITEMENT_ECHOUE' });
   }

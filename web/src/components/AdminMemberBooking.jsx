@@ -49,10 +49,10 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
   const addSlot = () => setSlots((ss) => [...ss, newSlot(ss[ss.length - 1]?.date)]);
   const removeSlot = (id) => setSlots((ss) => (ss.length > 1 ? ss.filter((s) => s.id !== id) : ss));
 
+  const eur = (cents) => ((Number(cents) || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
   const total = slots.reduce((sum, s) => { const a = avail[s.id]; return sum + (a && a.cost ? a.cost : 0); }, 0);
   const allValid = slots.every((s) => slotIso(s).valid);
   const anyFull = slots.some((s) => { const a = avail[s.id]; return a && a !== 'invalid' && a.seats_left < s.seats; });
-  const insufficient = total > member.balance;
 
   const reserve = async () => {
     setFeedback(null); setBadSlot(null); setBusy(true);
@@ -62,7 +62,7 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
     };
     try {
       const r = await api.post(`/admin/members/${member.id}/reservations`, payload);
-      onDone?.(`${r.count} réservation${r.count > 1 ? 's' : ''} créée${r.count > 1 ? 's' : ''} pour ${member.display_name} — ${r.total} crédits débités.`);
+      onDone?.(`${r.count} réservation${r.count > 1 ? 's' : ''} créée${r.count > 1 ? 's' : ''} pour ${member.display_name} (gratuite — paiement hors ligne).`);
     } catch (err) {
       const idx = err.data?.slot_index;
       if (idx != null) setBadSlot(idx);
@@ -79,7 +79,7 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
           <h2 style={{ margin: 0 }}>Réserver pour {member.display_name}</h2>
           <button className="ghost" style={{ color: 'var(--ink)', border: '1px solid var(--line)' }} onClick={onClose}>✕</button>
         </div>
-        <p className="subtitle" style={{ marginBottom: 14 }}>Solde du membre : <strong>{member.balance} crédits</strong></p>
+        <p className="subtitle" style={{ marginBottom: 14 }}>Réservation enregistrée pour le membre (gratuite — paiement géré hors ligne).</p>
 
         {feedback && <div className="alert error">{feedback.text}</div>}
 
@@ -88,7 +88,7 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
           <select value={spaceId} onChange={(e) => setSpaceId(e.target.value)}>
             {spaces.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} — {s.credits_per_hour} cr/h {s.exclusive ? '(salle, forfait)' : s.privatizable ? '(focus, /poste)' : '(open-space, /place)'}
+                {s.name} — {s.price_per_hour_cents != null ? `${eur(s.price_per_hour_cents)}/h` : '—'} {s.exclusive ? '(salle, forfait)' : s.privatizable ? '(focus, /poste)' : '(open-space, /place)'}
               </option>
             ))}
           </select>
@@ -126,7 +126,7 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
                       {!valid ? <span className="badge red">Invalide</span>
                         : a == null || a === 'invalid' ? <span className="muted">…</span>
                         : full ? <span className="badge red">{space?.exclusive ? 'Réservé' : 'Complet'}</span>
-                        : <><span className="badge green">{space?.exclusive ? 'Dispo' : `${a.seats_left} pl.`}</span> <span className="muted">≈ {a.cost} cr.</span></>}
+                        : <><span className="badge green">{space?.exclusive ? 'Dispo' : `${a.seats_left} pl.`}</span> <span className="muted">{a.cost != null ? eur(a.cost) : ''}</span></>}
                     </div>
                   </div>
                   <div className="field" style={{ flex: '0 0 auto' }}><label>&nbsp;</label><button className="outline small" onClick={() => removeSlot(s.id)} disabled={slots.length <= 1}>✕</button></div>
@@ -139,11 +139,10 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
 
         <div className="flex-between" style={{ marginTop: 16, flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div className="muted seats">Total</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--navy)' }}>{total} crédits</div>
-            {insufficient && <div className="seats" style={{ color: 'var(--red)' }}>Solde insuffisant — rechargez le compte d'abord.</div>}
+            <div className="muted seats">Total indicatif</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--navy)' }}>{eur(total)}</div>
           </div>
-          <button onClick={reserve} disabled={busy || !allValid || anyFull || insufficient}>
+          <button onClick={reserve} disabled={busy || !allValid || anyFull}>
             Réserver {slots.length} créneau{slots.length > 1 ? 'x' : ''}
           </button>
         </div>

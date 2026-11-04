@@ -2,7 +2,9 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { api, msg } from '../api.js';
 import { prepareImage } from '../lib/image.js';
 
-const EMPTY = { name: '', kind: 'zone', capacity: 8, exclusive: false, privatizable: false, credits_per_hour: 2, color: '#1C3155', description: '', amenities: '', photo: null, active: true };
+const EMPTY = { name: '', kind: 'zone', capacity: 8, exclusive: false, privatizable: false, price_per_hour: 7, price_half_day: '', price_day: '', color: '#1C3155', description: '', amenities: '', photo: null, active: true };
+// Centimes (API) → chaîne euros pour l'édition ('' si forfait non défini).
+const centsToEur = (c) => (c == null ? '' : String(c / 100));
 
 export default function AdminSpaces() {
   const [spaces, setSpaces] = useState([]);
@@ -23,7 +25,7 @@ export default function AdminSpaces() {
 
   const startEdit = (s) => {
     setEditingId(s.id);
-    setForm({ name: s.name, kind: s.kind, capacity: s.capacity, exclusive: !!s.exclusive, privatizable: !!s.privatizable, credits_per_hour: s.credits_per_hour, color: s.color, description: s.description || '', amenities: s.amenities || '', photo: s.photo || null, active: !!s.active });
+    setForm({ name: s.name, kind: s.kind, capacity: s.capacity, exclusive: !!s.exclusive, privatizable: !!s.privatizable, price_per_hour: centsToEur(s.price_per_hour_cents), price_half_day: centsToEur(s.price_half_day_cents), price_day: centsToEur(s.price_day_cents), color: s.color, description: s.description || '', amenities: s.amenities || '', photo: s.photo || null, active: !!s.active });
   };
   const reset = () => { setEditingId(null); setForm(EMPTY); };
 
@@ -33,7 +35,10 @@ export default function AdminSpaces() {
     const payload = {
       ...form,
       capacity: Number(form.capacity),
-      credits_per_hour: Number(form.credits_per_hour),
+      // Euros (laissés tels quels) ; le serveur convertit en centimes. '' = forfait non proposé.
+      price_per_hour: form.price_per_hour,
+      price_half_day: form.price_half_day,
+      price_day: form.price_day,
     };
     try {
       if (editingId) await api.put(`/admin/spaces/${editingId}`, payload);
@@ -85,12 +90,22 @@ export default function AdminSpaces() {
             </div>
             <div className="row" style={{ marginTop: 14 }}>
               <div className="field">
-                <label>{form.exclusive ? 'Crédits/h (forfait salle)' : 'Crédits/h (par place)'}</label>
-                <input type="number" min="0" value={form.credits_per_hour} onChange={set('credits_per_hour')} />
+                <label>{form.exclusive ? 'Tarif horaire € (forfait salle)' : 'Tarif horaire € (par place)'}</label>
+                <input type="number" min="0" step="0.01" value={form.price_per_hour} onChange={set('price_per_hour')} />
               </div>
               <div className="field" style={{ maxWidth: 90 }}>
                 <label>Couleur</label>
                 <input type="color" value={form.color} onChange={set('color')} style={{ height: 42, padding: 4 }} />
+              </div>
+            </div>
+            <div className="row">
+              <div className="field">
+                <label>Forfait demi-journée € <span className="muted">(vide = non proposé)</span></label>
+                <input type="number" min="0" step="0.01" placeholder="ex. 12" value={form.price_half_day} onChange={set('price_half_day')} />
+              </div>
+              <div className="field">
+                <label>Forfait journée € <span className="muted">(vide = non proposé)</span></label>
+                <input type="number" min="0" step="0.01" placeholder="ex. 20" value={form.price_day} onChange={set('price_day')} />
               </div>
             </div>
             <SpacePhotoField
@@ -120,14 +135,18 @@ export default function AdminSpaces() {
         <div className="card">
           <h2>Espaces existants</h2>
           <table>
-            <thead><tr><th>Nom</th><th>Type</th><th>Cap.</th><th>Cr/h</th><th></th></tr></thead>
+            <thead><tr><th>Nom</th><th>Type</th><th>Cap.</th><th>€/h · ½j · j</th><th></th></tr></thead>
             <tbody>
               {spaces.map((s) => (
                 <tr key={s.id} style={{ opacity: s.active ? 1 : 0.5 }}>
                   <td><span className="dot" style={{ background: s.color }} />{s.name}</td>
                   <td>{s.exclusive ? 'Exclusive' : s.privatizable ? 'Focus' : 'Open-space'}</td>
                   <td>{s.capacity}</td>
-                  <td>{s.credits_per_hour}</td>
+                  <td className="muted seats">
+                    {centsToEur(s.price_per_hour_cents) || '—'}€
+                    {' · '}{s.price_half_day_cents != null ? `${s.price_half_day_cents / 100}€` : '—'}
+                    {' · '}{s.price_day_cents != null ? `${s.price_day_cents / 100}€` : '—'}
+                  </td>
                   <td><button className="outline small" onClick={() => startEdit(s)}>Éditer</button></td>
                 </tr>
               ))}

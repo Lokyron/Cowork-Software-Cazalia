@@ -1,7 +1,6 @@
 import { db } from '../db.js';
 import { config } from '../config.js';
 import { fail } from './errors.js';
-import { getBalance } from './wallet.js';
 import { billedHours, toUtcIso, isBeforeRefundWindow, parisWeekday, parisMinutes } from './time.js';
 
 /**
@@ -100,36 +99,101 @@ export function resolveSeats(space, seatsRaw) {
   return Math.min(space.capacity, Math.max(1, n));
 }
 
-// Coût : exclusif = forfait salle × heures ; inventaire = tarif/place × heures × places.
+// ── Tarification en EUROS (centimes) ─────────────────────────────────────────
+// Trois types de tarif : 'heure' (tarif horaire × heures facturées × places),
+// 'demi_journee' et 'journee' (forfaits à prix fixe). Les forfaits exigent que le
+// créneau corresponde EXACTEMENT à une fenêtre forfaitaire du jour (config.forfaitSlots).
+
 /**
- * Calcule le coût en crédits d'un créneau.
- * Deux tarifications : espace exclusif = forfait salle × heures facturées ;
- * espace à inventaire = tarif par place × heures × nombre de places.
- * Les heures sont arrondies à l'heure supérieure, minimum 1 (cf. brief §5.3).
+ * Vrai si le créneau correspond exactement à l'une des fenêtres forfaitaires du
+ * jour pour le type demandé. Calcul en heure de Paris (créneaux stockés en UTC).
+ * @param {string} startIso Début (ISO/UTC).
+ * @param {string} endIso Fin (ISO/UTC).
+ * @param {'demi_journee'|'journee'} tarifType Type de forfait.
+ * @returns {boolean}
+ */
+export function slotMatchesForfait(startIso, endIso, tarifType) {
+  const windows = config.forfaitSlots?.[parisWeekday(startIso)]?.[tarifType] || [];
+  const s = parisMinutes(startIso);
+  let e = parisMinutes(endIso);
+  if (e === 0) e = 24 * 60;
+  return windows.some(([a, b]) => a === s && b === e);
+}
+
+/**
+ * Calcule le prix d'un créneau EN CENTIMES d'euro, selon le type de tarif.
+ * Inventaire : prix × places ; exclusif : prix forfaitaire salle (places = 1).
  *
+ * @param {object} space Ligne d'espace (doit porter les colonnes price_*_cents).
+ * @param {string} startIso Début (ISO/UTC).
+ * @param {string} endIso Fin (ISO/UTC).
+ * @param {number} seats Places (ignoré si exclusif).
+ * @param {'heure'|'demi_journee'|'journee'} [tarifType] Type de tarif (défaut 'heure').
+ * @returns {number} Prix en centimes.
+ * @throws {Error} `TARIF_INDISPONIBLE`, `CRENEAU_FORFAIT_INVALIDE`.
+ */
+export function priceCents(space, startIso, endIso, seats, tarifType = 'heure') {
+  const units = space.exclusive ? 1 : Math.max(1, seats);
+  if (tarifType === 'demi_journee' || tarifType === 'journee') {
+    const unit = tarifType === 'demi_journee' ? space.price_half_day_cents : space.price_day_cents;
+    if (unit == null) throw fail('TARIF_INDISPONIBLE');
+    if (!slotMatchesForfait(startIso, endIso, tarifType)) throw fail('CRENEAU_FORFAIT_INVALIDE');
+    return unit * units;
+  }
+  const rate = space.price_per_hour_cents ?? 0;
+  return rate * billedHours(startIso, endIso) * units;
+}
+
+/**
+ * Prix d'un créneau en centimes (résout l'espace par son id).
  * @param {number} spaceId Espace concerné.
  * @param {string} startIso Début (ISO/UTC).
  * @param {string} endIso Fin (ISO/UTC).
- * @param {number|string} [seatsRaw] Nombre de places demandé (ignoré si exclusif).
- * @returns {number} Coût en crédits.
- * @throws {Error} `ESPACE_INTROUVABLE`.
+ * @param {number|string} [seatsRaw] Places demandées (ignoré si exclusif).
+ * @param {'heure'|'demi_journee'|'journee'} [tarifType] Type de tarif.
+ * @returns {number} Prix en centimes.
+ * @throws {Error} `ESPACE_INTROUVABLE`, `TARIF_INDISPONIBLE`, `CRENEAU_FORFAIT_INVALIDE`.
  */
-export function quoteCost(spaceId, startIso, endIso, seatsRaw = 1) {
+export function quoteCost(spaceId, startIso, endIso, seatsRaw = 1, tarifType = 'heure') {
   const space = spaceStmt.get(spaceId);
   if (!space) throw fail('ESPACE_INTROUVABLE');
-  const hours = billedHours(startIso, endIso);
-  if (space.exclusive) return space.credits_per_hour * hours;
-  return space.credits_per_hour * hours * resolveSeats(space, seatsRaw);
+  return priceCents(space, startIso, endIso, resolveSeats(space, seatsRaw), tarifType);
 }
 
+// Création d'une réservation (euros). `credits_cost` reste à 0 (colonne héritée).
 const insertResStmt = db.prepare(
-  `INSERT INTO reservations (user_id, space_id, start_at, end_at, credits_cost, seats)
-   VALUES (?, ?, ?, ?, ?, ?)`
+  `INSERT INTO reservations
+     (user_id, space_id, start_at, end_at, credits_cost, seats,
+      price_cents, tarif_type, payment_status, stripe_session_id, payment_intent)
+   VALUES (@user_id, @space_id, @start_at, @end_at, 0, @seats,
+           @price_cents, @tarif_type, @payment_status, @stripe_session_id, @payment_intent)`
 );
-const insertBookingTxStmt = db.prepare(
-  `INSERT INTO credit_transactions (user_id, amount, reason, reservation_id, created_by)
-   VALUES (?, ?, 'booking', ?, ?)`
-);
+
+/**
+ * Insère une réservation confirmée. Utilisé par le back-office (résa gratuite,
+ * paiement hors ligne) ET par la confirmation de paiement Stripe (webhook).
+ * N'effectue AUCun mouvement financier : le paiement est géré en amont (Stripe)
+ * ou hors ligne (admin).
+ *
+ * @param {object} p
+ * @returns {number|bigint} id de la réservation créée.
+ */
+function insertReservation(p) {
+  const info = insertResStmt.run({
+    user_id: p.userId,
+    space_id: p.spaceId,
+    start_at: p.startIso,
+    end_at: p.endIso,
+    seats: p.seats,
+    price_cents: p.priceCents ?? 0,
+    tarif_type: p.tarifType ?? null,
+    payment_status: p.paymentStatus ?? 'free',
+    stripe_session_id: p.stripeSessionId ?? null,
+    payment_intent: p.paymentIntent ?? null,
+  });
+  return info.lastInsertRowid;
+}
+export { insertReservation };
 
 // Normalise + valide un créneau brut. `slotIndex` (optionnel) est attaché à
 // l'erreur pour permettre au client de pointer le créneau fautif dans un lot.
@@ -166,11 +230,17 @@ const reserveTx = db.transaction((userId, spaceId, startIso, endIso, seatsRaw, o
   if (!o.ignoreHours && !withinOpeningHours(startIso, endIso)) throw fail('HORS_HORAIRES');
   const seats = resolveSeats(space, seatsRaw);
   if (!o.allowOverbooking && availableSeats(spaceId, startIso, endIso) < seats) throw fail('COMPLET');
-  const cost = o.customCost != null ? Math.max(0, Math.round(o.customCost)) : quoteCost(spaceId, startIso, endIso, seats);
-  if (getBalance(userId) < cost) throw fail('CREDITS_INSUFFISANTS');
-  const res = insertResStmt.run(userId, spaceId, startIso, endIso, cost, seats);
-  insertBookingTxStmt.run(userId, -cost, res.lastInsertRowid, o.createdBy ?? userId);
-  return { reservationId: res.lastInsertRowid, cost, seats };
+  const tarifType = o.tarifType || 'heure';
+  const price = o.customCostCents != null
+    ? Math.max(0, Math.round(o.customCostCents))
+    : priceCents(space, startIso, endIso, seats, tarifType);
+  const reservationId = insertReservation({
+    userId, spaceId, startIso, endIso, seats,
+    priceCents: price, tarifType,
+    paymentStatus: o.paymentStatus || 'free',
+    stripeSessionId: o.stripeSessionId, paymentIntent: o.paymentIntent,
+  });
+  return { reservationId, cost: price, seats };
 });
 
 /**
@@ -223,24 +293,27 @@ export function reserveBatch(userId, spaceId, rawSlots, opts = {}) {
   const space = spaceStmt.get(spaceId);
   if (!space) throw fail('ESPACE_INTROUVABLE');
   const o = opts || {};
-  const slots = rawSlots.map((s, i) => ({ i, seatsRaw: s.seats, ...validateSlot(s.start_at, s.end_at, i) }));
+  const slots = rawSlots.map((s, i) => ({ i, seatsRaw: s.seats, tarifType: s.tarif_type || 'heure', ...validateSlot(s.start_at, s.end_at, i) }));
 
   const tx = db.transaction(() => {
     for (const sl of slots) {
       if (!o.ignoreHours && !withinOpeningHours(sl.startIso, sl.endIso)) throw fail('HORS_HORAIRES', { slotIndex: sl.i });
       sl.seats = resolveSeats(space, sl.seatsRaw);
-      sl.cost = quoteCost(spaceId, sl.startIso, sl.endIso, sl.seats);
+      sl.cost = priceCents(space, sl.startIso, sl.endIso, sl.seats, sl.tarifType);
     }
     const total = slots.reduce((sum, sl) => sum + sl.cost, 0);
-    if (getBalance(userId) < total) throw fail('CREDITS_INSUFFISANTS');
 
     const created = [];
     for (const sl of slots) {
       // La dispo tient compte des créneaux déjà insérés dans CETTE transaction.
       if (!o.allowOverbooking && availableSeats(spaceId, sl.startIso, sl.endIso) < sl.seats) throw fail('COMPLET', { slotIndex: sl.i });
-      const r = insertResStmt.run(userId, spaceId, sl.startIso, sl.endIso, sl.cost, sl.seats);
-      insertBookingTxStmt.run(userId, -sl.cost, r.lastInsertRowid, o.createdBy ?? userId);
-      created.push({ reservationId: r.lastInsertRowid, cost: sl.cost, seats: sl.seats, start_at: sl.startIso, end_at: sl.endIso });
+      const reservationId = insertReservation({
+        userId, spaceId, startIso: sl.startIso, endIso: sl.endIso, seats: sl.seats,
+        priceCents: sl.cost, tarifType: sl.tarifType,
+        paymentStatus: o.paymentStatus || 'free',
+        stripeSessionId: o.stripeSessionId, paymentIntent: o.paymentIntent,
+      });
+      created.push({ reservationId, cost: sl.cost, seats: sl.seats, start_at: sl.startIso, end_at: sl.endIso });
     }
     return { reservations: created, total, count: created.length };
   });
@@ -252,11 +325,6 @@ const getResStmt = db.prepare(`SELECT * FROM reservations WHERE id = ?`);
 const cancelResStmt = db.prepare(
   `UPDATE reservations SET status = 'cancelled' WHERE id = ? AND status = 'confirmed'`
 );
-const insertRefundStmt = db.prepare(
-  `INSERT INTO credit_transactions (user_id, amount, reason, reservation_id, note, created_by)
-   VALUES (?, ?, 'refund', ?, ?, ?)`
-);
-
 // Charge une réservation confirmée ou lève (RESA_INTROUVABLE / DEJA_ANNULEE).
 function getConfirmed(id) {
   const res = getResStmt.get(id);
@@ -273,18 +341,11 @@ const cancelTx = db.transaction((reservationId, actor) => {
   if (res.status !== 'confirmed') throw fail('DEJA_ANNULEE');
   cancelResStmt.run(reservationId);
 
-  // Remboursement total si annulée avant la fenêtre configurable, sinon rien.
-  const refunded = isBeforeRefundWindow(res.start_at, config.refundWindowHours);
-  if (refunded && res.credits_cost > 0) {
-    insertRefundStmt.run(
-      res.user_id,
-      res.credits_cost,
-      reservationId,
-      `Remboursement annulation (> ${config.refundWindowHours}h avant)`,
-      actor.id
-    );
-  }
-  return { cancelled: true, refunded, amount: refunded ? res.credits_cost : 0 };
+  // Remboursement DÛ (à effectuer manuellement dans Stripe par l'admin) si
+  // l'annulation intervient avant la fenêtre ET que la résa a été payée en ligne.
+  const inWindow = isBeforeRefundWindow(res.start_at, config.refundWindowHours);
+  const refundDue = inWindow && res.payment_status === 'paid' && res.price_cents > 0;
+  return { cancelled: true, refunded: refundDue, amount: refundDue ? res.price_cents : 0, inWindow };
 });
 
 /**
@@ -393,13 +454,12 @@ export function moveReservation(id, startRaw, endRaw) {
 }
 
 // Annulation par l'admin : remboursement TOTAL systématique (geste commercial).
-const adminCancelTx = db.transaction((id, actorId) => {
+const adminCancelTx = db.transaction((id, _actorId) => {
   const res = getConfirmed(id);
   cancelResStmt.run(id);
-  if (res.credits_cost > 0) {
-    insertRefundStmt.run(res.user_id, res.credits_cost, id, 'Remboursement (annulation admin)', actorId);
-  }
-  return { cancelled: true, refunded: res.credits_cost > 0, amount: res.credits_cost };
+  // Remboursement dû si la résa avait été payée en ligne (à faire dans Stripe).
+  const refundDue = res.payment_status === 'paid' && res.price_cents > 0;
+  return { cancelled: true, refunded: refundDue, amount: refundDue ? res.price_cents : 0 };
 });
 export function adminCancelReservation(id, actorId) {
   return adminCancelTx(id, actorId);

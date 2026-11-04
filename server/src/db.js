@@ -93,6 +93,65 @@ if (!txCols.includes('amount_eur_cents')) {
   db.exec(`ALTER TABLE credit_transactions ADD COLUMN amount_eur_cents INTEGER`);
 }
 
+// ── Passage aux EUROS + paiement à la réservation (abandon des crédits) ───────
+// Prix en centimes sur les espaces ; champs de paiement sur les réservations et
+// type de tarif sur les verrous de panier. Colonnes ajoutées pour les bases déjà
+// créées (CREATE TABLE les porte déjà pour les bases neuves).
+const spacePriceCols = db.prepare(`PRAGMA table_info(spaces)`).all().map((c) => c.name);
+if (!spacePriceCols.includes('price_per_hour_cents')) db.exec(`ALTER TABLE spaces ADD COLUMN price_per_hour_cents INTEGER`);
+if (!spacePriceCols.includes('price_half_day_cents')) db.exec(`ALTER TABLE spaces ADD COLUMN price_half_day_cents INTEGER`);
+if (!spacePriceCols.includes('price_day_cents')) db.exec(`ALTER TABLE spaces ADD COLUMN price_day_cents INTEGER`);
+// Backfill du tarif horaire depuis l'ancien crédit (1 crédit ≈ 1 €) là où absent.
+// Les forfaits demi-journée / journée restent NULL : à renseigner dans l'admin Espaces.
+db.exec(`UPDATE spaces SET price_per_hour_cents = credits_per_hour * 100 WHERE price_per_hour_cents IS NULL`);
+
+const resPayCols = db.prepare(`PRAGMA table_info(reservations)`).all().map((c) => c.name);
+if (!resPayCols.includes('price_cents')) db.exec(`ALTER TABLE reservations ADD COLUMN price_cents INTEGER NOT NULL DEFAULT 0`);
+if (!resPayCols.includes('tarif_type')) db.exec(`ALTER TABLE reservations ADD COLUMN tarif_type TEXT`);
+if (!resPayCols.includes('payment_status')) db.exec(`ALTER TABLE reservations ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'paid'`);
+if (!resPayCols.includes('stripe_session_id')) db.exec(`ALTER TABLE reservations ADD COLUMN stripe_session_id TEXT`);
+if (!resPayCols.includes('payment_intent')) db.exec(`ALTER TABLE reservations ADD COLUMN payment_intent TEXT`);
+
+const holdTarifCols = db.prepare(`PRAGMA table_info(reservation_holds)`).all().map((c) => c.name);
+if (!holdTarifCols.includes('tarif_type')) db.exec(`ALTER TABLE reservation_holds ADD COLUMN tarif_type TEXT`);
+
+// Abandon du système de crédits : remise à zéro des portefeuilles (une seule fois).
+// Les réservations ne sont PAS touchées ; seul le grand-livre de crédits est purgé.
+const eurosReset = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_euros_reset_v1');
+if (!eurosReset) {
+  db.exec(`DELETE FROM credit_transactions`);
+  db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_euros_reset_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
+  console.log('[migration] passage aux euros : portefeuilles de credits remis a zero.');
+}
+
+// Gabarit e-mail de confirmation : « Crédits » → « Montant » + variable euros.
+const eurosTmpl = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_euros_tmpl_v1');
+if (!eurosTmpl) {
+  const row = db.prepare(`SELECT body_html FROM email_templates WHERE code = 'booking_confirmation'`).get();
+  if (row && row.body_html.includes('{{credits_cost}}')) {
+    const patched = row.body_html.replace('>Crédits<', '>Montant<').replace('{{credits_cost}}', '{{price}}');
+    db.prepare(`UPDATE email_templates SET body_html = ?, updated_at = datetime('now') WHERE code = 'booking_confirmation'`).run(patched);
+  }
+  db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_euros_tmpl_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
+}
+
+// « Café & thé inclus » ajouté aux prestations des espaces qui ne le mentionnent pas.
+const cafeFlag = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_cafe_the_v1');
+if (!cafeFlag) {
+  const rows = db.prepare(`SELECT id, amenities FROM spaces`).all();
+  const updAmen = db.prepare(`UPDATE spaces SET amenities = ? WHERE id = ?`);
+  const tx = db.transaction(() => {
+    for (const s of rows) {
+      const a = s.amenities || '';
+      if (!/caf[eé].{0,6}th[eé]|th[eé].{0,6}caf[eé]/i.test(a)) {
+        updAmen.run((a ? a + '\n' : '') + 'Café & thé inclus', s.id);
+      }
+    }
+    db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_cafe_the_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
+  });
+  tx();
+}
+
 // Journal des e-mails : traçabilité du fournisseur et recollage des événements
 // de délivrabilité reçus par webhook (cf. routes/webhooks.js).
 const emailLogCols = db.prepare(`PRAGMA table_info(email_log)`).all().map((c) => c.name);

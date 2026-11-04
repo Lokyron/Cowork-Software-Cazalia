@@ -87,8 +87,9 @@ export const DEFAULT_TEMPLATES = [
   <tr><td style="padding:6px 0;color:#5b6577;">Espace</td><td style="padding:6px 0;text-align:right;font-weight:600;">{{space_name}}</td></tr>
   <tr><td style="padding:6px 0;color:#5b6577;">Date</td><td style="padding:6px 0;text-align:right;font-weight:600;">{{booking_date}}</td></tr>
   <tr><td style="padding:6px 0;color:#5b6577;">Horaire</td><td style="padding:6px 0;text-align:right;font-weight:600;">{{booking_time}}</td></tr>
-  <tr><td style="padding:6px 0;color:#5b6577;">Crédits</td><td style="padding:6px 0;text-align:right;font-weight:600;">{{credits_cost}}</td></tr>
+  <tr><td style="padding:6px 0;color:#5b6577;">Montant</td><td style="padding:6px 0;text-align:right;font-weight:600;">{{price}}</td></tr>
 </table>
+<p style="margin:0 0 16px;line-height:1.6;color:#5b6577;">☕ Café &amp; thé inclus dans votre réservation.</p>
 {{wifi_block}}
 <div style="margin:16px 0;line-height:1.6;">{{arrival_instructions}}</div>
 <p style="margin:18px 0 0;">${btn('{{dashboard_url}}', 'Voir ma réservation')}&nbsp;&nbsp;${calendarBtn}</p>`,

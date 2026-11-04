@@ -5,76 +5,45 @@ import { useAuth } from '../auth.jsx';
 import { fmtDateTime } from '../time.js';
 import VoucherBlock from '../components/VoucherBlock.jsx';
 import GoogleCalendarLink from '../components/GoogleCalendarLink.jsx';
-import InvoiceExport from '../components/InvoiceExport.jsx';
 
 const dFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' });
 const tFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hour12: false });
 const longDate = (iso) => dFmt.format(new Date(iso));
 const range = (a, b) => `${tFmt.format(new Date(a))} – ${tFmt.format(new Date(b))}`;
-
-// Libellé lisible d'un mouvement de crédits (grand-livre du portefeuille).
-// Côté membre, seuls amount/reason/note/created_at sont servis par l'API.
-function movementLabel(t) {
-  switch (t.reason) {
-    case 'topup': return t.note || 'Recharge de crédits';
-    case 'booking': return 'Réservation';
-    case 'refund': return 'Remboursement';
-    case 'adjust': return t.note ? `Ajustement — ${t.note}` : 'Ajustement';
-    default: return t.note || t.reason;
-  }
-}
+const eur = (cents) => ((Number(cents) || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 
 export default function MemberDashboard() {
   const { user } = useAuth();
-  const [wallet, setWallet] = useState(null);
   const [reservations, setReservations] = useState([]);
   const [arrival, setArrival] = useState(null);
   const [feedback, setFeedback] = useState(null);
-  const [packs, setPacks] = useState([]);           // formules de recharge (vide = paiement en ligne indispo)
-  const [showPacks, setShowPacks] = useState(false);
-  const [paying, setPaying] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const load = useCallback(async () => {
-    const [w, r] = await Promise.all([api.get('/wallet/me'), api.get('/reservations/me')]);
-    setWallet(w);
+    const r = await api.get('/reservations/me');
     setReservations(r.reservations);
+    setLoading(false);
   }, []);
-  useEffect(() => { load(); api.get('/config').then(setArrival).catch(() => {}); }, [load]);
+  useEffect(() => { load().catch(() => setLoading(false)); api.get('/config').then(setArrival).catch(() => {}); }, [load]);
 
-  // Formules de recharge (affichées seulement si le paiement en ligne est actif).
+  // Retour depuis Stripe Checkout : la réservation est créée par le webhook, on
+  // relit donc la liste peu après et on informe le membre.
   useEffect(() => {
-    api.get('/wallet/packs').then((r) => { if (r.enabled) setPacks(r.packs || []); }).catch(() => {});
-  }, []);
-
-  // Retour depuis Stripe Checkout : le crédit réel arrive par webhook, on relit
-  // donc le solde peu après et on informe le membre.
-  useEffect(() => {
-    const status = searchParams.get('recharge');
+    const status = searchParams.get('reservation');
     if (!status) return;
     if (status === 'success') {
-      setFeedback({ type: 'ok', text: 'Paiement reçu ! Vos crédits apparaissent dès la confirmation (quelques secondes).' });
-      const t1 = setTimeout(load, 1500);
-      const t2 = setTimeout(load, 5000);
-      searchParams.delete('recharge'); setSearchParams(searchParams, { replace: true });
+      setFeedback({ type: 'ok', text: 'Paiement reçu ! Votre réservation apparaît dès la confirmation (quelques secondes).' });
+      const t1 = setTimeout(() => load().catch(() => {}), 1500);
+      const t2 = setTimeout(() => load().catch(() => {}), 5000);
+      searchParams.delete('reservation'); setSearchParams(searchParams, { replace: true });
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
     if (status === 'cancel') {
-      setFeedback({ type: 'error', text: 'Recharge annulée. Aucun montant n’a été débité.' });
-      searchParams.delete('recharge'); setSearchParams(searchParams, { replace: true });
+      setFeedback({ type: 'error', text: 'Paiement annulé. Aucun montant n’a été débité et la réservation n’a pas été prise.' });
+      searchParams.delete('reservation'); setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams, load]);
-
-  const buyPack = async (packId) => {
-    setPaying(true); setFeedback(null);
-    try {
-      const { url } = await api.post('/wallet/checkout', { pack_id: packId });
-      window.location.assign(url); // redirection vers la page de paiement Stripe
-    } catch (err) {
-      setFeedback({ type: 'error', text: msg(err.code) });
-      setPaying(false);
-    }
-  };
 
   const now = Date.now();
   const { next, upcoming, past } = useMemo(() => {
@@ -89,12 +58,17 @@ export default function MemberDashboard() {
     setFeedback(null);
     try {
       const r = await api.del(`/reservations/${id}`);
-      setFeedback({ type: 'ok', text: r.refunded ? `Annulée — ${r.amount} crédits remboursés.` : 'Annulée — hors délai, pas de remboursement.' });
-      load();
+      setFeedback({
+        type: 'ok',
+        text: r.refunded
+          ? `Réservation annulée — un remboursement de ${eur(r.amount)} vous sera effectué sous quelques jours.`
+          : 'Réservation annulée — hors délai, pas de remboursement.',
+      });
+      load().catch(() => {});
     } catch (err) { setFeedback({ type: 'error', text: msg(err.code) }); }
   };
 
-  if (!wallet) return <p className="muted">Chargement…</p>;
+  if (loading) return <p className="muted">Chargement…</p>;
 
   return (
     <div>
@@ -118,7 +92,7 @@ export default function MemberDashboard() {
                 <span className="dot" style={{ background: next.space_color }} />{next.space_name}
               </h2>
               <div className="hero-when">{longDate(next.start_at)} · {range(next.start_at, next.end_at)}</div>
-              <div className="muted seats" style={{ marginTop: 4 }}>{next.credits_cost} crédits</div>
+              <div className="muted seats" style={{ marginTop: 4 }}>{eur(next.price_cents)}</div>
             </div>
             <div className="hero-actions">
               <GoogleCalendarLink reservation={next} />
@@ -152,7 +126,7 @@ export default function MemberDashboard() {
               <div key={r.id} className="flex-between" style={{ borderBottom: '1px solid var(--line)', paddingBottom: 8 }}>
                 <div>
                   <div><span className="dot" style={{ background: r.space_color }} /><strong>{r.space_name}</strong></div>
-                  <div className="muted seats">{fmtDateTime(r.start_at)} → {fmtDateTime(r.end_at)} · {r.credits_cost} cr.</div>
+                  <div className="muted seats">{fmtDateTime(r.start_at)} → {fmtDateTime(r.end_at)} · {eur(r.price_cents)}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                   <GoogleCalendarLink reservation={r} />
@@ -163,46 +137,14 @@ export default function MemberDashboard() {
           </div>
         </div>
 
-        {/* SOLDE */}
+        {/* BON À SAVOIR */}
         <div className="card">
-          <h2>Solde de crédits</h2>
-          <div className="balance">{wallet.balance} <span style={{ fontSize: 16, fontWeight: 500 }} className="muted">crédits</span></div>
-
-          {packs.length > 0 ? (
-            <>
-              {!showPacks ? (
-                <button className="small" style={{ marginTop: 10 }} onClick={() => setShowPacks(true)}>
-                  ＋ Recharger en ligne
-                </button>
-              ) : (
-                <div style={{ marginTop: 10 }}>
-                  <p className="muted" style={{ fontSize: 13, margin: '0 0 8px' }}>Choisissez une formule :</p>
-                  <div className="stack">
-                    {packs.map((p) => (
-                      <button
-                        key={p.id}
-                        className="outline small"
-                        disabled={paying}
-                        style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}
-                        onClick={() => buyPack(p.id)}
-                      >
-                        <span>{p.label}</span>
-                        <span>{(p.eur_cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                    Paiement sécurisé par Stripe. Les crédits n'ont pas de valeur monétaire
-                    (voir les <Link to="/cgv">CGV</Link>).
-                  </p>
-                  <button className="ghost small" style={{ marginTop: 4 }} onClick={() => setShowPacks(false)}>Annuler</button>
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Rechargez vos crédits à l'accueil (virement / CB).</p>
-          )}
-
+          <h2>Bon à savoir</h2>
+          <p style={{ lineHeight: 1.7, margin: '6px 0' }}>☕ <strong>Café &amp; thé inclus</strong> dans toutes les réservations.</p>
+          <p className="muted" style={{ fontSize: 14, lineHeight: 1.6 }}>
+            Vous payez chaque réservation en ligne par carte, au moment de réserver.
+            À l'heure ou au forfait (demi-journée, journée) — le plus avantageux est indiqué.
+          </p>
           <div style={{ marginTop: 10 }}>
             <Link to="/reserver"><button className="outline small">Réserver un espace</button></Link>
           </div>
@@ -215,7 +157,7 @@ export default function MemberDashboard() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Date</th><th>Espace</th><th>Statut</th><th style={{ textAlign: 'right' }}>Crédits</th></tr>
+              <tr><th>Date</th><th>Espace</th><th>Statut</th><th style={{ textAlign: 'right' }}>Montant</th></tr>
             </thead>
             <tbody>
               {past.map((r) => (
@@ -223,41 +165,10 @@ export default function MemberDashboard() {
                   <td>{fmtDateTime(r.start_at)}</td>
                   <td><span className="dot" style={{ background: r.space_color }} />{r.space_name}</td>
                   <td>{r.status === 'confirmed' ? <span className="badge green">Terminée</span> : <span className="badge red">Annulée</span>}</td>
-                  <td style={{ textAlign: 'right' }}>{r.credits_cost}</td>
+                  <td style={{ textAlign: 'right' }}>{eur(r.price_cents)}</td>
                 </tr>
               ))}
               {past.length === 0 && <tr><td colSpan={4} className="muted">Aucune session passée.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ marginTop: 14 }}>
-          <InvoiceExport baseUrl="/invoice" filenamePrefix="releve-cazalia" />
-        </div>
-      </div>
-
-      {/* MOUVEMENTS DE CRÉDITS (recharges, réservations, remboursements) */}
-      <div className="card" style={{ marginTop: 20 }}>
-        <h2>Mouvements de crédits</h2>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Date</th><th>Opération</th><th style={{ textAlign: 'right' }}>Crédits</th></tr>
-            </thead>
-            <tbody>
-              {(wallet.history || []).map((t) => (
-                <tr key={t.id}>
-                  <td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(t.created_at)}</td>
-                  <td>{movementLabel(t)}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    <span className={`badge ${t.amount >= 0 ? 'green' : 'red'}`}>
-                      {t.amount >= 0 ? `+${t.amount}` : t.amount}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {(!wallet.history || wallet.history.length === 0) && (
-                <tr><td colSpan={3} className="muted">Aucun mouvement pour le moment.</td></tr>
-              )}
             </tbody>
           </table>
         </div>

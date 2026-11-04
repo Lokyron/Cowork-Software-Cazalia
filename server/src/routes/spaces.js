@@ -28,7 +28,9 @@ spacesRouter.get('/config', (_req, res) => {
 spacesRouter.get('/spaces', (_req, res) => {
   const rows = db
     .prepare(
-      `SELECT id, name, kind, capacity, exclusive, privatizable, credits_per_hour, color, description, amenities, photo
+      `SELECT id, name, kind, capacity, exclusive, privatizable,
+              price_per_hour_cents, price_half_day_cents, price_day_cents,
+              color, description, amenities, photo
          FROM spaces WHERE active = 1 ORDER BY kind, name`
     )
     .all();
@@ -54,9 +56,13 @@ spacesRouter.get('/availability', (req, res) => {
 
     const a = spaceAvailability(spaceId, from, to);
     if (!a) return res.status(404).json({ error: 'ESPACE_INTROUVABLE' });
-    const cost = quoteCost(spaceId, from, to, seats);
+    // Prix EN CENTIMES pour le type de tarif demandé (défaut 'heure'). Si le
+    // créneau ne correspond pas au forfait demandé, on renvoie cost = null.
+    const tarifType = ['heure', 'demi_journee', 'journee'].includes(req.query.tarif_type) ? req.query.tarif_type : 'heure';
+    let cost = null;
+    try { cost = quoteCost(spaceId, from, to, seats, tarifType); } catch { cost = null; }
     res.json({
-      space_id: spaceId, from, to,
+      space_id: spaceId, from, to, tarif_type: tarifType,
       exclusive: a.exclusive, privatizable: a.privatizable, capacity: a.capacity,
       seats_left: a.seats_left, cost,
     });

@@ -138,7 +138,13 @@ export default function Landing() {
                       : `Jusqu'à ${s.capacity} places sur ce créneau.`}
                   </p>
                   <div className="flex-between">
-                    <span className="price">{s.credits_per_hour} <small>crédits/h</small></span>
+                    <span className="price">
+                      {s.price_per_hour_cents != null
+                        ? <>{(s.price_per_hour_cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} <small>/ h</small></>
+                        : s.price_half_day_cents != null
+                        ? <>{(s.price_half_day_cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} <small>/ ½ j</small></>
+                        : <small>sur devis</small>}
+                    </span>
                     <button className="small outline" onClick={(e) => { e.stopPropagation(); setOpenSpace({ space: s, photoSrc }); }}>
                       Voir le détail →
                     </button>

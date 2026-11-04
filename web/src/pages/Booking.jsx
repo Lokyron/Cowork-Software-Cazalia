@@ -27,7 +27,7 @@ export default function Booking() {
 
       {done ? (
         <div className="alert ok">
-          {done.count} réservation{done.count > 1 ? 's' : ''} confirmée{done.count > 1 ? 's' : ''} — {done.total} crédits débités.
+          {done.count} réservation{done.count > 1 ? 's' : ''} confirmée{done.count > 1 ? 's' : ''}.
           Le code Wi-Fi et les consignes sont disponibles sur votre espace.
           <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/mon-espace')}>Voir mon espace</button>

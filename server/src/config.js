@@ -57,6 +57,19 @@ export const config = {
     5: [[510, 1170]],   // vendredi
     6: [[540, 780]],    // samedi   : 9h00 – 13h00
   },
+  // Créneaux FORFAITAIRES (heure de Paris, minutes depuis minuit), par jour de
+  // semaine. Un créneau réservé « au forfait » doit correspondre EXACTEMENT à
+  // l'une de ces fenêtres. En semaine : matin 8h30–14h, après-midi 14h–19h30,
+  // journée 8h30–19h30. Samedi : une seule demi-journée 9h–13h (pas de journée).
+  forfaitSlots: {
+    0: { demi_journee: [], journee: [] },
+    1: { demi_journee: [[510, 840], [840, 1170]], journee: [[510, 1170]] },
+    2: { demi_journee: [[510, 840], [840, 1170]], journee: [[510, 1170]] },
+    3: { demi_journee: [[510, 840], [840, 1170]], journee: [[510, 1170]] },
+    4: { demi_journee: [[510, 840], [840, 1170]], journee: [[510, 1170]] },
+    5: { demi_journee: [[510, 840], [840, 1170]], journee: [[510, 1170]] },
+    6: { demi_journee: [[540, 780]], journee: [] },
+  },
   // Durée de validité d'un lien de réinitialisation de mot de passe.
   resetTokenTtlMs: Number(process.env.RESET_TOKEN_TTL_MS) || 1000 * 60 * 60 * 2, // 2 h
   // URL publique utilisée pour construire le lien de reset (sinon dérivée de la requête).
