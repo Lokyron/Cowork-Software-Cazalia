@@ -12,6 +12,18 @@ const tFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: 
 const longDate = (iso) => dFmt.format(new Date(iso));
 const range = (a, b) => `${tFmt.format(new Date(a))} – ${tFmt.format(new Date(b))}`;
 
+// Libellé lisible d'un mouvement de crédits (grand-livre du portefeuille).
+// Côté membre, seuls amount/reason/note/created_at sont servis par l'API.
+function movementLabel(t) {
+  switch (t.reason) {
+    case 'topup': return t.note || 'Recharge de crédits';
+    case 'booking': return 'Réservation';
+    case 'refund': return 'Remboursement';
+    case 'adjust': return t.note ? `Ajustement — ${t.note}` : 'Ajustement';
+    default: return t.note || t.reason;
+  }
+}
+
 export default function MemberDashboard() {
   const { user } = useAuth();
   const [wallet, setWallet] = useState(null);
@@ -220,6 +232,34 @@ export default function MemberDashboard() {
         </div>
         <div style={{ marginTop: 14 }}>
           <InvoiceExport baseUrl="/invoice" filenamePrefix="releve-cazalia" />
+        </div>
+      </div>
+
+      {/* MOUVEMENTS DE CRÉDITS (recharges, réservations, remboursements) */}
+      <div className="card" style={{ marginTop: 20 }}>
+        <h2>Mouvements de crédits</h2>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Date</th><th>Opération</th><th style={{ textAlign: 'right' }}>Crédits</th></tr>
+            </thead>
+            <tbody>
+              {(wallet.history || []).map((t) => (
+                <tr key={t.id}>
+                  <td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(t.created_at)}</td>
+                  <td>{movementLabel(t)}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <span className={`badge ${t.amount >= 0 ? 'green' : 'red'}`}>
+                      {t.amount >= 0 ? `+${t.amount}` : t.amount}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {(!wallet.history || wallet.history.length === 0) && (
+                <tr><td colSpan={3} className="muted">Aucun mouvement pour le moment.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
