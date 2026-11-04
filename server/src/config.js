@@ -190,12 +190,21 @@ export const config = {
   //    UNIFI_CONSOLE_ID — meme console que Network). Prioritaire s'il est defini.
   //  - LOCAL : la console sur le LAN en 443 (UNIFI_ACCESS_HOST), certificat
   //    auto-signe (politique TLS identique au mode local Network).
-  // La cle peut etre la MEME que Network (UNIFI_API_KEY) si elle a les droits
-  // Access. Inactif tant que cle + (console cloud OU host local) + porte ne sont
-  // pas definis (best-effort : une reservation n'echoue jamais faute d'Access).
+  // La cle depend du mode (verifie en conditions reelles) :
+  //  - CLOUD (connecteur api.ui.com) : la cle CLOUD (UNIFI_API_KEY, creee sur
+  //    unifi.ui.com) — la meme que Network, MAIS elle doit avoir le peRimetre
+  //    « Access » (sinon 403 insufficient permissions). Surcharge possible via
+  //    UNIFI_ACCESS_API_KEY.
+  //  - LOCAL : le token de l'application Access (UNIFI_ACCESS_TOKEN), qui n'est
+  //    PAS valable sur le cloud (401). Suppose la console joignable en 443 sur
+  //    le LAN (actuellement filtre depuis le CT → mode local indisponible).
+  // Inactif tant que cle + (console cloud OU host local) + porte ne sont pas
+  // definis (best-effort : une reservation n'echoue jamais faute d'Access).
   unifiAccess: {
-    apiKey: process.env.UNIFI_ACCESS_TOKEN || process.env.UNIFI_API_KEY || null, // X-API-KEY
     consoleId: process.env.UNIFI_ACCESS_CONSOLE_ID || process.env.UNIFI_CONSOLE_ID || null,
+    apiKey: (process.env.UNIFI_ACCESS_CONSOLE_ID || process.env.UNIFI_CONSOLE_ID)
+      ? (process.env.UNIFI_ACCESS_API_KEY || process.env.UNIFI_API_KEY || null) // cloud → clé cloud
+      : (process.env.UNIFI_ACCESS_TOKEN || process.env.UNIFI_ACCESS_API_KEY || null), // local → token Access
     host: process.env.UNIFI_ACCESS_HOST || null,
     door: process.env.UNIFI_ACCESS_DOOR || null,
     graceBeforeMin: Number(process.env.UNIFI_ACCESS_GRACE_BEFORE_MIN) || 10,
