@@ -196,9 +196,13 @@ adminRouter.post('/members/:id/reservations', async (req, res) => {
       return res.status(404).json({ error: 'UTILISATEUR_INTROUVABLE' });
     }
     const result = reserveBatch(userId, spaceId, slots);
-    await Promise.allSettled((result.reservations || []).flatMap((r) => [ensureVoucherForReservation(r.reservationId), ensureAccessPinForReservation(r.reservationId)]));
-    (result.reservations || []).forEach((r) => sendBookingConfirmation(r.reservationId).catch(() => {}));
+    // Réponse immédiate : voucher Wi-Fi + PIN de porte (en parallèle) puis e-mails
+    // de confirmation se font hors réponse (best-effort), sans bloquer l'admin.
     res.status(201).json(result);
+    (async () => {
+      await Promise.allSettled((result.reservations || []).flatMap((r) => [ensureVoucherForReservation(r.reservationId), ensureAccessPinForReservation(r.reservationId)]));
+      (result.reservations || []).forEach((r) => sendBookingConfirmation(r.reservationId).catch(() => {}));
+    })();
   } catch (err) {
     sendBusinessError(res, err, 400, err.slotIndex != null ? { slot_index: err.slotIndex } : undefined);
   }
@@ -225,10 +229,16 @@ adminRouter.post('/reservations', async (req, res) => {
       createdBy: req.user.id,
     };
     const result = reserve(userId, spaceId, b.start_at, b.end_at, b.seats, opts);
-    result.voucher_code = await ensureVoucherForReservation(result.reservationId);
-    await ensureAccessPinForReservation(result.reservationId).catch(() => {});
-    sendBookingConfirmation(result.reservationId).catch(() => {}); // confirmation au client (best-effort)
+    // Réponse immédiate : le post-traitement réseau (voucher Wi-Fi + PIN de porte,
+    // en parallèle) et l'e-mail de confirmation ne bloquent plus l'action admin.
     res.status(201).json(result);
+    (async () => {
+      await Promise.allSettled([
+        ensureVoucherForReservation(result.reservationId),
+        ensureAccessPinForReservation(result.reservationId),
+      ]);
+      sendBookingConfirmation(result.reservationId).catch(() => {});
+    })();
   } catch (err) {
     sendBusinessError(res, err);
   }

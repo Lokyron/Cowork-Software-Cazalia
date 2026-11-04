@@ -80,7 +80,10 @@ function request(method, pathname, body) {
       });
     });
     req.on('error', reject);
-    req.setTimeout(8000, () => req.destroy(new Error('UniFi Access : délai dépassé')));
+    // API LOCALE (LAN) : une réponse saine arrive en <1 s. Un délai court borne
+    // l'attente quand la console est injoignable (port filtré/pare-feu), pour ne
+    // pas retarder l'e-mail de confirmation qui attend le PIN.
+    req.setTimeout(5000, () => req.destroy(new Error('UniFi Access : délai dépassé')));
     if (payload) req.write(payload);
     req.end();
   });

@@ -42,7 +42,12 @@ export function isMailConfigured() {
 function buildTransport() {
   const s = getSmtp();
   if (!s.configured) return null;
-  const opts = { host: s.host, port: s.port };
+  // Délais de garde : par défaut nodemailer attend très longtemps (jusqu'à ~2 min)
+  // sur une connexion/handshake qui traîne, ce qui retarderait d'autant l'e-mail.
+  const opts = {
+    host: s.host, port: s.port,
+    connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 20_000,
+  };
   if (s.secureMode === 'ssl') opts.secure = true;            // 465
   else { opts.secure = false; if (s.secureMode === 'starttls') opts.requireTLS = true; }
   if (s.user || s.pass) opts.auth = { user: s.user, pass: s.pass };

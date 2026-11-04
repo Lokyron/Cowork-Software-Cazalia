@@ -15,12 +15,18 @@ import { securityEvent } from '../lib/audit.js';
 
 // Post-traitement (hors réponse webhook) : voucher Wi-Fi + PIN de porte d'abord
 // (pour qu'ils figurent dans l'e-mail), puis e-mail de confirmation. Best-effort.
+//
+// Le voucher et le PIN sont générés EN PARALLÈLE (deux services distincts, l'un
+// via le cloud UniFi, l'autre en local) : l'e-mail n'attend donc que le plus lent
+// des deux, et non leur somme. Chaque réservation est traitée en parallèle aussi.
 async function finalizeReservations(ids) {
-  for (const id of ids) {
-    await ensureVoucherForReservation(id).catch(() => {});
-    await ensureAccessPinForReservation(id).catch(() => {});
+  await Promise.all(ids.map(async (id) => {
+    await Promise.allSettled([
+      ensureVoucherForReservation(id),
+      ensureAccessPinForReservation(id),
+    ]);
     sendBookingConfirmation(id).catch(() => {});
-  }
+  }));
 }
 
 /**
