@@ -59,7 +59,7 @@ cartRouter.post('/cart/checkout', requireAuth, async (req, res) => {
     }
     if (!getStripe().enabled) return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });
     const baseUrl = config.publicBaseUrl || `${req.protocol}://${req.get('host')}`;
-    const result = await startBookingCheckout(req.user.id, baseUrl);
+    const result = await startBookingCheckout(req.user.id, baseUrl, { promoCode: req.body?.promo_code || null });
     res.json(result);
   } catch (err) {
     if (err.code === 'STRIPE_NON_CONFIGURE') return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });

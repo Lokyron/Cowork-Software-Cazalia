@@ -51,6 +51,7 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
   const [now, setNow] = useState(Date.now());
   const [cgvAccepted, setCgvAccepted] = useState(false);
   const [retractationAck, setRetractationAck] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
 
   const reload = () => adapter.list().then(setCart).catch(() => {});
   useEffect(() => { api.get('/spaces').then((r) => setSpaces(r.spaces)).catch(() => {}); }, []);
@@ -115,7 +116,7 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
   const doCheckout = async () => {
     setBusy(true); setFeedback(null);
     try {
-      const result = await adapter.checkout();
+      const result = await adapter.checkout(promoCode.trim() || undefined);
       if (result?.url) { window.location.assign(result.url); return; } // paiement Stripe (client)
       onDone?.(result); // création directe (admin)
     } catch (err) { setFeedback({ type: 'error', text: msg(err.code) }); setBusy(false); reload(); }
@@ -237,6 +238,18 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
               <strong>{eur(total)}</strong>
             </div>
             <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>☕ Café &amp; thé inclus dans toutes les réservations.</p>
+            {!admin && (
+              <div className="field" style={{ marginTop: 12 }}>
+                <label>Code promo <span className="muted" style={{ fontWeight: 400 }}>(facultatif)</span></label>
+                <input
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value)}
+                  placeholder="Ex. JOURNEE-CAZALIA"
+                  autoComplete="off"
+                  style={{ textTransform: 'uppercase' }}
+                />
+              </div>
+            )}
             {!admin && (
               <div style={{ marginTop: 12 }}>
                 <label className="consent">

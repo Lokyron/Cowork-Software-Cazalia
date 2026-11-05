@@ -20,15 +20,25 @@ const VALID_TARIFS = new Set(['heure', 'demi_journee', 'journee']);
 const insertStmt = db.prepare(
   `INSERT INTO promo_codes
      (code, stripe_coupon_id, stripe_promo_id, reduction_type, reduction_value,
-      tarif_restriction, max_redemptions, expires_at, active)
+      tarif_restriction, max_redemptions, max_per_user, expires_at, active)
    VALUES (@code, @stripe_coupon_id, @stripe_promo_id, @reduction_type, @reduction_value,
-           @tarif_restriction, @max_redemptions, @expires_at, 1)`
+           @tarif_restriction, @max_redemptions, @max_per_user, @expires_at, 1)`
 );
 const listStmt = db.prepare(`SELECT * FROM promo_codes ORDER BY created_at DESC`);
 const getStmt = db.prepare(`SELECT * FROM promo_codes WHERE id = ?`);
 const setActiveStmt = db.prepare(`UPDATE promo_codes SET active = @active WHERE id = @id`);
 const deleteStmt = db.prepare(`DELETE FROM promo_codes WHERE id = ?`);
 const byCodeStmt = db.prepare(`SELECT id FROM promo_codes WHERE code = ?`);
+// Recherche insensible à la casse (Stripe normalise les codes en majuscules, mais
+// le client peut saisir en minuscules).
+const fullByCodeCiStmt = db.prepare(`SELECT * FROM promo_codes WHERE UPPER(code) = UPPER(?)`);
+
+// Comptage des utilisations (table locale) : global et par personne.
+const countGlobalStmt = db.prepare(`SELECT COUNT(*) AS n FROM promo_redemptions WHERE promo_id = ?`);
+const countUserStmt = db.prepare(`SELECT COUNT(*) AS n FROM promo_redemptions WHERE promo_id = ? AND user_id = ?`);
+const insertRedemptionStmt = db.prepare(
+  `INSERT INTO promo_redemptions (promo_id, user_id, order_id) VALUES (@promo_id, @user_id, @order_id)`
+);
 
 const toEpoch = (iso) => Math.floor(new Date(iso).getTime() / 1000);
 
@@ -47,13 +57,14 @@ function requireClient() {
  * @param {'percent'|'amount'} p.reductionType Type de remise.
  * @param {number} p.reductionValue Pourcentage (1-100) ou montant en centimes.
  * @param {string|null} [p.tarifRestriction] Formule imposée (`journee`…), ou null.
- * @param {number|null} [p.maxRedemptions] Nombre maximal d'utilisations.
+ * @param {number|null} [p.maxRedemptions] Nombre maximal d'utilisations (global).
+ * @param {number|null} [p.maxPerUser] Nombre maximal d'utilisations par personne.
  * @param {string|null} [p.expiresAt] Date limite ISO 8601, ou null.
  * @returns {Promise<object>} Ligne miroir créée.
  */
 export async function createPromo({
   code, reductionType, reductionValue, tarifRestriction = null,
-  maxRedemptions = null, expiresAt = null,
+  maxRedemptions = null, maxPerUser = null, expiresAt = null,
 }) {
   const stripe = requireClient();
 
@@ -65,6 +76,8 @@ export async function createPromo({
   if (tarifRestriction && !VALID_TARIFS.has(tarifRestriction)) throw fail('PROMO_TARIF_INVALIDE');
   const max = maxRedemptions != null && maxRedemptions !== '' ? Math.round(Number(maxRedemptions)) : null;
   if (max != null && (!Number.isFinite(max) || max < 1)) throw fail('PROMO_LIMITE_INVALIDE');
+  const perUser = maxPerUser != null && maxPerUser !== '' ? Math.round(Number(maxPerUser)) : null;
+  if (perUser != null && (!Number.isFinite(perUser) || perUser < 1)) throw fail('PROMO_LIMITE_INVALIDE');
   let expiresEpoch = null;
   if (expiresAt) {
     const t = new Date(expiresAt).getTime();
@@ -106,35 +119,75 @@ export async function createPromo({
     reduction_value: value,
     tarif_restriction: tarifRestriction || null,
     max_redemptions: max,
+    max_per_user: perUser,
     expires_at: expiresAt || null,
   });
   return getStmt.get(info.lastInsertRowid);
 }
 
 /**
- * Liste les codes promo (miroir local) enrichis du nombre d'utilisations réel
- * lu chez Stripe (un seul appel de liste, best-effort).
+ * Valide un code saisi au panier, pour l'utilisateur et le contenu donnés.
+ * Fait respecter : existence, activation, expiration, restriction de formule,
+ * limite globale et limite PAR PERSONNE (via la table locale `promo_redemptions`).
+ *
+ * @param {object} p
+ * @param {string} p.code Code saisi par le client.
+ * @param {number} p.userId Membre qui paie.
+ * @param {Array<{tarif_type:string}>} p.items Lignes du panier.
+ * @returns {object} Ligne `promo_codes` validée (contient `stripe_promo_id`, `id`).
+ * @throws {Error} `PROMO_INTROUVABLE`, `PROMO_INACTIVE`, `PROMO_EXPIREE`,
+ *         `PROMO_NON_APPLICABLE`, `PROMO_EPUISE`, `PROMO_DEJA_UTILISE`.
+ */
+export function validatePromoForCheckout({ code, userId, items }) {
+  const wanted = String(code || '').trim();
+  if (!wanted) throw fail('PROMO_INTROUVABLE');
+  const row = fullByCodeCiStmt.get(wanted);
+  if (!row) throw fail('PROMO_INTROUVABLE');
+  if (!row.active) throw fail('PROMO_INACTIVE');
+  if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) throw fail('PROMO_EXPIREE');
+  if (row.tarif_restriction && !(items || []).some((it) => it.tarif_type === row.tarif_restriction)) {
+    throw fail('PROMO_NON_APPLICABLE');
+  }
+  if (row.max_redemptions != null && countGlobalStmt.get(row.id).n >= row.max_redemptions) {
+    throw fail('PROMO_EPUISE');
+  }
+  if (row.max_per_user != null && countUserStmt.get(row.id, userId).n >= row.max_per_user) {
+    throw fail('PROMO_DEJA_UTILISE');
+  }
+  return row;
+}
+
+/**
+ * Enregistre une utilisation d'un code promo (appelée à la confirmation du
+ * paiement, dans la transaction idempotente de `fulfillOrder`).
+ * @param {{promoId:number, userId:number, orderId:number|null}} p
+ */
+export function recordRedemption({ promoId, userId, orderId = null }) {
+  if (!promoId) return;
+  insertRedemptionStmt.run({ promo_id: promoId, user_id: userId, order_id: orderId });
+}
+
+/**
+ * Liste les codes promo (miroir local) enrichis du nombre d'utilisations : le
+ * compteur local (`used`, qui fait foi pour nos limites) et, best-effort, celui
+ * de Stripe (`times_redeemed`).
  * @returns {Promise<object[]>}
  */
 export async function listPromos() {
   const rows = listStmt.all();
   const stripe = getClient();
+  const withLocal = rows.map((r) => ({ ...r, active: !!r.active, used: countGlobalStmt.get(r.id).n }));
   if (!stripe || !rows.length) {
-    return rows.map((r) => ({ ...r, active: !!r.active, times_redeemed: null }));
+    return withLocal.map((r) => ({ ...r, times_redeemed: null }));
   }
   const live = new Map();
   try {
     const resp = await stripe.promotionCodes.list({ limit: 100 });
     for (const pc of resp.data) live.set(pc.id, pc);
-  } catch { /* best-effort : on affiche sans le compteur en cas d'échec */ }
-  return rows.map((r) => {
+  } catch { /* best-effort : on affiche sans le compteur Stripe en cas d'échec */ }
+  return withLocal.map((r) => {
     const pc = live.get(r.stripe_promo_id);
-    return {
-      ...r,
-      active: !!r.active,
-      times_redeemed: pc ? pc.times_redeemed : null,
-      stripe_active: pc ? pc.active : null,
-    };
+    return { ...r, times_redeemed: pc ? pc.times_redeemed : null, stripe_active: pc ? pc.active : null };
   });
 }
 

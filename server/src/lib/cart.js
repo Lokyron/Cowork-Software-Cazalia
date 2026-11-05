@@ -13,6 +13,7 @@ import { config } from '../config.js';
 import { fail } from './errors.js';
 import { createBookingCheckoutSession } from './stripe.js';
 import { createPendingOrder } from './orders.js';
+import { validatePromoForCheckout } from './promos.js';
 import { ensureVoucherForReservation } from './unifi.js';
 import { ensureAccessPinForReservation } from './unifiAccess.js';
 import { sendBookingConfirmation } from './mailer.js';
@@ -186,10 +187,12 @@ export async function checkoutFree(userId) {
  *
  * @param {number} userId Bénéficiaire du panier.
  * @param {string} baseUrl Origine publique (URL de retour Stripe).
+ * @param {{promoCode?: string|null}} [opts] Code promo saisi au panier (facultatif).
  * @returns {Promise<{url:string, total:number, count:number}>}
- * @throws {Error} `PANIER_VIDE`, `HORS_HORAIRES`, `COMPLET`, `STRIPE_NON_CONFIGURE`.
+ * @throws {Error} `PANIER_VIDE`, `HORS_HORAIRES`, `COMPLET`, `STRIPE_NON_CONFIGURE`,
+ *         et les codes `PROMO_*` si le code promo est refusé.
  */
-export async function startBookingCheckout(userId, baseUrl) {
+export async function startBookingCheckout(userId, baseUrl, { promoCode = null } = {}) {
   purgeExpired();
   const holds = listHolds.all(userId, new Date().toISOString());
   if (!holds.length) throw fail('PANIER_VIDE');
@@ -206,8 +209,14 @@ export async function startBookingCheckout(userId, baseUrl) {
   }));
   const totalCents = items.reduce((s, it) => s + it.price_cents, 0);
 
-  const session = await createBookingCheckoutSession({ userId, items, baseUrl });
-  createPendingOrder({ userId, sessionId: session.id, items, totalCents });
+  // Code promo : validé côté serveur (formule, dates, limites globale et par
+  // personne) AVANT d'engager le paiement, puis appliqué par Stripe via `discounts`.
+  const promo = promoCode ? validatePromoForCheckout({ code: promoCode, userId, items }) : null;
+
+  const session = await createBookingCheckoutSession({
+    userId, items, baseUrl, promotionCodeId: promo?.stripe_promo_id || null,
+  });
+  createPendingOrder({ userId, sessionId: session.id, items, totalCents, promoId: promo?.id || null });
 
   // Prolonge les verrous le temps du paiement (places tenues jusqu'au webhook).
   const until = new Date(Date.now() + CHECKOUT_HOLD_MINUTES * 60000).toISOString();

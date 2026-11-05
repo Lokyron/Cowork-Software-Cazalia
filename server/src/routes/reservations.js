@@ -37,7 +37,7 @@ reservationsRouter.post('/reservations', requireAuth, async (req, res) => {
     addHold(req.user.id, spaceId, start_at, end_at, seats, { tarifType: tarif_type });
     if (isAdmin) return res.json(await checkoutFree(req.user.id));
     const baseUrl = config.publicBaseUrl || `${req.protocol}://${req.get('host')}`;
-    const result = await startBookingCheckout(req.user.id, baseUrl);
+    const result = await startBookingCheckout(req.user.id, baseUrl, { promoCode: req.body?.promo_code || null });
     res.json(result);
   } catch (err) {
     if (err.code === 'STRIPE_NON_CONFIGURE') return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });
@@ -65,7 +65,7 @@ reservationsRouter.post('/reservations/batch', requireAuth, async (req, res) => 
     slots.forEach((s, i) => addHold(req.user.id, spaceId, s.start_at, s.end_at, s.seats, { tarifType: s.tarif_type }));
     if (isAdmin) return res.json(await checkoutFree(req.user.id));
     const baseUrl = config.publicBaseUrl || `${req.protocol}://${req.get('host')}`;
-    const result = await startBookingCheckout(req.user.id, baseUrl);
+    const result = await startBookingCheckout(req.user.id, baseUrl, { promoCode: req.body?.promo_code || null });
     res.json(result);
   } catch (err) {
     if (err.code === 'STRIPE_NON_CONFIGURE') return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });

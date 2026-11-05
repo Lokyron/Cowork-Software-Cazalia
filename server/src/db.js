@@ -199,6 +199,18 @@ if (!emailLogCols.includes('message_id')) db.exec(`ALTER TABLE email_log ADD COL
 if (!emailLogCols.includes('updated_at')) db.exec(`ALTER TABLE email_log ADD COLUMN updated_at TEXT`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_email_log_message ON email_log(message_id)`);
 
+// Codes promo : colonne « limite par personne » (ajoutée après la 1re version du
+// système) et rattachement d'un code à une commande de réservation. `promo_codes`
+// et `promo_redemptions` sont créées par le schéma (CREATE TABLE IF NOT EXISTS).
+const promoCols = db.prepare(`PRAGMA table_info(promo_codes)`).all().map((c) => c.name);
+if (promoCols.length && !promoCols.includes('max_per_user')) {
+  db.exec(`ALTER TABLE promo_codes ADD COLUMN max_per_user INTEGER`);
+}
+const orderCols = db.prepare(`PRAGMA table_info(reservation_orders)`).all().map((c) => c.name);
+if (orderCols.length && !orderCols.includes('promo_id')) {
+  db.exec(`ALTER TABLE reservation_orders ADD COLUMN promo_id INTEGER`);
+}
+
 const spaceCols = db.prepare(`PRAGMA table_info(spaces)`).all().map((c) => c.name);
 if (!spaceCols.includes('description')) db.exec(`ALTER TABLE spaces ADD COLUMN description TEXT`);
 if (!spaceCols.includes('amenities')) db.exec(`ALTER TABLE spaces ADD COLUMN amenities TEXT`);

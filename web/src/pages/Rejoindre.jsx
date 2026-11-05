@@ -93,9 +93,9 @@ export default function Rejoindre() {
 
           <p className="muted" style={{ fontSize: 14, textAlign: 'left', lineHeight: 1.6 }}>
             Pour l'utiliser, réservez comme d'habitude&nbsp;: choisissez la <strong>formule Journée</strong>,
-            puis saisissez ce code au moment du paiement pour que la journée soit offerte. Ce code est
-            valable <strong>uniquement sur la formule Journée</strong> — les formules à l'heure et à la
-            demi-journée n'y donnent pas droit.
+            puis saisissez ce code dans le champ <em>Code promo</em> du panier avant de payer, pour que la
+            journée soit offerte. Ce code est valable <strong>uniquement sur la formule Journée</strong> —
+            les formules à l'heure et à la demi-journée n'y donnent pas droit.
           </p>
 
           <button type="button" style={{ width: '100%', marginTop: 8 }} onClick={() => navigate('/mon-espace')}>

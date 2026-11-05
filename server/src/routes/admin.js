@@ -515,6 +515,7 @@ adminRouter.post('/promos', async (req, res) => {
       reductionValue: b.reduction_value,
       tarifRestriction: b.tarif_restriction || null,
       maxRedemptions: b.max_redemptions ?? null,
+      maxPerUser: b.max_per_user ?? null,
       expiresAt: b.expires_at || null,
     });
     res.status(201).json({ promo });

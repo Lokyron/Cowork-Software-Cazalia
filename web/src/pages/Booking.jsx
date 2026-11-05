@@ -13,7 +13,7 @@ export default function Booking() {
     list: () => api.get('/cart'),
     add: (payload) => api.post('/cart', payload),
     remove: (id) => api.del(`/cart/${id}`),
-    checkout: () => api.post('/cart/checkout', {}),
+    checkout: (promoCode) => api.post('/cart/checkout', promoCode ? { promo_code: promoCode } : {}),
   }), []);
 
   return (

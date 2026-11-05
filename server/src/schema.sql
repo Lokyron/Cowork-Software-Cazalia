@@ -224,6 +224,7 @@ CREATE TABLE IF NOT EXISTS reservation_orders (
   user_id        INTEGER NOT NULL REFERENCES users(id),
   session_id     TEXT    NOT NULL UNIQUE,              -- id de la session Checkout Stripe
   payment_intent TEXT,
+  promo_id       INTEGER REFERENCES promo_codes(id),  -- code promo appliqué (si saisi au panier)
   total_cents    INTEGER NOT NULL,
   payload        TEXT    NOT NULL,                     -- JSON: [{space_id,start_at,end_at,seats,tarif_type,price_cents}]
   status         TEXT    NOT NULL DEFAULT 'pending',   -- 'pending' | 'paid'
@@ -243,8 +244,21 @@ CREATE TABLE IF NOT EXISTS promo_codes (
   reduction_type    TEXT    NOT NULL,                   -- 'percent' | 'amount'
   reduction_value   INTEGER NOT NULL,                   -- % (1-100) ou centimes d'euro
   tarif_restriction TEXT,                               -- 'journee' | 'demi_journee' | 'heure' | NULL (tous)
-  max_redemptions   INTEGER,                            -- NULL = illimité
+  max_redemptions   INTEGER,                            -- limite GLOBALE (NULL = illimité)
+  max_per_user      INTEGER,                            -- limite PAR PERSONNE (NULL = illimité)
   expires_at        TEXT,                               -- ISO 8601, NULL = sans expiration
   active            INTEGER NOT NULL DEFAULT 1,
   created_at        TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Utilisations d'un code promo, par personne. Renseignée à la confirmation du
+-- paiement (webhook) : sert à faire respecter la limite « N fois par personne »,
+-- que Stripe ne gère pas nativement pour un code partagé.
+CREATE TABLE IF NOT EXISTS promo_redemptions (
+  id         INTEGER PRIMARY KEY,
+  promo_id   INTEGER NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  order_id   INTEGER REFERENCES reservation_orders(id),
+  created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_promo_redemptions_promo_user ON promo_redemptions(promo_id, user_id);

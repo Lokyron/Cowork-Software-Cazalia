@@ -112,12 +112,16 @@ export async function createCheckoutSession({ userId, pack, baseUrl }) {
  *
  * @param {object} params
  * @param {number} params.userId Membre qui réserve.
- * @param {Array<{price_cents:number,label:string}>} params.items Lignes à facturer.
+ * @param {Array<{price_cents:number,label:string,tarif_type:string}>} params.items Lignes à facturer.
  * @param {string} params.baseUrl Origine publique (URL de retour).
+ * @param {string|null} [params.promotionCodeId] Promotion Code Stripe à appliquer
+ *        (déjà validé côté serveur). La saisie libre de code sur la page Stripe
+ *        est désactivée : seuls les codes validés par Cazalia sont appliqués, ce
+ *        qui permet de faire respecter la limite « par personne ».
  * @returns {Promise<import('stripe').Stripe.Checkout.Session>}
  * @throws {Error} `STRIPE_NON_CONFIGURE`.
  */
-export async function createBookingCheckoutSession({ userId, items, baseUrl }) {
+export async function createBookingCheckoutSession({ userId, items, baseUrl, promotionCodeId = null }) {
   const stripe = client();
   if (!stripe) { const e = new Error('STRIPE_NON_CONFIGURE'); e.code = 'STRIPE_NON_CONFIGURE'; throw e; }
   const base = String(baseUrl || '').replace(/\/$/, '');
@@ -145,10 +149,11 @@ export async function createBookingCheckoutSession({ userId, items, baseUrl }) {
     client_reference_id: String(userId),
     metadata: { kind: 'booking', user_id: String(userId) },
     line_items,
-    // Le client peut saisir un code promo sur la page de paiement Stripe. Stripe
-    // applique alors le coupon en respectant ses restrictions (formule, dates,
-    // nombre d'utilisations) sans logique supplémentaire de notre côté.
-    allow_promotion_codes: true,
+    // Le code promo est saisi et VALIDÉ côté Cazalia (tunnel de réservation), puis
+    // appliqué ici. On n'active pas `allow_promotion_codes` (saisie libre sur la
+    // page Stripe) : c'est incompatible avec `discounts`, et cela contournerait la
+    // limite « par personne » que Stripe ne sait pas gérer pour un code partagé.
+    ...(promotionCodeId ? { discounts: [{ promotion_code: promotionCodeId }] } : {}),
     success_url: `${base}/mon-espace?reservation=success`,
     cancel_url: `${base}/mon-espace?reservation=cancel`,
   });

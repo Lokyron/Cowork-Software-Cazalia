@@ -19,7 +19,7 @@ const fmtDate = (iso) => {
 const fmtReduction = (p) =>
   p.reduction_type === 'percent' ? `-${p.reduction_value} %` : `-${(p.reduction_value / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`;
 
-const EMPTY = { code: '', reduction_type: 'percent', reduction_value: '', tarif_restriction: 'journee', max_redemptions: '', expires_at: '' };
+const EMPTY = { code: '', reduction_type: 'percent', reduction_value: '', tarif_restriction: 'journee', max_redemptions: '', max_per_user: '1', expires_at: '' };
 
 export default function AdminPromos() {
   const [promos, setPromos] = useState([]);
@@ -53,6 +53,7 @@ export default function AdminPromos() {
         reduction_value: form.reduction_type === 'amount' ? Math.round(value * 100) : Math.round(value),
         tarif_restriction: form.tarif_restriction || null,
         max_redemptions: form.max_redemptions ? Number(form.max_redemptions) : null,
+        max_per_user: form.max_per_user ? Number(form.max_per_user) : null,
         expires_at: form.expires_at ? `${form.expires_at}T23:59:59` : null,
       };
       const r = await api.post('/admin/promos', payload);
@@ -85,8 +86,9 @@ export default function AdminPromos() {
         <h1>Codes promo</h1>
       </div>
       <p className="subtitle">
-        Codes de réduction appliqués au paiement (saisis par le client sur la page Stripe). Chaque code
-        s'appuie sur un coupon Stripe&nbsp;: Stripe applique la remise et compte les utilisations.
+        Codes de réduction saisis par le client dans le tunnel de réservation. La remise est appliquée
+        par Stripe (coupon), et Cazalia fait respecter les limites&nbsp;: total et nombre d'utilisations
+        par personne.
       </p>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -121,8 +123,12 @@ export default function AdminPromos() {
               </select>
             </div>
             <div className="field">
-              <label>Nb max d'utilisations <span className="muted" style={{ fontWeight: 400 }}>(vide = illimité)</span></label>
+              <label>Total max <span className="muted" style={{ fontWeight: 400 }}>(vide = illimité)</span></label>
               <input type="number" min="1" value={form.max_redemptions} onChange={set('max_redemptions')} placeholder="ex. 20" />
+            </div>
+            <div className="field">
+              <label>Max par personne <span className="muted" style={{ fontWeight: 400 }}>(vide = illimité)</span></label>
+              <input type="number" min="1" value={form.max_per_user} onChange={set('max_per_user')} placeholder="ex. 1" />
             </div>
             <div className="field">
               <label>Expire le <span className="muted" style={{ fontWeight: 400 }}>(facultatif)</span></label>
@@ -143,7 +149,7 @@ export default function AdminPromos() {
           <table>
             <thead>
               <tr>
-                <th>Code</th><th>Réduction</th><th>Formule</th><th>Utilisations</th><th>Expire</th><th>État</th><th></th>
+                <th>Code</th><th>Réduction</th><th>Formule</th><th>Utilisations</th><th>Par pers.</th><th>Expire</th><th>État</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -152,7 +158,8 @@ export default function AdminPromos() {
                   <td><code className="voucher-code" style={{ fontSize: 14, padding: '2px 8px' }}>{p.code}</code></td>
                   <td>{fmtReduction(p)}</td>
                   <td>{TARIF_LABEL[p.tarif_restriction || '']}</td>
-                  <td>{p.times_redeemed != null ? p.times_redeemed : '—'}{p.max_redemptions ? ` / ${p.max_redemptions}` : ''}</td>
+                  <td>{p.used != null ? p.used : (p.times_redeemed ?? '—')}{p.max_redemptions ? ` / ${p.max_redemptions}` : ''}</td>
+                  <td>{p.max_per_user ? p.max_per_user : '∞'}</td>
                   <td>{fmtDate(p.expires_at)}</td>
                   <td><span className={`badge ${p.active ? 'green' : 'grey'}`}>{p.active ? 'Actif' : 'Inactif'}</span></td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>

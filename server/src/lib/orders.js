@@ -10,10 +10,11 @@
 
 import { db } from '../db.js';
 import { insertReservation } from './booking.js';
+import { recordRedemption } from './promos.js';
 
 const insertOrder = db.prepare(
-  `INSERT INTO reservation_orders (user_id, session_id, total_cents, payload, status)
-   VALUES (@user_id, @session_id, @total_cents, @payload, 'pending')`
+  `INSERT INTO reservation_orders (user_id, session_id, total_cents, payload, status, promo_id)
+   VALUES (@user_id, @session_id, @total_cents, @payload, 'pending', @promo_id)`
 );
 const getOrderBySession = db.prepare(`SELECT * FROM reservation_orders WHERE session_id = ?`);
 const markOrderPaid = db.prepare(
@@ -25,11 +26,14 @@ const clearUserHolds = db.prepare(`DELETE FROM reservation_holds WHERE user_id =
 
 /**
  * Enregistre une commande en attente de paiement.
- * @param {{userId:number, sessionId:string, items:object[], totalCents:number}} p
+ * @param {{userId:number, sessionId:string, items:object[], totalCents:number, promoId?:number|null}} p
  * @returns {void}
  */
-export function createPendingOrder({ userId, sessionId, items, totalCents }) {
-  insertOrder.run({ user_id: userId, session_id: sessionId, total_cents: totalCents, payload: JSON.stringify(items) });
+export function createPendingOrder({ userId, sessionId, items, totalCents, promoId = null }) {
+  insertOrder.run({
+    user_id: userId, session_id: sessionId, total_cents: totalCents,
+    payload: JSON.stringify(items), promo_id: promoId ?? null,
+  });
 }
 
 /**
@@ -57,6 +61,9 @@ export const fulfillOrder = db.transaction((sessionId, paymentIntent = null) => 
     created.push(reservationId);
   }
   markOrderPaid.run({ id: order.id, pi: paymentIntent });
+  // Comptabilise l'utilisation du code promo (limite par personne / globale).
+  // Dans la transaction idempotente : ne s'exécute qu'une fois par commande.
+  if (order.promo_id) recordRedemption({ promoId: order.promo_id, userId: order.user_id, orderId: order.id });
   clearUserHolds.run(order.user_id); // vide le panier : les places sont désormais réservées
   return { created, alreadyProcessed: false, userId: order.user_id };
 });
