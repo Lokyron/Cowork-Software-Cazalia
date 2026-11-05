@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Routes, Route, Navigate, NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
+import { useCart } from './cart.jsx';
 import Background from './components/Background.jsx';
 import TwoFactorBanner from './components/TwoFactorBanner.jsx';
 import Landing from './pages/Landing.jsx';
@@ -30,6 +31,7 @@ import AdminUpdate from './pages/AdminUpdate.jsx';
 // Barre de navigation de l'application (utilisateur connecté).
 function Nav() {
   const { user, logout } = useAuth();
+  const { cart } = useCart();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   if (!user) return null;
@@ -83,6 +85,16 @@ function Nav() {
         </nav>
         <div className="user">
           <span>{user.display_name}{user.role === 'admin' ? ' · admin' : ''}</span>
+          <Link
+            to="/reserver"
+            className="nav-cart"
+            onClick={close}
+            aria-label={cart.count > 0 ? `Panier (${cart.count})` : 'Panier'}
+            title="Mon panier"
+          >
+            🛒
+            {cart.count > 0 && <span className="nav-cart-badge">{cart.count}</span>}
+          </Link>
           <button className="ghost" onClick={onLogout}>Déconnexion</button>
         </div>
       </div>

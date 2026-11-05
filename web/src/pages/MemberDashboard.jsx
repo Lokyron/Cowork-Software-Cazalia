@@ -6,6 +6,7 @@ import { fmtDateTime } from '../time.js';
 import VoucherBlock from '../components/VoucherBlock.jsx';
 import AccessPinBlock from '../components/AccessPinBlock.jsx';
 import GoogleCalendarLink from '../components/GoogleCalendarLink.jsx';
+import CartSidebar from '../components/CartSidebar.jsx';
 
 const dFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' });
 const tFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hour12: false });
@@ -107,7 +108,8 @@ export default function MemberDashboard() {
   if (loading) return <p className="muted">Chargement…</p>;
 
   return (
-    <div>
+    <div className="espace-layout">
+      <div className="espace-main">
       <div className="flex-between" style={{ marginBottom: 16 }}>
         <div>
           <h1>Bonjour {user?.display_name?.split(' ')[0] || ''} 👋</h1>
@@ -238,6 +240,9 @@ export default function MemberDashboard() {
           </table>
         </div>
       </div>
+      </div>
+
+      <CartSidebar />
     </div>
   );
 }

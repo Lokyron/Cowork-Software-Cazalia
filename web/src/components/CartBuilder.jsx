@@ -244,7 +244,7 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                   <span className={`cart-timer ${soon ? 'soon' : ''}`} title="Temps restant du verrou">⏱ {mmss(left)}</span>
-                  <button className="ghost" onClick={() => remove(h.id)} aria-label="Retirer">✕</button>
+                  <button className="cart-remove" onClick={() => remove(h.id)} aria-label="Retirer du panier" title="Retirer du panier">✕</button>
                 </div>
               </div>
             );
@@ -261,7 +261,7 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
                     value={promoApplied ? promoApplied.code : promoCode}
                     onChange={onPromoInput}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!promoApplied) applyPromo(); } }}
-                    placeholder="Ex. JOURNEE-CAZALIA"
+                    placeholder="Ex : CODE-PROMO"
                     autoComplete="off"
                     disabled={!!promoApplied || promoBusy}
                     style={{ textTransform: 'uppercase', flex: 1 }}

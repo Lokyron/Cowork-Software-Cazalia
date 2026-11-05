@@ -187,7 +187,7 @@ export default function Rejoindre() {
 
           {error && <div className="alert error">{error}</div>}
           <button type="submit" disabled={busy} style={{ width: '100%' }}>
-            {busy ? '…' : 'Je crée mon compte et je profite de ma journée offerte'}
+            {busy ? '…' : 'Je profite'}
           </button>
         </form>
       </div>

@@ -662,6 +662,49 @@ a.kpi:hover { transform: translateY(-2px); }
 }
 .cart-timer.soon { color: var(--red); background: rgba(190,18,60,0.10); }
 
+/* Bouton « retirer du panier » : bien visible sur fond clair, cible confortable. */
+.cart-remove {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; flex-shrink: 0;
+  border-radius: 999px; cursor: pointer;
+  font-size: 15px; line-height: 1; font-weight: 700;
+  color: var(--red);
+  background: rgba(190, 18, 60, 0.10);
+  border: 1px solid rgba(190, 18, 60, 0.28);
+  box-shadow: none;
+  transition: background .15s, color .15s, transform .1s;
+}
+.cart-remove:hover { background: var(--red); color: #fff; border-color: var(--red); }
+.cart-remove:active { transform: scale(0.92); }
+.cart-remove:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
+/* ── Panier : sidebar persistante (Mon espace) + icône header ────────────────── */
+.espace-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+.espace-layout > .espace-main { min-width: 0; }
+.cart-aside { position: sticky; top: 16px; }
+@media (max-width: 900px) {
+  .espace-layout { grid-template-columns: 1fr; }
+  .cart-aside { position: static; }
+}
+.cart-aside .cart-line { gap: 8px; }
+.cart-aside-total { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* Icône panier du header (à côté de la déconnexion). */
+.nav-cart {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 10px;
+  color: #fff; font-size: 18px; line-height: 1; text-decoration: none;
+  background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.35);
+  transition: background .15s;
+}
+.nav-cart:hover { background: rgba(255, 255, 255, 0.28); text-decoration: none; }
+.nav-cart .nav-cart-badge {
+  position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; background: var(--accent); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 1; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
 /* ── Modale ─────────────────────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;
