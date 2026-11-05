@@ -147,13 +147,23 @@ export function getDashboardStats() {
     .prepare(`SELECT COUNT(DISTINCT user_id) AS n FROM reservations WHERE status = 'confirmed' AND start_at >= ?`)
     .get(days30Ago).n;
 
+  // Chiffre d'affaires du mois : paiements de réservation RÉELS (euros), nets des
+  // remboursements. S'appuie sur `reservation_orders` (source de vérité des
+  // encaissements en ligne) et non plus sur l'ancien grand-livre de crédits.
   const month = db
     .prepare(
-      `SELECT COALESCE(SUM(amount_eur_cents), 0) AS cents, COALESCE(SUM(amount), 0) AS credits
-         FROM credit_transactions
-        WHERE reason = 'topup' AND datetime(created_at) >= datetime(?)`
+      `SELECT COALESCE(SUM(COALESCE(amount_paid_cents, total_cents)), 0) AS cents,
+              COALESCE(SUM(refunded_cents), 0) AS refunded,
+              COUNT(*) AS orders
+         FROM reservation_orders
+        WHERE status = 'paid' AND datetime(created_at) >= datetime(?)`
     )
     .get(monthStart);
+  const pendingOrders = db
+    .prepare(`SELECT COUNT(*) AS n FROM reservation_orders WHERE status = 'pending' AND datetime(created_at) <= datetime('now', '-15 minutes')`)
+    .get().n;
+  // Crédits en circulation : reste pertinent tant que l'admin fait des ajustements
+  // manuels sur le grand-livre (sinon 0).
   const creditsOutstanding = db.prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM credit_transactions`).get().n;
 
   return {
@@ -166,8 +176,9 @@ export function getDashboardStats() {
       active_members: activeMembers,
       total_members: members.length,
       new_members_month: newMembersMonth,
-      revenue_month_eur: month.cents / 100,
-      credits_sold_month: month.credits,
+      revenue_month_eur: (month.cents - month.refunded) / 100,
+      orders_month: month.orders,
+      pending_orders: pendingOrders,
       credits_outstanding: creditsOutstanding,
     },
     bookings14,

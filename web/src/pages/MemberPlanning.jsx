@@ -28,11 +28,12 @@ export default function MemberPlanning() {
   const next = () => setWeekStart((w) => addDaysStr(w, 7));
   const rangeLabel = `${dayNumLabel(weekStart)} – ${dayNumLabel(addDaysStr(weekStart, 6))}`;
 
+  const eur = (cents) => ((Number(cents) || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
   const renderEvent = (ev) => ({
     color: ev.space_color,
     tooltip: `${ev.space_name}, ${parisTimeHM(ev.start_at)}`,
     main: ev.space_name,
-    sub: `${ev.credits_cost} cr.`,
+    sub: eur(ev.price_cents),
   });
 
   const cancel = async (id) => {
@@ -41,7 +42,7 @@ export default function MemberPlanning() {
       const r = await api.del(`/reservations/${id}`);
       setFeedback({
         type: 'ok',
-        text: r.refunded ? `Annulée. ${r.amount} crédits remboursés.` : 'Annulée. Hors délai, pas de remboursement.',
+        text: r.refunded ? `Annulée. Un remboursement de ${eur(r.amount)} vous sera effectué sous quelques jours.` : 'Annulée. Hors délai, pas de remboursement.',
       });
       setSelected(null);
       load();
@@ -95,7 +96,7 @@ export default function MemberPlanning() {
               <tbody>
                 <tr><td className="muted">Début</td><td style={{ textAlign: 'right' }}>{fmtDateTime(selected.start_at)}</td></tr>
                 <tr><td className="muted">Fin</td><td style={{ textAlign: 'right' }}>{fmtDateTime(selected.end_at)}</td></tr>
-                <tr><td className="muted">Coût</td><td style={{ textAlign: 'right' }}>{selected.credits_cost} crédits</td></tr>
+                <tr><td className="muted">Montant</td><td style={{ textAlign: 'right' }}>{eur(selected.price_cents)}</td></tr>
               </tbody>
             </table>
             <VoucherBlock reservation={selected} />

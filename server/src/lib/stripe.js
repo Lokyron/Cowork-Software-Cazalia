@@ -164,6 +164,45 @@ export async function createBookingCheckoutSession({ userId, items, baseUrl, pro
 }
 
 /**
+ * Récupère l'URL du reçu Stripe (hosted receipt) associé à un PaymentIntent.
+ * Best-effort : renvoie `null` si Stripe n'est pas configuré, si le PI est absent
+ * ou si l'appel échoue — la capture du reçu ne doit JAMAIS faire échouer le flux
+ * de confirmation de réservation.
+ *
+ * @param {string|null} paymentIntentId Identifiant du PaymentIntent.
+ * @returns {Promise<string|null>} URL du reçu, ou `null`.
+ */
+export async function getReceiptUrl(paymentIntentId) {
+  if (!paymentIntentId) return null;
+  const stripe = client();
+  if (!stripe) return null;
+  try {
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ['latest_charge'] });
+    const charge = pi?.latest_charge;
+    return (charge && typeof charge === 'object' ? charge.receipt_url : null) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Récupère une session Checkout (pour la réconciliation d'une commande restée
+ * `pending` : vérifier a posteriori si le paiement a finalement abouti).
+ *
+ * @param {string} sessionId Session Checkout Stripe.
+ * @returns {Promise<import('stripe').Stripe.Checkout.Session|null>}
+ */
+export async function retrieveCheckoutSession(sessionId) {
+  const stripe = client();
+  if (!stripe) return null;
+  try {
+    return await stripe.checkout.sessions.retrieve(sessionId);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Vérifie et décode un événement de webhook Stripe à partir du CORPS BRUT.
  * La signature garantit que l'appel provient bien de Stripe (et non d'un POST forgé).
  *

@@ -15,6 +15,8 @@ import { toUtcIso, parsePeriod } from '../lib/time.js';
 import { ensureVoucherForReservation, revokeVoucherForReservation } from '../lib/unifi.js';
 import { ensureAccessPinForReservation, revokeAccessForReservation } from '../lib/unifiAccess.js';
 import { addHold, listCart, removeHold, checkoutFree } from '../lib/cart.js';
+import { listStalePendingOrders, getPendingOrder, fulfillOrder, attachReceipt } from '../lib/orders.js';
+import { retrieveCheckoutSession, getReceiptUrl } from '../lib/stripe.js';
 import { requireAdmin, sendBusinessError } from '../middleware.js';
 import { config } from '../config.js';
 import { adminSetPassword, createResetToken } from '../lib/passwords.js';
@@ -481,6 +483,55 @@ adminRouter.post('/reservations/:id/cancel', async (req, res) => {
       });
     }
     res.json({ ok: true, ...result, notify: notifyResult });
+  } catch (err) {
+    sendBusinessError(res, err);
+  }
+});
+
+// ── Réconciliation des paiements « en attente » ──────────────────────────────
+// Une commande reste 'pending' si le webhook Stripe n'a jamais abouti (endpoint
+// mal configuré, panne). Le membre a potentiellement payé sans obtenir sa
+// réservation. On liste les commandes anciennes restées en attente et on offre
+// de les réconcilier en interrogeant Stripe (idempotent : fulfillOrder refait
+// rien si la commande est déjà 'paid').
+
+/**
+ * GET /api/admin/orders/pending — commandes payées côté membre restées en attente.
+ * @returns 200 `{orders}`
+ */
+adminRouter.get('/orders/pending', (_req, res) => {
+  try {
+    res.json({ orders: listStalePendingOrders() });
+  } catch (err) {
+    sendBusinessError(res, err, 500);
+  }
+});
+
+/**
+ * POST /api/admin/orders/:id/reconcile — interroge Stripe pour une commande en
+ * attente et crée les réservations si le paiement a bien abouti.
+ * @returns 200 `{reconciled, created, status}` · 404 `COMMANDE_INTROUVABLE`
+ *          · 409 `PAIEMENT_NON_ABOUTI`/`PAIEMENT_INDISPONIBLE`
+ */
+adminRouter.post('/orders/:id/reconcile', async (req, res) => {
+  try {
+    const order = getPendingOrder(Number(req.params.id));
+    if (!order) return res.status(404).json({ error: 'COMMANDE_INTROUVABLE' });
+    const session = await retrieveCheckoutSession(order.session_id);
+    if (!session) return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });
+    const settled = session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
+    if (!settled) return res.status(409).json({ error: 'PAIEMENT_NON_ABOUTI', payment_status: session.payment_status });
+    const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+    const amountPaidCents = Number.isInteger(session.amount_total) ? session.amount_total : null;
+    const r = fulfillOrder(order.session_id, paymentIntent, amountPaidCents);
+    securityEvent('stripe_reconciliation', { session: order.session_id, created: r.created?.length || 0, par: req.user.id });
+    for (const id of r.created || []) {
+      await ensureVoucherForReservation(id).catch(() => {});
+      await ensureAccessPinForReservation(id).catch(() => {});
+      sendBookingConfirmation(id).catch(() => {});
+    }
+    if (r.created?.length) getReceiptUrl(paymentIntent).then((url) => attachReceipt(order.session_id, url)).catch(() => {});
+    res.json({ reconciled: true, created: r.created?.length || 0, status: session.payment_status });
   } catch (err) {
     sendBusinessError(res, err);
   }

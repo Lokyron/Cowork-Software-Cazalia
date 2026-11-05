@@ -66,12 +66,20 @@ export default function AdminDashboard() {
         <div className="card kpi">
           <div className="kpi-l">Encaissé ce mois</div>
           <div className="kpi-v">{eur(k.revenue_month_eur)}</div>
-          <span className="kpi-d mut">{k.credits_sold_month} crédits vendus</span>
+          <span className="kpi-d mut">{k.orders_month} paiement{k.orders_month > 1 ? 's' : ''} · net des remboursements</span>
         </div>
       </div>
-      <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
-        Crédits en circulation : <strong>{k.credits_outstanding}</strong> (dette envers les membres).
-      </p>
+      {k.pending_orders > 0 && (
+        <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
+          ⚠️ <strong>{k.pending_orders}</strong> paiement{k.pending_orders > 1 ? 's' : ''} en attente depuis &gt; 15 min
+          (webhook non abouti ?) — à réconcilier.
+        </p>
+      )}
+      {k.credits_outstanding !== 0 && (
+        <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
+          Crédits en circulation : <strong>{k.credits_outstanding}</strong> (ajustements manuels).
+        </p>
+      )}
 
       {/* Réservations 14 j + occupation par espace */}
       <div className="dash-row2" style={{ marginTop: 16 }}>

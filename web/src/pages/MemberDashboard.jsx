@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, msg } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -13,32 +13,63 @@ const longDate = (iso) => dFmt.format(new Date(iso));
 const range = (a, b) => `${tFmt.format(new Date(a))} – ${tFmt.format(new Date(b))}`;
 const eur = (cents) => ((Number(cents) || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 
+// Badge de statut d'une réservation passée / en cours (cf. audit M3).
+function HistoryBadge({ r, now }) {
+  if (r.status !== 'confirmed') return <span className="badge red">Annulée</span>;
+  if (new Date(r.start_at).getTime() <= now && new Date(r.end_at).getTime() > now) {
+    return <span className="badge green">En cours</span>;
+  }
+  if (r.payment_status === 'refunded') return <span className="badge red">Remboursée</span>;
+  return <span className="badge">Terminée</span>;
+}
+
 export default function MemberDashboard() {
   const { user } = useAuth();
   const [reservations, setReservations] = useState([]);
+  const [processing, setProcessing] = useState([]);
   const [arrival, setArrival] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(Date.now());
   const [searchParams, setSearchParams] = useSearchParams();
 
   const load = useCallback(async () => {
     const r = await api.get('/reservations/me');
     setReservations(r.reservations);
+    setProcessing(r.processing || []);
     setLoading(false);
+    return r;
   }, []);
   useEffect(() => { load().catch(() => setLoading(false)); api.get('/config').then(setArrival).catch(() => {}); }, [load]);
 
-  // Retour depuis Stripe Checkout : la réservation est créée par le webhook, on
-  // relit donc la liste peu après et on informe le membre.
+  // Horloge basse fréquence : garde le statut « en cours » à jour sans recharger.
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
+
+  // Filet post-paiement (audit M2) : tant qu'un paiement est « en cours de
+  // traitement » (commande payée, webhook pas encore arrivé), on recharge à
+  // cadence décroissante, borné, jusqu'à ce que la réservation apparaisse.
+  const pollRef = useRef(null);
+  useEffect(() => {
+    if (processing.length === 0) return undefined;
+    let tries = 0;
+    const tick = () => {
+      tries += 1;
+      load().catch(() => {}).finally(() => {
+        if (tries < 10) pollRef.current = setTimeout(tick, Math.min(2000 + tries * 1000, 8000));
+      });
+    };
+    pollRef.current = setTimeout(tick, 2500);
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+  }, [processing.length, load]);
+
+  // Retour depuis Stripe Checkout.
   useEffect(() => {
     const status = searchParams.get('reservation');
     if (!status) return;
     if (status === 'success') {
-      setFeedback({ type: 'ok', text: 'Paiement reçu ! Votre réservation apparaît dès la confirmation (quelques secondes).' });
-      const t1 = setTimeout(() => load().catch(() => {}), 1500);
-      const t2 = setTimeout(() => load().catch(() => {}), 5000);
+      setFeedback({ type: 'ok', text: 'Paiement reçu ! Votre réservation apparaît dès sa confirmation (quelques secondes).' });
+      load().catch(() => {});
       searchParams.delete('reservation'); setSearchParams(searchParams, { replace: true });
-      return () => { clearTimeout(t1); clearTimeout(t2); };
     }
     if (status === 'cancel') {
       setFeedback({ type: 'error', text: 'Paiement annulé. Aucun montant n’a été débité et la réservation n’a pas été prise.' });
@@ -46,13 +77,17 @@ export default function MemberDashboard() {
     }
   }, [searchParams, setSearchParams, load]);
 
-  const now = Date.now();
-  const { next, upcoming, past } = useMemo(() => {
+  const { current, next, upcoming, past } = useMemo(() => {
     const confirmed = reservations.filter((r) => r.status === 'confirmed');
+    const inProgress = confirmed
+      .filter((r) => new Date(r.start_at).getTime() <= now && new Date(r.end_at).getTime() > now)
+      .sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
     const fut = confirmed.filter((r) => new Date(r.start_at).getTime() > now).sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
-    const pastOnes = reservations.filter((r) => r.status !== 'confirmed' || new Date(r.start_at).getTime() <= now)
+    // Historique : annulées + terminées (fin passée). Les « en cours » en sont exclues.
+    const pastOnes = reservations
+      .filter((r) => r.status !== 'confirmed' || new Date(r.end_at).getTime() <= now)
       .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
-    return { next: fut[0] || null, upcoming: fut.slice(1), past: pastOnes };
+    return { current: inProgress, next: fut[0] || null, upcoming: fut.slice(1), past: pastOnes };
   }, [reservations, now]);
 
   const cancel = async (id) => {
@@ -83,6 +118,33 @@ export default function MemberDashboard() {
 
       {feedback && <div className={`alert ${feedback.type === 'ok' ? 'ok' : 'error'}`}>{feedback.text}</div>}
 
+      {/* Paiement en cours de traitement (webhook Stripe pas encore arrivé) */}
+      {processing.length > 0 && (
+        <div className="alert" style={{ marginBottom: 16, background: 'rgba(59,130,246,0.08)', borderColor: 'rgba(59,130,246,0.3)' }}>
+          ⏳ Paiement en cours de traitement… Votre réservation s’affiche dès la confirmation de la banque
+          (quelques secondes). Inutile de payer à nouveau.
+        </div>
+      )}
+
+      {/* EN COURS */}
+      {current.map((r) => (
+        <div key={r.id} className="card hero-card" style={{ marginBottom: 20 }}>
+          <div className="hero-tag">En ce moment</div>
+          <div className="hero-main">
+            <div>
+              <h2 style={{ margin: '4px 0 2px' }}>
+                <span className="dot" style={{ background: r.space_color }} />{r.space_name}
+              </h2>
+              <div className="hero-when">{longDate(r.start_at)} · {range(r.start_at, r.end_at)}</div>
+              <div className="muted seats" style={{ marginTop: 4 }}>{eur(r.price_cents)}</div>
+            </div>
+            <div className="hero-actions"><GoogleCalendarLink reservation={r} /></div>
+          </div>
+          <AccessPinBlock reservation={r} />
+          <VoucherBlock reservation={r} />
+        </div>
+      ))}
+
       {/* HERO — prochaine réservation */}
       {next ? (
         <div className="card hero-card" style={{ marginBottom: 20 }}>
@@ -111,7 +173,7 @@ export default function MemberDashboard() {
             </div>
           )}
         </div>
-      ) : (
+      ) : current.length === 0 && (
         <div className="card" style={{ marginBottom: 20, textAlign: 'center', padding: 28 }}>
           <p className="muted" style={{ margin: '0 0 12px' }}>Aucune réservation à venir.</p>
           <Link to="/reserver"><button>Réserver un espace</button></Link>
@@ -147,15 +209,16 @@ export default function MemberDashboard() {
             Vous payez chaque réservation en ligne par carte, au moment de réserver.
             À l'heure ou au forfait (demi-journée, journée) — le plus avantageux est indiqué.
           </p>
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Link to="/reserver"><button className="outline small">Réserver un espace</button></Link>
+            <Link to="/mes-paiements"><button className="outline small">Mes paiements</button></Link>
           </div>
         </div>
       </div>
 
       {/* HISTORIQUE */}
       <div className="card">
-        <h2>Historique des réservations</h2>
+        <div className="flex-between"><h2>Historique des réservations</h2><Link to="/mes-paiements" style={{ fontSize: 13 }}>Mes paiements →</Link></div>
         <div className="table-wrap">
           <table>
             <thead>
@@ -166,7 +229,7 @@ export default function MemberDashboard() {
                 <tr key={r.id}>
                   <td>{fmtDateTime(r.start_at)}</td>
                   <td><span className="dot" style={{ background: r.space_color }} />{r.space_name}</td>
-                  <td>{r.status === 'confirmed' ? <span className="badge green">Terminée</span> : <span className="badge red">Annulée</span>}</td>
+                  <td><HistoryBadge r={r} now={now} /></td>
                   <td style={{ textAlign: 'right' }}>{eur(r.price_cents)}</td>
                 </tr>
               ))}

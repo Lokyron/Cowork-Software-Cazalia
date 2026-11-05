@@ -117,6 +117,21 @@ if (!resPayCols.includes('payment_intent')) db.exec(`ALTER TABLE reservations AD
 const holdTarifCols = db.prepare(`PRAGMA table_info(reservation_holds)`).all().map((c) => c.name);
 if (!holdTarifCols.includes('tarif_type')) db.exec(`ALTER TABLE reservation_holds ADD COLUMN tarif_type TEXT`);
 
+// ── Traçabilité paiement / remboursement Stripe (audit data flow) ─────────────
+// Reçu Stripe capté au webhook + suivi des remboursements confirmés par Stripe
+// (event charge.refunded). Sans ces colonnes, un remboursement effectué dans
+// Stripe ne laissait AUCUNE trace en base et l'espace client ne pouvait ni
+// afficher un justificatif ni le statut « remboursée ».
+const resTraceCols = db.prepare(`PRAGMA table_info(reservations)`).all().map((c) => c.name);
+if (!resTraceCols.includes('receipt_url')) db.exec(`ALTER TABLE reservations ADD COLUMN receipt_url TEXT`);
+if (!resTraceCols.includes('refunded_cents')) db.exec(`ALTER TABLE reservations ADD COLUMN refunded_cents INTEGER NOT NULL DEFAULT 0`);
+if (!resTraceCols.includes('refunded_at')) db.exec(`ALTER TABLE reservations ADD COLUMN refunded_at TEXT`);
+
+const orderTraceCols = db.prepare(`PRAGMA table_info(reservation_orders)`).all().map((c) => c.name);
+if (orderTraceCols.length && !orderTraceCols.includes('amount_paid_cents')) db.exec(`ALTER TABLE reservation_orders ADD COLUMN amount_paid_cents INTEGER`);
+if (orderTraceCols.length && !orderTraceCols.includes('receipt_url')) db.exec(`ALTER TABLE reservation_orders ADD COLUMN receipt_url TEXT`);
+if (orderTraceCols.length && !orderTraceCols.includes('refunded_cents')) db.exec(`ALTER TABLE reservation_orders ADD COLUMN refunded_cents INTEGER NOT NULL DEFAULT 0`);
+
 // UniFi Access : PIN de porte temporaire par réservation (cf. lib/unifiAccess.js).
 const accessCols = db.prepare(`PRAGMA table_info(reservations)`).all().map((c) => c.name);
 if (!accessCols.includes('access_pin')) db.exec(`ALTER TABLE reservations ADD COLUMN access_pin TEXT`);

@@ -47,12 +47,17 @@ CREATE TABLE IF NOT EXISTS reservations (
   credits_cost INTEGER NOT NULL DEFAULT 0,            -- LEGACY (crédits) — conservé, plus alimenté
   seats        INTEGER NOT NULL DEFAULT 1,             -- places consommées (inventaire) ; 1 pour un espace exclusif
   -- Paiement en EUROS. price_cents = montant dû/payé. tarif_type = heure | demi_journee | journee.
-  -- payment_status : 'paid' (payé Stripe ou résa admin gratuite 'free'), 'pending' (en attente du webhook), 'free'.
+  -- payment_status : 'paid' (payé Stripe), 'free' (résa admin gratuite / paiement hors ligne),
+  --   'refunded' (remboursement total confirmé par Stripe via charge.refunded),
+  --   'partially_refunded' (remboursement partiel confirmé par Stripe).
   price_cents       INTEGER NOT NULL DEFAULT 0,
   tarif_type        TEXT,
   payment_status    TEXT    NOT NULL DEFAULT 'paid',
   stripe_session_id TEXT,
   payment_intent    TEXT,
+  receipt_url       TEXT,                                 -- lien reçu Stripe (hosted) capté au webhook
+  refunded_cents    INTEGER NOT NULL DEFAULT 0,           -- montant remboursé confirmé par Stripe
+  refunded_at       TEXT,                                 -- horodatage du remboursement (ISO/UTC)
   note         TEXT,                                  -- note libre (admin)
   created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
   CHECK (end_at > start_at)
@@ -225,7 +230,10 @@ CREATE TABLE IF NOT EXISTS reservation_orders (
   session_id     TEXT    NOT NULL UNIQUE,              -- id de la session Checkout Stripe
   payment_intent TEXT,
   promo_id       INTEGER REFERENCES promo_codes(id),  -- code promo appliqué (si saisi au panier)
-  total_cents    INTEGER NOT NULL,
+  total_cents    INTEGER NOT NULL,                     -- montant AVANT remise (somme des créneaux)
+  amount_paid_cents INTEGER,                            -- montant RÉELLEMENT encaissé (amount_total Stripe, après remise)
+  receipt_url    TEXT,                                 -- lien reçu Stripe (hosted) capté au webhook
+  refunded_cents INTEGER NOT NULL DEFAULT 0,           -- montant remboursé confirmé par Stripe (charge.refunded)
   payload        TEXT    NOT NULL,                     -- JSON: [{space_id,start_at,end_at,seats,tarif_type,price_cents}]
   status         TEXT    NOT NULL DEFAULT 'pending',   -- 'pending' | 'paid'
   created_at     TEXT    NOT NULL DEFAULT (datetime('now')),

@@ -10,7 +10,7 @@ export function googleCalendarUrl(r) {
     action: 'TEMPLATE',
     text: `Cazalia — ${r.space_name}`,
     dates: `${toGCalDate(r.start_at)}/${toGCalDate(r.end_at)}`,
-    details: `Réservation — ${r.space_name} (${r.credits_cost} crédits) chez Cazalia.`,
+    details: `Réservation — ${r.space_name} chez Cazalia.`,
     location: 'Cazalia',
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;

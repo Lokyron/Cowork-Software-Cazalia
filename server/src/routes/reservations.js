@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { config } from '../config.js';
 import { cancelReservation, listMyReservations } from '../lib/booking.js';
+import { listMyTransactions, listMyPendingOrders } from '../lib/orders.js';
 import { addHold, startBookingCheckout, checkoutFree } from '../lib/cart.js';
 import { getStripe } from '../lib/settings.js';
 import { revokeVoucherForReservation } from '../lib/unifi.js';
@@ -75,10 +76,28 @@ reservationsRouter.post('/reservations/batch', requireAuth, async (req, res) => 
 
 /**
  * GET /api/reservations/me — réservations de l'utilisateur connecté.
- * @returns 200 `{reservations}` · 401 `NON_AUTHENTIFIE`
+ * `processing` = paiements en cours de traitement (commande payée côté Stripe
+ * dont le webhook n'a pas encore créé la réservation). Permet au front d'afficher
+ * un bandeau « paiement en cours » et de ne pas laisser croire à une résa perdue.
+ *
+ * @returns 200 `{reservations, processing}` · 401 `NON_AUTHENTIFIE`
  */
 reservationsRouter.get('/reservations/me', requireAuth, (req, res) => {
-  res.json({ reservations: listMyReservations(req.user.id) });
+  res.json({
+    reservations: listMyReservations(req.user.id),
+    processing: listMyPendingOrders(req.user.id),
+  });
+});
+
+/**
+ * GET /api/transactions/me — historique des paiements en ligne de l'appelant.
+ * L'identité vient de la SESSION (pas de paramètre) : aucune transaction d'un
+ * autre membre n'est accessible.
+ *
+ * @returns 200 `{transactions}` · 401 `NON_AUTHENTIFIE`
+ */
+reservationsRouter.get('/transactions/me', requireAuth, (req, res) => {
+  res.json({ transactions: listMyTransactions(req.user.id) });
 });
 
 /**

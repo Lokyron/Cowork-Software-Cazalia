@@ -8,6 +8,8 @@ import VoucherBlock from './VoucherBlock.jsx';
 // onChanged(reload) est appelé après chaque action réussie ; onClose ferme.
 export default function ReservationDetail({ reservation, onClose, onChanged }) {
   const r = reservation;
+  const eur = (cents) => ((Number(cents) || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+  const PAY_LABEL = { paid: 'Payé en ligne', free: 'Gratuit / hors ligne', refunded: 'Remboursé', partially_refunded: 'Partiellement remboursé' };
   const [note, setNote] = useState(r.note || '');
   const [date, setDate] = useState(parisDateKey(r.start_at));
   const [start, setStart] = useState(parisTimeHM(r.start_at));
@@ -72,7 +74,11 @@ export default function ReservationDetail({ reservation, onClose, onChanged }) {
             <tr><td className="muted">Membre</td><td><strong>{r.member_name}</strong> · {r.member_email}</td></tr>
             <tr><td className="muted">Début</td><td>{fmtDateTime(r.start_at)}</td></tr>
             <tr><td className="muted">Fin</td><td>{fmtDateTime(r.end_at)}</td></tr>
-            <tr><td className="muted">Coût</td><td>{r.credits_cost} crédits</td></tr>
+            <tr><td className="muted">Montant</td><td>{eur(r.price_cents)}{r.refunded_cents > 0 ? ` · remboursé ${eur(r.refunded_cents)}` : ''}</td></tr>
+            <tr><td className="muted">Paiement</td><td>{PAY_LABEL[r.payment_status] || r.payment_status || '—'}</td></tr>
+            {r.receipt_url && (
+              <tr><td className="muted">Reçu</td><td><a href={r.receipt_url} target="_blank" rel="noopener noreferrer">Reçu Stripe ↗</a></td></tr>
+            )}
           </tbody>
         </table>
 

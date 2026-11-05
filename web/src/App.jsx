@@ -14,6 +14,7 @@ import ResetPassword from './pages/ResetPassword.jsx';
 import ForcePasswordChange from './pages/ForcePasswordChange.jsx';
 import Booking from './pages/Booking.jsx';
 import MemberDashboard from './pages/MemberDashboard.jsx';
+import MemberPayments from './pages/MemberPayments.jsx';
 import AccountSettings from './pages/AccountSettings.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import MemberPlanning from './pages/MemberPlanning.jsx';
@@ -61,6 +62,7 @@ function Nav() {
             <>
               <NavLink to="/reserver">Réserver</NavLink>
               <NavLink to="/mon-planning">Mon planning</NavLink>
+              <NavLink to="/mes-paiements">Mes paiements</NavLink>
             </>
           )}
           <NavLink to="/mon-compte">Mon compte</NavLink>
@@ -150,6 +152,7 @@ export default function App() {
         <Route path="/reserver" element={<Guard><Shell><Booking /></Shell></Guard>} />
         <Route path="/mon-espace" element={<Guard><Shell><MemberDashboard /></Shell></Guard>} />
         <Route path="/mon-planning" element={<Guard><Shell><MemberPlanning /></Shell></Guard>} />
+        <Route path="/mes-paiements" element={<Guard><Shell><MemberPayments /></Shell></Guard>} />
         <Route path="/mon-compte" element={<Guard><Shell><AccountSettings /></Shell></Guard>} />
         <Route path="/admin" element={<Guard admin><Shell><AdminDashboard /></Shell></Guard>} />
         <Route path="/admin/planning" element={<Guard admin><Shell><AdminPlanning /></Shell></Guard>} />
