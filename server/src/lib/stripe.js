@@ -10,7 +10,7 @@
 //     effet sans redémarrage.
 
 import Stripe from 'stripe';
-import { getStripe } from './settings.js';
+import { getStripe, getSetting, setSetting } from './settings.js';
 
 /**
  * Client Stripe construit avec la clé secrète courante, ou `null` si absente.
@@ -20,6 +20,46 @@ function client() {
   const { secretKey } = getStripe();
   if (!secretKey) return null;
   return new Stripe(secretKey);
+}
+
+// Exposé pour les autres modules (lib/promos.js) : réutilise la même fabrique de
+// client (clé lue à chaud) plutôt que d'en recréer une.
+export { client as getClient };
+
+// ── Produits « formule » persistants ─────────────────────────────────────────
+// La restriction d'un coupon à une formule précise (ex. « Journée » uniquement)
+// passe par `coupon.applies_to.products`, qui exige un Produit Stripe PERSISTANT.
+// Le checkout paie des montants dynamiques (prix ad-hoc) : on garde `price_data`
+// mais on le rattache à l'un de ces trois produits via `price_data.product`.
+// Les ids sont créés une fois puis mémorisés en réglages (clé `stripe_formules`).
+//
+// ⚠️ En cas de bascule vers un autre compte Stripe (test → live, rotation), les
+// ids mémorisés n'existeront plus : vider le réglage `stripe_formules` force leur
+// recréation.
+const FORMULE_NAMES = {
+  heure: 'Formule Heure',
+  demi_journee: 'Formule Demi-journée',
+  journee: 'Formule Journée',
+};
+
+/**
+ * Garantit l'existence des trois produits « formule » et renvoie leurs ids.
+ * @param {Stripe} stripe Client Stripe.
+ * @returns {Promise<{heure:string, demi_journee:string, journee:string}>}
+ */
+export async function ensureFormuleProducts(stripe) {
+  const cached = getSetting('stripe_formules', null);
+  if (cached && cached.heure && cached.demi_journee && cached.journee) return cached;
+  const ids = {};
+  for (const [key, name] of Object.entries(FORMULE_NAMES)) {
+    const product = await stripe.products.create({
+      name: `Cazalia — ${name}`,
+      metadata: { formule: key },
+    });
+    ids[key] = product.id;
+  }
+  setSetting('stripe_formules', ids);
+  return ids;
 }
 
 /**
@@ -81,20 +121,34 @@ export async function createBookingCheckoutSession({ userId, items, baseUrl }) {
   const stripe = client();
   if (!stripe) { const e = new Error('STRIPE_NON_CONFIGURE'); e.code = 'STRIPE_NON_CONFIGURE'; throw e; }
   const base = String(baseUrl || '').replace(/\/$/, '');
-  const line_items = items.map((it) => ({
-    quantity: 1,
-    price_data: {
-      currency: 'eur',
-      unit_amount: it.price_cents,
-      product_data: { name: it.label || 'Réservation Cazalia' },
-    },
-  }));
+  // Chaque ligne est rattachée au produit « formule » correspondant (via
+  // `price_data.product`) pour que les coupons restreints à une formule
+  // (applies_to.products) ne s'appliquent qu'aux bonnes lignes. Repli sur un
+  // libellé ad-hoc si le type de tarif est inconnu (ne devrait pas arriver).
+  const formules = await ensureFormuleProducts(stripe);
+  const line_items = items.map((it) => {
+    const productId = formules[it.tarif_type];
+    return {
+      quantity: 1,
+      price_data: {
+        currency: 'eur',
+        unit_amount: it.price_cents,
+        ...(productId
+          ? { product: productId }
+          : { product_data: { name: it.label || 'Réservation Cazalia' } }),
+      },
+    };
+  });
   return stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],
     client_reference_id: String(userId),
     metadata: { kind: 'booking', user_id: String(userId) },
     line_items,
+    // Le client peut saisir un code promo sur la page de paiement Stripe. Stripe
+    // applique alors le coupon en respectant ses restrictions (formule, dates,
+    // nombre d'utilisations) sans logique supplémentaire de notre côté.
+    allow_promotion_codes: true,
     success_url: `${base}/mon-espace?reservation=success`,
     cancel_url: `${base}/mon-espace?reservation=cancel`,
   });

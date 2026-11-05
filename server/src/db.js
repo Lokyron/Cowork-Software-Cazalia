@@ -67,6 +67,8 @@ if (!userCols.includes('notify_marketing')) db.exec(`ALTER TABLE users ADD COLUM
 // Acceptation des CGU à l'inscription : horodatage de preuve (RGPD / consentement
 // documenté). NULL pour les comptes créés avant la mise en place de l'opt-in.
 if (!userCols.includes('cgu_accepted_at')) db.exec(`ALTER TABLE users ADD COLUMN cgu_accepted_at TEXT`);
+// Statut/profession facultatif, renseigné à l'inscription (page /rejoindre).
+if (!userCols.includes('activity')) db.exec(`ALTER TABLE users ADD COLUMN activity TEXT`);
 
 // Migration ponctuelle : chiffrement des secrets TOTP restés en clair.
 // Le secret TOTP est un facteur d'authentification à part entière ; stocké en

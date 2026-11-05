@@ -50,8 +50,11 @@ export function stripeWebhookHandler(req, res) {
   try {
     if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
-      // On ne crée les réservations que si le paiement est réellement encaissé.
-      if (s.payment_status === 'paid' && s.metadata?.kind === 'booking') {
+      // On crée les réservations une fois le paiement réglé. `no_payment_required`
+      // couvre le cas d'un code promo à 100 % (total 0 €) : Stripe valide la
+      // session sans encaissement, la réservation gratuite doit tout de même être créée.
+      const settled = s.payment_status === 'paid' || s.payment_status === 'no_payment_required';
+      if (settled && s.metadata?.kind === 'booking') {
         const paymentIntent = typeof s.payment_intent === 'string' ? s.payment_intent : null;
         const r = fulfillOrder(s.id, paymentIntent);
         securityEvent('stripe_reservation_payee', {

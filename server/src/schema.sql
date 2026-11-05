@@ -231,3 +231,20 @@ CREATE TABLE IF NOT EXISTS reservation_orders (
   updated_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_reservation_orders_user ON reservation_orders(user_id);
+
+-- Codes promotionnels (miroir local des Coupons + Promotion Codes Stripe). Stripe
+-- reste la source de vérité pour l'application de la remise et le comptage des
+-- utilisations (times_redeemed) ; cette table sert à lister/gérer côté admin.
+CREATE TABLE IF NOT EXISTS promo_codes (
+  id                INTEGER PRIMARY KEY,
+  code              TEXT    NOT NULL UNIQUE,            -- code public saisi au paiement
+  stripe_coupon_id  TEXT    NOT NULL,                   -- Coupon Stripe (règle de remise)
+  stripe_promo_id   TEXT    NOT NULL,                   -- Promotion Code Stripe
+  reduction_type    TEXT    NOT NULL,                   -- 'percent' | 'amount'
+  reduction_value   INTEGER NOT NULL,                   -- % (1-100) ou centimes d'euro
+  tarif_restriction TEXT,                               -- 'journee' | 'demi_journee' | 'heure' | NULL (tous)
+  max_redemptions   INTEGER,                            -- NULL = illimité
+  expires_at        TEXT,                               -- ISO 8601, NULL = sans expiration
+  active            INTEGER NOT NULL DEFAULT 1,
+  created_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+);

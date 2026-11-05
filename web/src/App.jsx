@@ -6,6 +6,7 @@ import TwoFactorBanner from './components/TwoFactorBanner.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import Rejoindre from './pages/Rejoindre.jsx';
+import AdminPromos from './pages/AdminPromos.jsx';
 import Cgu from './pages/Cgu.jsx';
 import Cgv from './pages/Cgv.jsx';
 import Reclamation from './pages/Reclamation.jsx';
@@ -71,6 +72,7 @@ function Nav() {
               <NavLink to="/admin/espaces">Espaces</NavLink>
               <NavLink to="/admin/membres">Membres</NavLink>
               <NavLink to="/admin/prospects">Prospects</NavLink>
+              <NavLink to="/admin/codes-promo">Codes promo</NavLink>
               <NavLink to="/admin/emails">E-mails</NavLink>
               <NavLink to="/admin/photos">Photos</NavLink>
               <NavLink to="/admin/maj">Mises à jour</NavLink>
@@ -154,6 +156,7 @@ export default function App() {
         <Route path="/admin/espaces" element={<Guard admin><Shell><AdminSpaces /></Shell></Guard>} />
         <Route path="/admin/membres" element={<Guard admin><Shell><AdminMembers /></Shell></Guard>} />
         <Route path="/admin/prospects" element={<Guard admin><Shell><AdminProspects /></Shell></Guard>} />
+        <Route path="/admin/codes-promo" element={<Guard admin><Shell><AdminPromos /></Shell></Guard>} />
         <Route path="/admin/emails" element={<Guard admin><Shell><AdminEmails /></Shell></Guard>} />
         <Route path="/admin/photos" element={<Guard admin><Shell><AdminPhotos /></Shell></Guard>} />
         <Route path="/admin/maj" element={<Guard admin><Shell><AdminUpdate /></Shell></Guard>} />

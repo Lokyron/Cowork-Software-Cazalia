@@ -103,8 +103,8 @@ function publicUser(u) {
 
 const findByEmail = db.prepare(`SELECT * FROM users WHERE email = ?`);
 const insertUser = db.prepare(
-  `INSERT INTO users (email, display_name, first_name, last_name, phone, password_hash, role, cgu_accepted_at)
-   VALUES (@email, @display_name, @first_name, @last_name, @phone, @password_hash, @role, @cgu_accepted_at)`
+  `INSERT INTO users (email, display_name, first_name, last_name, phone, password_hash, role, cgu_accepted_at, activity, notify_marketing)
+   VALUES (@email, @display_name, @first_name, @last_name, @phone, @password_hash, @role, @cgu_accepted_at, @activity, @notify_marketing)`
 );
 const countUsers = db.prepare(`SELECT COUNT(*) AS n FROM users`);
 
@@ -122,6 +122,11 @@ authRouter.post('/register', registerLimiter, (req, res) => {
     const phone = String(req.body?.phone || '').trim();
     const password = String(req.body?.password || '');
     const cguAccepted = req.body?.cgu_accepted === true;
+    // Opt-in marketing facultatif (par défaut activé, comme la colonne) : seule une
+    // valeur explicitement `false` désinscrit. `activity` : statut facultatif.
+    const notifyMarketing = req.body?.notify_marketing === false ? 0 : 1;
+    const activityRaw = req.body?.activity;
+    const activity = typeof activityRaw === 'string' && activityRaw.trim() ? activityRaw.trim().slice(0, 40) : null;
 
     // Tous les champs sont obligatoires ; longueurs bornées (insertion directe en base).
     if (!EMAIL_RE.test(email) || email.length > 160 || !firstName || !lastName || !phone ||
@@ -150,6 +155,8 @@ authRouter.post('/register', registerLimiter, (req, res) => {
       password_hash: hashPassword(password),
       role,
       cgu_accepted_at: new Date().toISOString(),
+      activity,
+      notify_marketing: notifyMarketing,
     });
     const user = { id: info.lastInsertRowid, email, display_name: displayName, role };
 
