@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 // Nom du réseau Wi-Fi invité diffusé sur place.
-const WIFI_SSID = 'CAZALIA-BOUTONNET';
+const WIFI_SSID = 'Cazalia-Coworkers';
 
 // Bloc « Accès Wi-Fi invité » affiché sur le détail d'une réservation (client et admin).
 // Grisé si la réservation est annulée ou déjà passée. Bouton « Copier » avec retour visuel.

@@ -260,3 +260,54 @@ if (!calFlag) {
   });
   calTx();
 }
+
+// SSID Wi-Fi : l'ancien réseau « CAZALIA-BOUTONNET » devient « Cazalia-Coworkers ».
+// On ne corrige QUE la valeur restée à l'ancien défaut ; un SSID personnalisé
+// depuis l'admin est préservé.
+const wifiSsidFlag = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_wifi_ssid_coworkers_v1');
+if (!wifiSsidFlag) {
+  const row = db.prepare(`SELECT value FROM app_settings WHERE key = 'arrival'`).get();
+  if (row) {
+    let arrival = null;
+    try { arrival = JSON.parse(row.value); } catch { arrival = null; }
+    if (arrival && typeof arrival === 'object'
+        && (arrival.wifi_ssid == null || /^cazalia-boutonnet$/i.test(String(arrival.wifi_ssid).trim()))) {
+      arrival.wifi_ssid = 'Cazalia-Coworkers';
+      db.prepare(`UPDATE app_settings SET value = ?, updated_at = datetime('now') WHERE key = 'arrival'`).run(JSON.stringify(arrival));
+    }
+  }
+  db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_wifi_ssid_coworkers_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
+}
+
+// Déplacement de réservation : nouveau gabarit mettant en évidence l'ancien vs le
+// nouveau créneau (variables {{previous_date}}/{{previous_time}}). Remplace le
+// gabarit tant qu'il n'a pas été mis à niveau (absence de {{previous_date}}).
+const moveSlotsFlag = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_resa_move_slots_v1');
+if (!moveSlotsFlag) {
+  const def = DEFAULT_TEMPLATES.find((t) => t.code === 'booking_modified');
+  const cur = db.prepare(`SELECT body_html FROM email_templates WHERE code = 'booking_modified'`).get();
+  if (def && cur && !cur.body_html.includes('{{previous_date}}')) {
+    db.prepare(`UPDATE email_templates SET label = ?, subject = ?, body_html = ?, updated_at = datetime('now') WHERE code = 'booking_modified'`)
+      .run(def.label, def.subject, def.body_html);
+  }
+  db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_resa_move_slots_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
+}
+
+// Boutons « Voir ma réservation » / « Ajouter à mon agenda » : empilés (une ligne
+// chacun) au lieu d'être collés. On cible le séparateur « &nbsp;&nbsp; » placé
+// devant le bouton agenda, présent aussi bien dans le gabarit semé que dans celui
+// corrigé par migr_calendar_btn_v1. Idempotent (garde + séparateur absent après coup).
+const ctaStackFlag = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_cta_stack_v1');
+if (!ctaStackFlag) {
+  const rows = db.prepare(`SELECT code, body_html FROM email_templates WHERE code IN ('booking_confirmation','booking_modified')`).all();
+  const upd = db.prepare(`UPDATE email_templates SET body_html = ?, updated_at = datetime('now') WHERE code = ?`);
+  const ctaTx = db.transaction(() => {
+    for (const row of rows) {
+      if (!row.body_html.includes('&nbsp;&nbsp;<a href="{{calendar_url}}"')) continue;
+      const patched = row.body_html.replace('</a>&nbsp;&nbsp;<a href="{{calendar_url}}"', '</a><br><br><a href="{{calendar_url}}"');
+      upd.run(patched, row.code);
+    }
+    db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_cta_stack_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
+  });
+  ctaTx();
+}

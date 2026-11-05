@@ -35,7 +35,7 @@ export function setSetting(key, value) {
 }
 
 // ── SMTP ─────────────────────────────────────────────────────────────────────
-const WIFI_SSID_DEFAULT = 'CAZALIA-BOUTONNET';
+const WIFI_SSID_DEFAULT = 'Cazalia-Coworkers';
 
 /**
  * Configuration SMTP effective (réglages en base par-dessus les variables

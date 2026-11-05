@@ -18,6 +18,8 @@ export const TEMPLATE_VARIABLES = [
   ['wifi_ssid', 'Nom du réseau Wi-Fi'],
   ['arrival_instructions', "Consignes d'arrivée / plan d'accès"],
   ['refund_info', "Information de remboursement (annulation)"],
+  ['previous_date', "Ancienne date (déplacement de réservation)"],
+  ['previous_time', "Ancienne plage horaire (déplacement de réservation)"],
   ['calendar_url', "Lien « Ajouter à Google Agenda »"],
   ['reset_link', 'Lien de réinitialisation du mot de passe'],
   ['dashboard_url', "Lien vers l'espace client"],
@@ -66,6 +68,15 @@ const btnGhost = (href, label) =>
 // Bouton « Ajouter à mon agenda » (rendu uniquement si {{calendar_url}} est fourni).
 const calendarBtn = btnGhost('{{calendar_url}}', '📅 Ajouter à mon agenda');
 
+// Groupe de boutons d'action EMPILÉS (une ligne par bouton, espacement vertical
+// propre). Mise en page par tableau : seule technique fiable sous Outlook et la
+// plupart des clients mail (un simple display:block ne stacke pas partout).
+const ctaStack = (primaryHref, primaryLabel) => `
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0 0;border-collapse:collapse;">
+  <tr><td style="padding:0 0 10px;">${btn(primaryHref, primaryLabel)}</td></tr>
+  <tr><td>${calendarBtn}</td></tr>
+</table>`;
+
 const voucherBox = `
   <div style="border:1px solid rgba(28,49,85,.15);border-radius:10px;padding:14px 16px;background:#f5f8ff;margin:16px 0;">
     <div style="font-size:12px;font-weight:700;color:#5b6577;text-transform:uppercase;letter-spacing:.03em;">Accès Wi-Fi invité</div>
@@ -75,11 +86,18 @@ const voucherBox = `
   </div>`;
 
 // Encart « PIN de porte » (rendu uniquement si {{access_pin}} est fourni).
+// Le bandeau « Où trouver le digicode ? » est volontairement proéminent (fond
+// ambré contrasté) : c'est l'information qui bloque le plus les nouveaux venus.
 const accessBox = `
   <div style="border:1px solid rgba(28,49,85,.15);border-radius:10px;padding:14px 16px;background:#f5f8ff;margin:16px 0;">
     <div style="font-size:12px;font-weight:700;color:#5b6577;text-transform:uppercase;letter-spacing:.03em;">Code d'accès porte</div>
     <div style="font-size:26px;font-weight:800;letter-spacing:.18em;font-family:ui-monospace,Menlo,monospace;margin:6px 0;">{{access_pin}}</div>
     <div style="font-size:12px;color:#5b6577;">À composer sur le digicode. Valable uniquement pendant votre créneau réservé.</div>
+    <div style="margin-top:12px;padding:12px 14px;border-radius:8px;background:#fff6e5;border:1px solid #f3d9a0;color:#5a4a1e;font-size:13px;line-height:1.55;">
+      <div style="font-weight:800;margin-bottom:4px;">📍 Où se trouve le digicode&nbsp;?</div>
+      Face à la porte d'entrée, c'est le <strong>petit boîtier carré blanc situé sur la droite</strong>.
+      <strong>Tapez une fois dessus</strong> pour activer l'affichage des chiffres, puis composez votre code.
+    </div>
   </div>`;
 
 // Templates par défaut. `{{wifi_block}}` est un bloc conditionnel géré par le mailer.
@@ -102,23 +120,30 @@ export const DEFAULT_TEMPLATES = [
 {{access_block}}
 {{wifi_block}}
 <div style="margin:16px 0;line-height:1.6;">{{arrival_instructions}}</div>
-<p style="margin:18px 0 0;">${btn('{{dashboard_url}}', 'Voir ma réservation')}&nbsp;&nbsp;${calendarBtn}</p>`,
+${ctaStack('{{dashboard_url}}', 'Voir ma réservation')}`,
   },
   {
     code: 'booking_modified',
-    label: 'Modification de réservation',
-    subject: 'Votre réservation {{space_name}} a été modifiée',
+    label: 'Déplacement de réservation',
+    subject: 'Votre réservation {{space_name}} a été déplacée',
     body_html: `
-<h1 style="margin:0 0 12px;font-size:22px;">Réservation modifiée</h1>
+<h1 style="margin:0 0 12px;font-size:22px;">Réservation déplacée</h1>
 <p style="margin:0 0 16px;line-height:1.6;">Bonjour {{first_name}},</p>
-<p style="margin:0 0 16px;line-height:1.6;">Votre réservation <strong>{{space_name}}</strong> a été mise à jour. Nouveau créneau :</p>
-<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 16px;">
-  <tr><td style="padding:6px 0;color:#5b6577;">Date</td><td style="padding:6px 0;text-align:right;font-weight:600;">{{booking_date}}</td></tr>
-  <tr><td style="padding:6px 0;color:#5b6577;">Horaire</td><td style="padding:6px 0;text-align:right;font-weight:600;">{{booking_time}}</td></tr>
+<p style="margin:0 0 16px;line-height:1.6;">Votre réservation <strong>{{space_name}}</strong> a été déplacée. Voici votre nouveau créneau :</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 10px;">
+  <tr><td style="padding:6px 0;color:#5b6577;">Ancien créneau</td><td style="padding:6px 0;text-align:right;color:#9aa3b2;text-decoration:line-through;">{{previous_date}} · {{previous_time}}</td></tr>
 </table>
+<div style="border:1px solid #cfe6cf;border-radius:10px;padding:12px 16px;background:#eef7ee;margin:0 0 16px;">
+  <div style="font-size:12px;font-weight:700;color:#2f7a33;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px;">Nouveau créneau</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
+    <tr><td style="padding:4px 0;color:#5b6577;">Date</td><td style="padding:4px 0;text-align:right;font-weight:600;">{{booking_date}}</td></tr>
+    <tr><td style="padding:4px 0;color:#5b6577;">Horaire</td><td style="padding:4px 0;text-align:right;font-weight:600;">{{booking_time}}</td></tr>
+  </table>
+</div>
+<p style="margin:0 0 16px;line-height:1.6;color:#5b6577;">🔁 Votre code d'accès à la porte a été régénéré pour ce nouveau créneau : utilisez celui indiqué ci-dessous.</p>
 {{access_block}}
 {{wifi_block}}
-<p style="margin:18px 0 0;">${btn('{{dashboard_url}}', 'Voir ma réservation')}&nbsp;&nbsp;${calendarBtn}</p>`,
+${ctaStack('{{dashboard_url}}', 'Voir ma réservation')}`,
   },
   {
     code: 'booking_cancelled',

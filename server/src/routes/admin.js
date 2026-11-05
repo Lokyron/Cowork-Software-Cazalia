@@ -422,8 +422,13 @@ adminRouter.patch('/reservations/:id', async (req, res) => {
     const id = Number(req.params.id);
     const { note, start_at, end_at, notify } = req.body || {};
     const changed = [];
+    let previousSlot = null;
 
     if (start_at && end_at) {
+      // Capture l'ancien créneau AVANT le déplacement (l'e-mail met en évidence
+      // l'ancien vs le nouveau ; après le move, les anciens horaires sont perdus).
+      const before = getReservationDetail(id);
+      if (before) previousSlot = { start_at: before.start_at, end_at: before.end_at };
       moveReservation(id, start_at, end_at);
       changed.push('horaire');
       // Le créneau a changé : on régénère le PIN de porte sur la nouvelle fenêtre
@@ -446,6 +451,7 @@ adminRouter.patch('/reservations/:id', async (req, res) => {
         displayName: reservation.member_name,
         action: changed.includes('horaire') ? 'modification' : 'note',
         reservation,
+        previous: previousSlot,
       });
     }
     res.json({ ok: true, changed, reservation, notify: notifyResult });

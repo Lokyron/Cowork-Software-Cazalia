@@ -386,10 +386,22 @@ export async function sendBookingConfirmation(reservationId) {
   return sendToUser({ userId: r.user_id, code: 'booking_confirmation', vars: reservationVars(r) });
 }
 
-export async function sendBookingModified(reservationId) {
+/**
+ * E-mail de déplacement d'une réservation. Met en évidence l'ancien créneau face
+ * au nouveau : l'appelant transmet les anciens horaires (perdus après le move).
+ *
+ * @param {number} reservationId Réservation déplacée (déjà repositionnée).
+ * @param {{previous?: {start_at: string, end_at: string}}} [opts] Ancien créneau.
+ */
+export async function sendBookingModified(reservationId, { previous } = {}) {
   const r = getResStmt.get(reservationId);
   if (!r) return { sent: false, reason: 'RESA_INTROUVABLE' };
-  return sendToUser({ userId: r.user_id, code: 'booking_modified', vars: reservationVars(r) });
+  const vars = reservationVars(r);
+  if (previous?.start_at && previous?.end_at) {
+    vars.previous_date = fmtDate(previous.start_at);
+    vars.previous_time = `${fmtTime(previous.start_at)} – ${fmtTime(previous.end_at)}`;
+  }
+  return sendToUser({ userId: r.user_id, code: 'booking_modified', vars });
 }
 
 export async function sendBookingCancelled(reservationId, { refunded, amount } = {}) {
@@ -443,9 +455,9 @@ export async function sendPasswordResetEmail({ to, displayName, resetUrl, userId
 }
 
 // Notification admin sur une réservation (modif/annulation). Route vers les templates.
-export async function sendReservationNotification({ to, displayName, action, reservation, refund }) {
+export async function sendReservationNotification({ to, displayName, action, reservation, refund, previous }) {
   if (!reservation?.id) return { sent: false, reason: 'RESA_INTROUVABLE' };
   if (action === 'annulation') return sendBookingCancelled(reservation.id, refund || {});
-  if (action === 'modification') return sendBookingModified(reservation.id);
+  if (action === 'modification') return sendBookingModified(reservation.id, { previous });
   return { sent: false, reason: 'ACTION_NON_EMAIL' }; // 'note' : pas d'e-mail
 }
