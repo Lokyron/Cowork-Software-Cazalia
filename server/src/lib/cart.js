@@ -13,7 +13,7 @@ import { config } from '../config.js';
 import { fail } from './errors.js';
 import { createBookingCheckoutSession } from './stripe.js';
 import { createPendingOrder } from './orders.js';
-import { validatePromoForCheckout } from './promos.js';
+import { validatePromoForCheckout, computeDiscount } from './promos.js';
 import { ensureVoucherForReservation } from './unifi.js';
 import { ensureAccessPinForReservation } from './unifiAccess.js';
 import { sendBookingConfirmation } from './mailer.js';
@@ -177,6 +177,37 @@ export async function checkoutFree(userId) {
   );
   result.reservations.forEach((r) => sendBookingConfirmation(r.reservationId).catch(() => {}));
   return { free: true, ...result };
+}
+
+/**
+ * Prévisualise l'effet d'un code promo sur le panier courant SANS l'enregistrer :
+ * valide le code (mêmes contrôles que le paiement, y compris la limite par
+ * personne) et calcule la remise à afficher. Aucune réservation, aucun paiement,
+ * aucune utilisation comptabilisée — ce qui n'arrive qu'à la confirmation du
+ * paiement (webhook). Un retour en arrière du client ne consomme donc rien.
+ *
+ * @param {number} userId Bénéficiaire du panier.
+ * @param {string} code Code saisi.
+ * @returns {{code:string, reduction_type:string, reduction_value:number,
+ *            discount_cents:number, total_cents:number, new_total_cents:number}}
+ * @throws {Error} `PANIER_VIDE` et les codes `PROMO_*`.
+ */
+export function previewPromo(userId, code) {
+  purgeExpired();
+  const holds = listHolds.all(userId, new Date().toISOString());
+  if (!holds.length) throw fail('PANIER_VIDE');
+  const items = holds.map((h) => ({ tarif_type: h.tarif_type, price_cents: h.cost }));
+  const total = items.reduce((s, it) => s + it.price_cents, 0);
+  const promo = validatePromoForCheckout({ code, userId, items }); // lève si invalide
+  const discount = computeDiscount(promo, items);
+  return {
+    code: promo.code,
+    reduction_type: promo.reduction_type,
+    reduction_value: promo.reduction_value,
+    discount_cents: discount,
+    total_cents: total,
+    new_total_cents: Math.max(0, total - discount),
+  };
 }
 
 // ── Checkout MEMBRE (paiement CB via Stripe) ─────────────────────────────────

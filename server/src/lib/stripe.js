@@ -146,6 +146,10 @@ export async function createBookingCheckoutSession({ userId, items, baseUrl, pro
   return stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],
+    // Ne réclame une carte que si un paiement est réellement dû : un code promo à
+    // 100 % (total 0 €) passe alors sans saisie de carte (payment_status =
+    // 'no_payment_required'), que le webhook traite comme une réservation gratuite.
+    payment_method_collection: 'if_required',
     client_reference_id: String(userId),
     metadata: { kind: 'booking', user_id: String(userId) },
     line_items,

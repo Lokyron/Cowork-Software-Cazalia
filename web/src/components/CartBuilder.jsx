@@ -52,6 +52,9 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
   const [cgvAccepted, setCgvAccepted] = useState(false);
   const [retractationAck, setRetractationAck] = useState(false);
   const [promoCode, setPromoCode] = useState('');
+  const [promoApplied, setPromoApplied] = useState(null); // aperçu validé {code, discount_cents, ...}
+  const [promoError, setPromoError] = useState(null);
+  const [promoBusy, setPromoBusy] = useState(false);
 
   const reload = () => adapter.list().then(setCart).catch(() => {});
   useEffect(() => { api.get('/spaces').then((r) => setSpaces(r.spaces)).catch(() => {}); }, []);
@@ -103,20 +106,37 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
       if (admin) { payload.ignore_hours = ignoreHours; payload.allow_overbooking = overbook; payload.custom_cost = customCost === '' ? undefined : Number(customCost); }
       const r = await adapter.add(payload);
       setCart(r.cart);
+      clearPromo(); // le panier a changé : l'aperçu de remise n'est plus valable
       setFeedback({ type: 'ok', text: 'Ajouté au panier (place tenue 10 min).' });
     } catch (err) { setFeedback({ type: 'error', text: msg(err.code) }); }
     finally { setBusy(false); }
   };
 
   const remove = async (id) => {
-    try { const r = await adapter.remove(id); if (r?.cart) setCart(r.cart); else reload(); }
+    try { const r = await adapter.remove(id); if (r?.cart) setCart(r.cart); else reload(); clearPromo(); }
     catch (err) { setFeedback({ type: 'error', text: msg(err.code) }); }
+  };
+
+  // ── Code promo (aperçu AVANT paiement ; aucune utilisation comptée ici) ───────
+  const clearPromo = () => { setPromoApplied(null); setPromoError(null); };
+  const onPromoInput = (e) => { setPromoCode(e.target.value); if (promoApplied) clearPromo(); };
+  const applyPromo = async () => {
+    const code = promoCode.trim();
+    if (!code || !adapter.previewPromo) return;
+    setPromoBusy(true); setPromoError(null);
+    try {
+      const r = await adapter.previewPromo(code);
+      setPromoApplied(r);
+    } catch (err) {
+      setPromoApplied(null);
+      setPromoError(msg(err.code));
+    } finally { setPromoBusy(false); }
   };
 
   const doCheckout = async () => {
     setBusy(true); setFeedback(null);
     try {
-      const result = await adapter.checkout(promoCode.trim() || undefined);
+      const result = await adapter.checkout(promoApplied?.code || promoCode.trim() || undefined);
       if (result?.url) { window.location.assign(result.url); return; } // paiement Stripe (client)
       onDone?.(result); // création directe (admin)
     } catch (err) { setFeedback({ type: 'error', text: msg(err.code) }); setBusy(false); reload(); }
@@ -233,23 +253,55 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
 
         {cart.holds.length > 0 && (
           <>
-            <div className="flex-between" style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
-              <strong>Total</strong>
-              <strong>{eur(total)}</strong>
-            </div>
-            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>☕ Café &amp; thé inclus dans toutes les réservations.</p>
             {!admin && (
               <div className="field" style={{ marginTop: 12 }}>
                 <label>Code promo <span className="muted" style={{ fontWeight: 400 }}>(facultatif)</span></label>
-                <input
-                  value={promoCode}
-                  onChange={(e) => setPromoCode(e.target.value)}
-                  placeholder="Ex. JOURNEE-CAZALIA"
-                  autoComplete="off"
-                  style={{ textTransform: 'uppercase' }}
-                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    value={promoApplied ? promoApplied.code : promoCode}
+                    onChange={onPromoInput}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!promoApplied) applyPromo(); } }}
+                    placeholder="Ex. JOURNEE-CAZALIA"
+                    autoComplete="off"
+                    disabled={!!promoApplied || promoBusy}
+                    style={{ textTransform: 'uppercase', flex: 1 }}
+                  />
+                  {promoApplied ? (
+                    <button type="button" className="ghost" onClick={clearPromo}>Retirer</button>
+                  ) : (
+                    <button type="button" className="outline" onClick={applyPromo} disabled={promoBusy || !promoCode.trim()}>
+                      {promoBusy ? '…' : 'Valider'}
+                    </button>
+                  )}
+                </div>
+                {promoError && <div className="alert error" style={{ marginTop: 8 }}>{promoError}</div>}
+                {promoApplied && (
+                  <div className="alert ok" style={{ marginTop: 8 }}>
+                    Code appliqué{promoApplied.new_total_cents === 0 ? ' — c\'est offert ! 🎉' : ` : −${eur(promoApplied.discount_cents)}`}
+                  </div>
+                )}
               </div>
             )}
+
+            <div style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+              {promoApplied && (
+                <>
+                  <div className="flex-between">
+                    <span className="muted">Sous-total</span>
+                    <span className="muted" style={{ textDecoration: 'line-through' }}>{eur(promoApplied.total_cents)}</span>
+                  </div>
+                  <div className="flex-between" style={{ marginTop: 4 }}>
+                    <span style={{ color: 'var(--green)' }}>Remise ({promoApplied.code})</span>
+                    <span style={{ color: 'var(--green)' }}>− {eur(promoApplied.discount_cents)}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex-between" style={{ marginTop: promoApplied ? 6 : 0 }}>
+                <strong>Total</strong>
+                <strong>{eur(promoApplied ? promoApplied.new_total_cents : total)}</strong>
+              </div>
+            </div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>☕ Café &amp; thé inclus dans toutes les réservations.</p>
             {!admin && (
               <div style={{ marginTop: 12 }}>
                 <label className="consent">
@@ -270,7 +322,11 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
               disabled={busy || (!admin && (!cgvAccepted || !retractationAck))}
               onClick={doCheckout}
             >
-              {admin ? `Valider (${eur(total)})` : `Payer ${eur(total)}`}
+              {admin
+                ? `Valider (${eur(total)})`
+                : promoApplied && promoApplied.new_total_cents === 0
+                  ? 'Confirmer ma réservation (offerte)'
+                  : `Payer ${eur(promoApplied ? promoApplied.new_total_cents : total)}`}
             </button>
           </>
         )}

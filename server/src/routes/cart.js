@@ -1,7 +1,7 @@
 // Panier de réservation — côté client (pour soi-même).
 import { Router } from 'express';
 import { config } from '../config.js';
-import { addHold, listCart, removeHold, startBookingCheckout, checkoutFree } from '../lib/cart.js';
+import { addHold, listCart, removeHold, startBookingCheckout, checkoutFree, previewPromo } from '../lib/cart.js';
 import { getStripe } from '../lib/settings.js';
 import { requireAuth, sendBusinessError } from '../middleware.js';
 
@@ -40,6 +40,22 @@ cartRouter.post('/cart', requireAuth, (req, res) => {
 cartRouter.delete('/cart/:id', requireAuth, (req, res) => {
   try { removeHold(Number(req.params.id), req.user); res.json({ ok: true, cart: listCart(req.user.id) }); }
   catch (err) { sendBusinessError(res, err); }
+});
+
+/**
+ * POST /api/cart/promo/preview — prévisualise l'effet d'un code sur le panier
+ * (remise et nouveau total) SANS rien enregistrer. Le code n'est comptabilisé
+ * comme utilisé qu'à la confirmation du paiement (webhook).
+ *
+ * @returns 200 `{code, discount_cents, total_cents, new_total_cents, ...}`
+ *          · 400 `PANIER_VIDE`/`PROMO_*`
+ */
+cartRouter.post('/cart/promo/preview', requireAuth, (req, res) => {
+  try {
+    const code = String(req.body?.code || '').trim();
+    if (!code) return res.status(400).json({ error: 'PROMO_INTROUVABLE' });
+    res.json(previewPromo(req.user.id, code));
+  } catch (err) { sendBusinessError(res, err, 400); }
 });
 
 /**

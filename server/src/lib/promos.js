@@ -158,6 +158,27 @@ export function validatePromoForCheckout({ code, userId, items }) {
 }
 
 /**
+ * Calcule la remise (centimes) qu'un code applique à un panier, de la même façon
+ * que Stripe : la réduction ne porte que sur les lignes éligibles (restriction de
+ * formule). POUR AFFICHAGE UNIQUEMENT — Stripe reste la référence au paiement, et
+ * ce calcul n'enregistre aucune utilisation.
+ *
+ * @param {object} promo Ligne `promo_codes`.
+ * @param {Array<{tarif_type:string, price_cents:number}>} items Lignes du panier.
+ * @returns {number} Remise en centimes (bornée au sous-total éligible).
+ */
+export function computeDiscount(promo, items) {
+  const eligible = (items || []).filter(
+    (it) => !promo.tarif_restriction || it.tarif_type === promo.tarif_restriction,
+  );
+  const eligibleSubtotal = eligible.reduce((s, it) => s + (it.price_cents || 0), 0);
+  const raw = promo.reduction_type === 'percent'
+    ? Math.round((eligibleSubtotal * promo.reduction_value) / 100)
+    : promo.reduction_value;
+  return Math.max(0, Math.min(raw, eligibleSubtotal));
+}
+
+/**
  * Enregistre une utilisation d'un code promo (appelée à la confirmation du
  * paiement, dans la transaction idempotente de `fulfillOrder`).
  * @param {{promoId:number, userId:number, orderId:number|null}} p
