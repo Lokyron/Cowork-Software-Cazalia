@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { api } from '../api.js';
+import { eur, spacePrice } from '../price.js';
 import Photo from '../components/Photo.jsx';
 import SpaceModal from '../components/SpaceModal.jsx';
 import DevisModal from '../components/DevisModal.jsx';
@@ -102,14 +103,14 @@ export default function Landing() {
                   </p>
                   <div className="flex-between">
                     <span className="price">
-                      {/* Bureau privé : aucune notion de prix (accès uniquement sur devis). */}
-                      {s.category === 'PRIVATE_OFFICE'
-                        ? null
-                        : s.price_per_hour_cents != null
-                        ? <>{(s.price_per_hour_cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} <small>/ h</small></>
-                        : s.price_half_day_cents != null
-                        ? <>{(s.price_half_day_cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} <small>/ ½ j</small></>
-                        : <small>sur devis</small>}
+                      {/* Prix d'appel « À partir de … » ; Bureau privé : aucun prix. */}
+                      {(() => {
+                        const p = spacePrice(s);
+                        if (p.kind === 'price') return <>{p.from && <small>À partir de </small>}{eur(p.min)}</>;
+                        if (p.kind === 'libre') return <small>Libre-service</small>;
+                        if (p.kind === 'devis') return null;
+                        return <small>sur devis</small>;
+                      })()}
                     </span>
                     <button className="small outline" onClick={(e) => { e.stopPropagation(); setOpenSpace({ space: s, photoSrc }); }}>
                       Voir le détail →

@@ -1,4 +1,5 @@
 import Photo from './Photo.jsx';
+import { eur, spacePrice } from '../price.js';
 
 // Fenêtre détaillée d'un espace (depuis la landing) : photo, descriptif complet,
 // prestations incluses, et appel à l'action adapté à la catégorie.
@@ -6,19 +7,18 @@ import Photo from './Photo.jsx';
 //     accessible exclusivement sur devis / demande de privatisation.
 //   • CONFIDENTIAL : libre-service sur place, sans réservation.
 //   • autres (open space / salle) : réservation en ligne.
-const eur = (cents) => ((Number(cents) || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
-
 export default function SpaceModal({ space, photoSrc, onClose, onReserve, onDevis }) {
   const amenities = (space.amenities || '').split('\n').map((s) => s.trim()).filter(Boolean);
   const isDevis = space.category === 'PRIVATE_OFFICE';
   const isLibreService = space.category === 'CONFIDENTIAL';
-  // Tarifs : horaire + forfaits éventuels (demi-journée / journée).
-  const priceParts = [];
-  if (space.price_per_hour_cents != null) priceParts.push(`${eur(space.price_per_hour_cents)}/h`);
-  if (space.price_half_day_cents != null) priceParts.push(`${eur(space.price_half_day_cents)} la demi-journée`);
-  if (space.price_day_cents != null) priceParts.push(`${eur(space.price_day_cents)} la journée`);
-  // Bureau privé (isDevis) : le prix n'est pas affiché du tout (voir plus bas).
-  const priceLabel = isLibreService ? 'Libre-service' : (priceParts.join(' · ') || '—');
+  // Prix d'appel : « À partir de … » dès qu'il existe plusieurs tarifs. L'open
+  // space n'est jamais affiché à l'heure (cf. price.js). Bureau privé (isDevis) :
+  // aucun prix affiché (voir plus bas).
+  const p = spacePrice(space);
+  const priceLabel = p.kind === 'price'
+    ? (p.from ? `À partir de ${eur(p.min)}` : eur(p.min))
+    : p.kind === 'libre' ? 'Libre-service'
+    : '—';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
