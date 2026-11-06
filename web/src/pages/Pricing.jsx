@@ -43,6 +43,14 @@ const COMPARE = [
   ['Abonnement mensuel', '—', '160 €', '220 €', '300 €'],
 ];
 
+// Univers du sélecteur segmenté. L'ordre fixe l'ordre d'affichage et la position
+// du surligné glissant. « Abonnement » est au centre et affiché par défaut.
+const SEGMENTS = [
+  { id: 'ponctuel', label: 'Ponctuel' },
+  { id: 'abonnement', label: 'Abonnement' },
+  { id: 'privatisation', label: 'Privatisation' },
+];
+
 export default function Pricing() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -50,6 +58,9 @@ export default function Pricing() {
   const [devis, setDevis] = useState(false);
   const [busyTier, setBusyTier] = useState(null);
   const [feedback, setFeedback] = useState(null);
+  // Univers affiché via le sélecteur segmenté. Vue par défaut : l'abonnement.
+  const [tab, setTab] = useState('abonnement');
+  const tabIndex = SEGMENTS.findIndex((s) => s.id === tab);
 
   // Retour d'un Checkout d'abonnement annulé.
   useEffect(() => {
@@ -95,7 +106,25 @@ export default function Pricing() {
 
       {feedback && <div className={`alert ${feedback.type === 'ok' ? 'ok' : 'error'}`} style={{ maxWidth: 720, margin: '0 auto 16px' }}>{feedback.text}</div>}
 
-      {/* ── 3 cartes d'abonnement ─────────────────────────────────────────── */}
+      {/* ── Sélecteur segmenté « slidable » (surligné glissant) ───────────── */}
+      <div className="tarif-seg" role="tablist" aria-label="Type d'offre">
+        <span className="tarif-seg-hl" style={{ transform: `translateX(${tabIndex * 100}%)` }} aria-hidden="true" />
+        {SEGMENTS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === s.id}
+            className={`tarif-seg-btn ${tab === s.id ? 'active' : ''}`}
+            onClick={() => setTab(s.id)}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Abonnement : les 3 cartes ─────────────────────────────────────── */}
+      {tab === 'abonnement' && (
       <div className="plan-grid">
         {PLANS.map((p) => (
           <div key={p.tier} className={`card plan-card ${p.popular ? 'popular' : ''}`}>
@@ -118,8 +147,10 @@ export default function Pricing() {
           </div>
         ))}
       </div>
+      )}
 
-      {/* ── Accès ponctuel ────────────────────────────────────────────────── */}
+      {/* ── Ponctuel : la grille à la carte ───────────────────────────────── */}
+      {tab === 'ponctuel' && (
       <div className="card ponctuel-card">
         <div>
           <h3 style={{ marginTop: 0 }}>Accès ponctuel — sans abonnement</h3>
@@ -132,8 +163,10 @@ export default function Pricing() {
         </div>
         <button className="outline" onClick={() => navigate(user ? '/reserver' : '/login')}>Réserver une session ponctuelle →</button>
       </div>
+      )}
 
-      {/* ── Bureau Privé — sur devis ──────────────────────────────────────── */}
+      {/* ── Privatisation : Bureau Privé sur devis ────────────────────────── */}
+      {tab === 'privatisation' && (
       <div className="card bureau-card">
         <div>
           <span className="badge grey">Entreprises & indépendants</span>
@@ -150,8 +183,9 @@ export default function Pricing() {
           <button onClick={() => setDevis(true)}>Demander un devis</button>
         </div>
       </div>
+      )}
 
-      {/* ── Tableau comparatif ────────────────────────────────────────────── */}
+      {/* ── Tableau comparatif (toujours visible) ─────────────────────────── */}
       <div className="card" style={{ marginTop: 20 }}>
         <h3 style={{ marginTop: 0 }}>Comparatif complet</h3>
         <div className="table-wrap">

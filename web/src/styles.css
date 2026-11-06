@@ -1260,3 +1260,22 @@ h2.big { font-size: clamp(24px, 3.4vw, 36px); letter-spacing: -0.8px; margin: 10
 /* Jauge de quota Open Space (dashboard Essentiel). */
 .quota-bar { height: 10px; border-radius: 999px; background: rgba(28, 49, 85, 0.12); overflow: hidden; }
 .quota-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 999px; transition: width 0.3s ease; }
+
+/* Sélecteur segmenté « slidable » de la page Tarifs. */
+.tarif-seg {
+  position: relative; display: grid; grid-template-columns: repeat(3, 1fr);
+  background: #eef1f6; border: 0.5px solid var(--line); border-radius: 999px;
+  padding: 4px; max-width: 440px; margin: 0 auto 24px;
+}
+.tarif-seg-hl {
+  position: absolute; top: 4px; left: 4px; bottom: 4px; width: calc((100% - 8px) / 3);
+  background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(20, 32, 61, 0.14);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tarif-seg-btn {
+  position: relative; z-index: 1; border: 0; background: transparent; cursor: pointer;
+  padding: 10px 6px; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 600;
+  color: var(--muted); transition: color 0.2s; box-shadow: none;
+}
+.tarif-seg-btn.active { color: var(--navy); }
+@media (max-width: 480px) { .tarif-seg-btn { font-size: 13px; padding: 10px 2px; } }
