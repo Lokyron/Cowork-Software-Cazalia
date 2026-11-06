@@ -89,6 +89,16 @@ export default function Cgv() {
         vente est <strong>définitivement conclue</strong> à la confirmation du paiement (ou, pour une
         réservation réglée en crédits, au débit effectif des crédits). Un récapitulatif lui est adressé.
       </p>
+      <p>
+        <strong>Réservation préalable obligatoire.</strong> L'accès à tout espace (poste en open space,
+        salle de réunion) est subordonné à la <strong>réservation préalable d'un créneau daté</strong> via
+        la plateforme, dans la limite des places et des disponibilités. Cette obligation s'applique à tous
+        les utilisateurs, <strong>y compris les titulaires d'un abonnement</strong>&nbsp;: l'abonnement
+        confère un droit d'accès et des conditions tarifaires, mais ne vaut pas réservation et ne garantit
+        pas de place sans créneau réservé. La salle de réunion doit être réservée pour <strong>toute
+        durée</strong> (heure, demi-journée ou journée). Cette règle vise à garantir la disponibilité des
+        espaces et le confort de chacun.
+      </p>
 
       <h2 id="paiement">5. Paiement</h2>
       <p>
