@@ -1,4 +1,4 @@
-// Chiffrement au repos (AES-256-GCM) des secrets stockés en base — p.ex. le mot de
+// Chiffrement au repos (AES-256-GCM) des secrets stockés en base - p.ex. le mot de
 // passe SMTP. La clé est dérivée de `config.appSecret` (scrypt). Format de sortie :
 //   "enc:v1:<iv b64>:<tag b64>:<ciphertext b64>"
 // Le préfixe permet de distinguer une valeur chiffrée d'un texte en clair (migration).
@@ -43,7 +43,7 @@ export function encryptSecret(plain) {
  * Déchiffre un secret stocké en base.
  *
  * @param {string | null} value Valeur lue en base (chiffrée ou encore en clair).
- * @returns {string} Secret en clair, ou `''` si la valeur est indéchiffrable —
+ * @returns {string} Secret en clair, ou `''` si la valeur est indéchiffrable -
  *          typiquement après un changement d'`APP_SECRET`.
  */
 export function decryptSecret(value) {

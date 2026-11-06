@@ -3,7 +3,7 @@
 //   • Membre  : le checkout crée une session Stripe (paiement CB à la résa) ;
 //               les réservations sont créées au webhook (cf. lib/orders.js).
 //   • Admin   : le checkout crée directement les réservations (gratuit, paiement
-//               géré hors ligne) — aucun passage par Stripe.
+//               géré hors ligne) - aucun passage par Stripe.
 //
 // Disponibilité : capacity − Σ(réservations confirmées) − Σ(verrous actifs des autres).
 // L'expiration est « paresseuse » : purgée à chaque lecture/écriture.
@@ -61,7 +61,7 @@ function lineLabel(h) {
   const tarif = TARIF_LABELS[h.tarif_type] || TARIF_LABELS.heure;
   const when = dtFmt.format(new Date(h.start_at));
   const seats = h.seats > 1 ? ` ×${h.seats}` : '';
-  return `${h.space_name} — ${tarif}${seats} (${when})`;
+  return `${h.space_name} - ${tarif}${seats} (${when})`;
 }
 
 /** Supprime les verrous expirés (expiration « paresseuse »). */
@@ -93,7 +93,7 @@ export function addHold(userId, spaceId, startRaw, endRaw, seatsRaw = 1, opts = 
 
   // Deux régimes de tarification :
   //   • ADMIN (opts.adminMode) : prix libre/custom, réservation gratuite hors
-  //     ligne (FREE_ADMIN), sans impact sur le quota du client — l'admin décide.
+  //     ligne (FREE_ADMIN), sans impact sur le quota du client - l'admin décide.
   //   • MEMBRE : prix effectif selon l'abonnement du bénéficiaire (moteur
   //     lib/pricing.js) ; refuse les espaces non réservables en ligne.
   let cost, paymentMethod, quotaDays;
@@ -135,7 +135,7 @@ export function listCart(userId) {
 }
 
 /**
- * Retire une ligne du panier (appartenance vérifiée — anti-IDOR).
+ * Retire une ligne du panier (appartenance vérifiée - anti-IDOR).
  * @param {number} holdId
  * @param {{id:number, role:string}} actor
  * @returns {{removed:boolean}}
@@ -190,7 +190,7 @@ const consumeQuotaStmt = db.prepare(
 // Un abonné dont le panier est entièrement couvert (Confort/Premium, ou Essentiel
 // dans son quota) confirme en 1 clic, sans paiement. On crée les réservations en
 // conservant leur mode de couverture, et on DÉCRÉMENTE le quota pour les lignes
-// SUBSCRIPTION_QUOTA — le tout dans une transaction atomique.
+// SUBSCRIPTION_QUOTA - le tout dans une transaction atomique.
 const checkoutCoveredTx = db.transaction((userId, holds) => {
   const created = [];
   for (const h of holds) {
@@ -228,7 +228,7 @@ async function checkoutCovered(userId, holds) {
  * confirmation), exactement comme une réservation payée.
  *
  * Utilisé pour toute réservation NON facturée : back-office admin (pour un
- * client) et — surtout — un utilisateur de rôle `admin` qui réserve pour
+ * client) et - surtout - un utilisateur de rôle `admin` qui réserve pour
  * lui-même via le parcours membre (il ne doit jamais voir de paiement).
  *
  * @param {number} userId Bénéficiaire du panier.
@@ -251,7 +251,7 @@ export async function checkoutFree(userId) {
  * Prévisualise l'effet d'un code promo sur le panier courant SANS l'enregistrer :
  * valide le code (mêmes contrôles que le paiement, y compris la limite par
  * personne) et calcule la remise à afficher. Aucune réservation, aucun paiement,
- * aucune utilisation comptabilisée — ce qui n'arrive qu'à la confirmation du
+ * aucune utilisation comptabilisée - ce qui n'arrive qu'à la confirmation du
  * paiement (webhook). Un retour en arrière du client ne consomme donc rien.
  *
  * @param {number} userId Bénéficiaire du panier.

@@ -58,7 +58,7 @@ export function parisMinutes(iso) {
   return Number(h) * 60 + Number(m);
 }
 
-// 'HH:MM' (heure de Paris) — pour pré-remplir un <input type="time">.
+// 'HH:MM' (heure de Paris) - pour pré-remplir un <input type="time">.
 export const parisTimeHM = (iso) => hmFmt.format(toDate(iso));
 
 export const weekdayLabel = (dateStr) => weekdayFmt.format(new Date(`${dateStr}T12:00:00Z`));

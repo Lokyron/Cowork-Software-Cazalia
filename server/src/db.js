@@ -3,7 +3,7 @@
 // Le fichier de base contient des données sensibles (empreintes de mots de
 // passe, secrets 2FA chiffrés, coordonnées des membres) : ses permissions
 // doivent rester restrictives sur l'hôte (0600, propriétaire = utilisateur du
-// service) — cf. `deploy/cazalia.service` et `deploy/durcissement.md`.
+// service) - cf. `deploy/cazalia.service` et `deploy/durcissement.md`.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -73,7 +73,7 @@ if (!userCols.includes('activity')) db.exec(`ALTER TABLE users ADD COLUMN activi
 // Migration ponctuelle : chiffrement des secrets TOTP restés en clair.
 // Le secret TOTP est un facteur d'authentification à part entière ; stocké en
 // clair, il rend la 2FA inopérante dès qu'un tiers lit la base. `decryptSecret`
-// tolérant les deux formats, la reprise est transparente pour les membres —
+// tolérant les deux formats, la reprise est transparente pour les membres -
 // aucune reconfiguration n'est nécessaire.
 // ⚠️ Comme pour le mot de passe SMTP, un changement d'`APP_SECRET` rendra ces
 // secrets illisibles : les membres devront alors réactiver leur 2FA.

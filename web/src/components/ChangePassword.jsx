@@ -3,7 +3,7 @@ import { api, msg } from '../api.js';
 import PasswordInput from './PasswordInput.jsx';
 import { checkPassword, PASSWORD_RULE } from '../password.js';
 
-// Bloc « changer mon mot de passe » — utilisable par tout utilisateur (admin inclus).
+// Bloc « changer mon mot de passe » - utilisable par tout utilisateur (admin inclus).
 // `forced` : 1re connexion (libellés adaptés). `onDone` : appelé après succès.
 export default function ChangePassword({ forced = false, onDone }) {
   const [form, setForm] = useState({ current: '', next: '', confirm: '' });

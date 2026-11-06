@@ -27,7 +27,7 @@ export default function AdminPlanning() {
   const goToday = () => setWeekStart(startOfWeekStr(todayStr()));
   const prev = () => setWeekStart((w) => addDaysStr(w, -7));
   const next = () => setWeekStart((w) => addDaysStr(w, 7));
-  const rangeLabel = `${dayNumLabel(weekStart)} – ${dayNumLabel(addDaysStr(weekStart, 6))}`;
+  const rangeLabel = `${dayNumLabel(weekStart)} - ${dayNumLabel(addDaysStr(weekStart, 6))}`;
 
   const renderEvent = (ev) => ({
     color: ev.space_color,

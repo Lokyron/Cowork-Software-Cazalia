@@ -72,7 +72,7 @@ export default function AdminMembers() {
               <tr key={m.id} className="row-clickable" onClick={() => setOpenId(m.id)}>
                 <td><strong>{m.display_name}</strong></td>
                 <td className="muted">{m.email}</td>
-                <td className="muted">{m.phone || '—'}</td>
+                <td className="muted">{m.phone || '-'}</td>
                 <td>{m.role === 'admin' ? <span className="badge grey">admin</span> : 'membre'}</td>
                 <td style={{ textAlign: 'right' }}><strong>{m.balance}</strong></td>
               </tr>

@@ -64,13 +64,13 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
     return members.filter((m) => `${m.display_name} ${m.email} ${m.phone || ''}`.toLowerCase().includes(qq)).slice(0, 8);
   }, [members, q]);
 
-  const eur = (cents) => (cents == null ? '—' : ((Number(cents)) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
+  const eur = (cents) => (cents == null ? '-' : ((Number(cents)) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
   const costCents = avail?.cost; // centimes (tarif horaire)
   const customCents = customCost !== '' ? Math.round(Number(customCost) * 100) : null;
   const effectiveCents = isAdmin && customCents != null ? customCents : costCents;
   const full = avail && avail.seats_left < seats;
   // Open Space : réservation par forfait (demi-journée / journée) depuis la page
-  // Réserver — ce modal horaire ne le gère pas côté client.
+  // Réserver - ce modal horaire ne le gère pas côté client.
   const openSpaceBlocked = !isAdmin && space?.category === 'OPEN_SPACE';
 
   const canSubmit = () => {
@@ -120,7 +120,7 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
           <div className="field">
             <label>Espace</label>
             <select value={spaceId} onChange={(e) => setSpaceId(e.target.value)} disabled={!!presetSpaceId}>
-              <option value="">— Choisir —</option>
+              <option value="">- Choisir -</option>
               {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
@@ -220,7 +220,7 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
 
           <div className="flex-between">
             <div className="muted seats">
-              {isAdmin ? 'Montant' : 'À payer'} : <strong>{effectiveCents != null ? eur(effectiveCents) : '—'}</strong>
+              {isAdmin ? 'Montant' : 'À payer'} : <strong>{effectiveCents != null ? eur(effectiveCents) : '-'}</strong>
             </div>
             <button disabled={!canSubmit()} onClick={submit}>{isAdmin ? 'Réserver' : 'Payer et réserver'}</button>
           </div>

@@ -217,7 +217,7 @@ adminRouter.post('/members/:id/reservations', async (req, res) => {
   }
 });
 
-// POST /admin/reservations — réservation unitaire depuis le planning, POUR un client,
+// POST /admin/reservations - réservation unitaire depuis le planning, POUR un client,
 // avec droits avancés (bypass) : hors horaires, surbooking, tarif/remise personnalisé.
 adminRouter.post('/reservations', async (req, res) => {
   try {
@@ -326,7 +326,7 @@ adminRouter.post('/users', (req, res) => {
 });
 
 /**
- * GET /api/admin/members/:id/invoice?from&to — relevé PDF d'un membre.
+ * GET /api/admin/members/:id/invoice?from&to - relevé PDF d'un membre.
  * La période est validée avant l'émission des en-têtes ; le nom de fichier ne
  * reprend que l'identifiant numérique (aucune donnée utilisateur dans l'en-tête
  * `Content-Disposition`).
@@ -503,7 +503,7 @@ adminRouter.post('/reservations/:id/cancel', async (req, res) => {
 // rien si la commande est déjà 'paid').
 
 /**
- * GET /api/admin/orders/pending — commandes payées côté membre restées en attente.
+ * GET /api/admin/orders/pending - commandes payées côté membre restées en attente.
  * @returns 200 `{orders}`
  */
 adminRouter.get('/orders/pending', (_req, res) => {
@@ -515,7 +515,7 @@ adminRouter.get('/orders/pending', (_req, res) => {
 });
 
 /**
- * POST /api/admin/orders/:id/reconcile — interroge Stripe pour une commande en
+ * POST /api/admin/orders/:id/reconcile - interroge Stripe pour une commande en
  * attente et crée les réservations si le paiement a bien abouti.
  * @returns 200 `{reconciled, created, status}` · 404 `COMMANDE_INTROUVABLE`
  *          · 409 `PAIEMENT_NON_ABOUTI`/`PAIEMENT_INDISPONIBLE`
@@ -546,7 +546,7 @@ adminRouter.post('/orders/:id/reconcile', async (req, res) => {
 
 // ── Codes promotionnels (Coupons + Promotion Codes Stripe) ───────────────────
 /**
- * GET /api/admin/promos — liste des codes promo (miroir local + utilisations Stripe).
+ * GET /api/admin/promos - liste des codes promo (miroir local + utilisations Stripe).
  * @returns 200 `{promos}`
  */
 adminRouter.get('/promos', async (_req, res) => {
@@ -558,7 +558,7 @@ adminRouter.get('/promos', async (_req, res) => {
 });
 
 /**
- * POST /api/admin/promos — crée un code promo.
+ * POST /api/admin/promos - crée un code promo.
  * Corps : `{ code?, reduction_type:'percent'|'amount', reduction_value,
  *            tarif_restriction?, max_redemptions?, expires_at? }`.
  * `code` omis ou vide → généré aléatoirement par Stripe.
@@ -584,7 +584,7 @@ adminRouter.post('/promos', async (req, res) => {
 });
 
 /**
- * PATCH /api/admin/promos/:id — active/désactive un code. Corps `{active:boolean}`.
+ * PATCH /api/admin/promos/:id - active/désactive un code. Corps `{active:boolean}`.
  * @returns 200 `{promo}` · 404 `PROMO_INTROUVABLE`
  */
 adminRouter.patch('/promos/:id', async (req, res) => {
@@ -597,7 +597,7 @@ adminRouter.patch('/promos/:id', async (req, res) => {
 });
 
 /**
- * DELETE /api/admin/promos/:id — supprime un code (et son coupon Stripe).
+ * DELETE /api/admin/promos/:id - supprime un code (et son coupon Stripe).
  * @returns 200 `{deleted:true}` · 404 `PROMO_INTROUVABLE`
  */
 adminRouter.delete('/promos/:id', async (req, res) => {
@@ -622,7 +622,7 @@ adminRouter.get('/prospects', (req, res) => {
 });
 
 /**
- * GET /api/admin/prospects/export.csv — export des pré-inscriptions.
+ * GET /api/admin/prospects/export.csv - export des pré-inscriptions.
  * Les cellules pouvant être interprétées comme des formules sont neutralisées
  * en amont (`lib/prospects.js`, injection de formule CSV).
  * Déclarée AVANT `/prospects/:id` pour éviter toute collision de motif.

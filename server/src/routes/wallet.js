@@ -8,7 +8,7 @@ import { requireAuth, sendBusinessError } from '../middleware.js';
 export const walletRouter = Router();
 
 /**
- * GET /api/wallet/me — solde et historique du portefeuille de l'appelant.
+ * GET /api/wallet/me - solde et historique du portefeuille de l'appelant.
  * L'identifiant provient de la SESSION, jamais d'un paramètre : il n'existe pas
  * de moyen de consulter le portefeuille d'un autre membre (IDOR impossible).
  *
@@ -26,7 +26,7 @@ const memberStmt = db.prepare(
 );
 
 /**
- * GET /api/invoice?from&to — relevé PDF des transactions de l'appelant.
+ * GET /api/invoice?from&to - relevé PDF des transactions de l'appelant.
  * La période est validée AVANT d'émettre le moindre en-tête : une erreur
  * survenant pendant la génération produirait un PDF tronqué.
  *

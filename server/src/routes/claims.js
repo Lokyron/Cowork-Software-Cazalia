@@ -20,7 +20,7 @@ const KIND_LABEL = { annulation: 'Annulation', remboursement: 'Remboursement', a
 const claimsLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 6 });
 
 /**
- * POST /api/claims — réclamation consommateur (aucun compte requis).
+ * POST /api/claims - réclamation consommateur (aucun compte requis).
  *
  * La réclamation est d'abord ENREGISTRÉE (trace durable), puis une notification
  * est envoyée à la gérante en best-effort : un échec d'e-mail ne doit pas perdre
@@ -40,7 +40,7 @@ claimsRouter.post('/claims', claimsLimiter, async (req, res) => {
     // Notification best-effort à la gérante (ne lève jamais).
     try {
       const { subject, html } = renderRaw(
-        `Nouvelle réclamation #{{id}} — {{kind}}`,
+        `Nouvelle réclamation #{{id}} - {{kind}}`,
         `<h1 style="font-size:20px;margin:0 0 12px;">Réclamation #{{id}}</h1>
          <p style="margin:0 0 6px;"><strong>Type :</strong> {{kind}}</p>
          <p style="margin:0 0 6px;"><strong>Nom :</strong> {{first_name}} {{last_name}}</p>
@@ -55,14 +55,14 @@ claimsRouter.post('/claims', claimsLimiter, async (req, res) => {
           first_name: data.first_name,
           last_name: data.last_name,
           email: data.email,
-          phone: data.phone || '—',
-          reservation_ref: data.reservation_ref || '—',
+          phone: data.phone || '-',
+          reservation_ref: data.reservation_ref || '-',
           message: data.message,
         }
       );
       await sendMail({
         to: CLAIMS_RECIPIENT, subject, html, templateCode: 'claim_notification',
-        fromEmail: NOTIFY_FROM, fromName: 'Cazalia — Réclamations', replyTo: data.email,
+        fromEmail: NOTIFY_FROM, fromName: 'Cazalia - Réclamations', replyTo: data.email,
       });
     } catch { /* journalisé par le mailer ; la réclamation est déjà enregistrée */ }
 

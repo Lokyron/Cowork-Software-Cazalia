@@ -37,8 +37,8 @@ if (spaceCount === 0) {
       credits_per_hour: cph, color, description: c.description, amenities: c.amenities,
     });
   };
-  mk('Open-space — Rez', 'zone', 12, 2, '#1C3155');                    // inventaire, prix/place
-  mk('Open-space — Étage', 'zone', 8, 3, '#2E7D32');                   // inventaire, prix/place
+  mk('Open-space - Rez', 'zone', 12, 2, '#1C3155');                    // inventaire, prix/place
+  mk('Open-space - Étage', 'zone', 8, 3, '#2E7D32');                   // inventaire, prix/place
   mk('Salle Focus', 'room', 2, 5, '#B71C1C', { privatizable: true }); // 2 postes, privatisation ×2
   mk('Salle Réunion', 'room', 8, 8, '#6A1B9A', { exclusive: true });  // exclusive, 8 occupants, forfait
 }

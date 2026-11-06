@@ -18,11 +18,11 @@ const STEP_LABEL = {
   complete: 'Terminé.',
 };
 
-const shortSha = (s) => (s ? String(s).slice(0, 7) : '—');
+const shortSha = (s) => (s ? String(s).slice(0, 7) : '-');
 const fmt = (iso) => {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—'
+  return Number.isNaN(d.getTime()) ? '-'
     : d.toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 };
 
@@ -183,13 +183,13 @@ export default function AdminUpdate() {
           <dd>
             v{installed.version || '?'} · <code>{shortSha(installed.commit)}</code>
             {installed.branch ? ` (${installed.branch})` : ''}
-            <span className="muted"> — posée le {fmt(installed.installedAt)}</span>
+            <span className="muted"> - posée le {fmt(installed.installedAt)}</span>
           </dd>
           <dt>Dernière sur « {CHANNEL_LABEL[data?.channel] || data?.channel} »</dt>
           <dd>
             {latest ? (
               <>
-                <code>{shortSha(latest.commit)}</code> — {latest.message || 'sans description'}
+                <code>{shortSha(latest.commit)}</code> - {latest.message || 'sans description'}
                 <span className="muted"> ({fmt(latest.date)})</span>
               </>
             ) : <span className="muted">{data?.error || 'indisponible'}</span>}
@@ -232,7 +232,7 @@ export default function AdminUpdate() {
           )}
           {data.status.state === 'failed' && (
             <p style={{ color: '#b85f3e' }}>
-              ✕ {data.status.message || 'La mise à jour a échoué.'} — la version précédente a été remise en place.
+              ✕ {data.status.message || 'La mise à jour a échoué.'} - la version précédente a été remise en place.
             </p>
           )}
           <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>

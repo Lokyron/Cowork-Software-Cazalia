@@ -36,13 +36,13 @@ const eur = (cents) => (cents / 100).toFixed(2).replace('.', ',') + ' €';
 function describe(t) {
   switch (t.reason) {
     case 'topup':
-      return 'Recharge de crédits' + (t.note ? ` — ${t.note}` : '');
+      return 'Recharge de crédits' + (t.note ? ` - ${t.note}` : '');
     case 'booking':
-      return 'Réservation' + (t.space_name ? ` — ${t.space_name}` : '') + (t.start_at ? `, ${fmtDT(t.start_at)}` : '');
+      return 'Réservation' + (t.space_name ? ` - ${t.space_name}` : '') + (t.start_at ? `, ${fmtDT(t.start_at)}` : '');
     case 'refund':
-      return 'Remboursement' + (t.space_name ? ` — ${t.space_name}` : '');
+      return 'Remboursement' + (t.space_name ? ` - ${t.space_name}` : '');
     case 'adjust':
-      return 'Ajustement' + (t.note ? ` — ${t.note}` : '');
+      return 'Ajustement' + (t.note ? ` - ${t.note}` : '');
     default:
       return t.note || t.reason;
   }
@@ -139,7 +139,7 @@ export function streamInvoicePdf(res, { member, transactions, fromIso, toIso }) 
     doc.fillColor(INK).text(fmtDT(t.created_at), cols.date + 6, y + 5, { width: 88 });
     doc.fillColor(INK).text(truncate(describe(t), 52), cols.op + 6, y + 5, { width: 252 });
     doc.fillColor(t.amount >= 0 ? GREEN : RED).text((t.amount >= 0 ? '+' : '') + t.amount, cols.cr, y + 5, { width: 60, align: 'right' });
-    doc.fillColor(INK).text(t.amount_eur_cents ? eur(t.amount_eur_cents) : '—', cols.mt, y + 5, { width: 69, align: 'right' });
+    doc.fillColor(INK).text(t.amount_eur_cents ? eur(t.amount_eur_cents) : '-', cols.mt, y + 5, { width: 69, align: 'right' });
     y += 20;
     doc.moveTo(left, y).lineTo(right, y).strokeColor('#eef0f3').stroke();
   }

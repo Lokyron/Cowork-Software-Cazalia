@@ -21,7 +21,7 @@ export default function ReservationDetail({ reservation, onClose, onChanged }) {
   const notifySuffix = (res) => {
     if (!notify) return '';
     if (res?.notify?.sent) return ' Email envoyé au membre.';
-    return ' (Email non envoyé — SMTP non configuré.)';
+    return ' (Email non envoyé - SMTP non configuré.)';
   };
 
   const saveNote = async () => {
@@ -75,7 +75,7 @@ export default function ReservationDetail({ reservation, onClose, onChanged }) {
             <tr><td className="muted">Début</td><td>{fmtDateTime(r.start_at)}</td></tr>
             <tr><td className="muted">Fin</td><td>{fmtDateTime(r.end_at)}</td></tr>
             <tr><td className="muted">Montant</td><td>{eur(r.price_cents)}{r.refunded_cents > 0 ? ` · remboursé ${eur(r.refunded_cents)}` : ''}</td></tr>
-            <tr><td className="muted">Paiement</td><td>{PAY_LABEL[r.payment_status] || r.payment_status || '—'}</td></tr>
+            <tr><td className="muted">Paiement</td><td>{PAY_LABEL[r.payment_status] || r.payment_status || '-'}</td></tr>
             {r.receipt_url && (
               <tr><td className="muted">Reçu</td><td><a href={r.receipt_url} target="_blank" rel="noopener noreferrer">Reçu Stripe ↗</a></td></tr>
             )}

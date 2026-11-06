@@ -4,7 +4,7 @@
 // des préférences de notification.
 //
 // Le choix du fournisseur se fait dans /admin/emails ; TOUT passe par `sendMail`,
-// unique point de sortie — c'est là que se branchent le quota et le journal.
+// unique point de sortie - c'est là que se branchent le quota et le journal.
 //
 // DÉGRADABLE : un échec d'envoi ne lève jamais vers l'appelant métier (réservation, etc.).
 
@@ -66,7 +66,7 @@ function fromHeader() {
  *
  * @param {string} str Gabarit (le HTML du gabarit lui-même est de confiance :
  *        il n'est éditable que depuis le back-office administrateur).
- * @param {Record<string, unknown>} vars Valeurs à injecter — TOUJOURS échappées.
+ * @param {Record<string, unknown>} vars Valeurs à injecter - TOUJOURS échappées.
  * @param {{raw?: string[]}} [options] `raw` liste les variables dont la valeur est
  *        du HTML délibéré, construit par l'application (jamais par un utilisateur).
  * @returns {string} Gabarit rendu.
@@ -81,7 +81,7 @@ export function interpolate(str, vars, options = {}) {
 
 /**
  * Interpole un gabarit destiné à du TEXTE BRUT (sujet d'e-mail) : pas
- * d'échappement HTML — qui afficherait « &amp; » au lieu de « & » — mais
+ * d'échappement HTML - qui afficherait « &amp; » au lieu de « & » - mais
  * suppression des retours à la ligne, qui permettraient d'injecter des en-têtes
  * SMTP arbitraires.
  *
@@ -102,7 +102,7 @@ const getTemplateStmt = db.prepare(`SELECT * FROM email_templates WHERE code = ?
  *
  * `{{wifi_block}}` est substitué AVANT l'interpolation générale : c'est un
  * fragment HTML construit par l'application (encart voucher), pas une donnée
- * utilisateur — il est donc injecté tel quel, ses propres variables ayant été
+ * utilisateur - il est donc injecté tel quel, ses propres variables ayant été
  * échappées au passage.
  *
  * @param {string} code Code du gabarit (`booking_confirmation`, `password_reset`…).
@@ -244,14 +244,14 @@ export async function sendMail({ to, toUserId = null, subject, html, templateCod
 
   if (!isMailConfigured()) {
     const reason = provider === 'brevo' ? 'BREVO_NON_CONFIGURE' : 'SMTP_NON_CONFIGURE';
-    console.log(`[mailer:STUB] ${provider} non configuré — « ${subject} » NON envoyé à ${to}`);
+    console.log(`[mailer:STUB] ${provider} non configuré - « ${subject} » NON envoyé à ${to}`);
     logEmail({ ...base, status: 'skipped', error: reason });
     return { sent: false, reason };
   }
 
   const refusal = quotaRefusal(mailKind(templateCode, marketing));
   if (refusal) {
-    console.warn(`[mailer] plafond du jour — « ${subject} » NON envoyé à ${to} (${refusal})`);
+    console.warn(`[mailer] plafond du jour - « ${subject} » NON envoyé à ${to} (${refusal})`);
     logEmail({ ...base, status: 'skipped', error: refusal });
     return { sent: false, reason: refusal };
   }
@@ -364,9 +364,9 @@ const toGCalDate = (iso) => new Date(iso).toISOString().replace(/[-:]|\.\d{3}/g,
 function googleCalendarUrl(r) {
   const params = new URLSearchParams({
     action: 'TEMPLATE',
-    text: `Cazalia — ${r.space_name}`,
+    text: `Cazalia - ${r.space_name}`,
     dates: `${toGCalDate(r.start_at)}/${toGCalDate(r.end_at)}`,
-    details: `Réservation — ${r.space_name} (${eurFromCents(r.price_cents)}) chez Cazalia.`,
+    details: `Réservation - ${r.space_name} (${eurFromCents(r.price_cents)}) chez Cazalia.`,
     location: 'Cazalia',
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
@@ -376,7 +376,7 @@ function reservationVars(r) {
   return {
     space_name: r.space_name,
     booking_date: fmtDate(r.start_at),
-    booking_time: `${fmtTime(r.start_at)} – ${fmtTime(r.end_at)}`,
+    booking_time: `${fmtTime(r.start_at)} - ${fmtTime(r.end_at)}`,
     price: eurFromCents(r.price_cents),
     credits_cost: eurFromCents(r.price_cents), // compat templates : affiche désormais des euros
     wifi_voucher: r.voucher_code || '',
@@ -405,7 +405,7 @@ export async function sendBookingModified(reservationId, { previous } = {}) {
   const vars = reservationVars(r);
   if (previous?.start_at && previous?.end_at) {
     vars.previous_date = fmtDate(previous.start_at);
-    vars.previous_time = `${fmtTime(previous.start_at)} – ${fmtTime(previous.end_at)}`;
+    vars.previous_time = `${fmtTime(previous.start_at)} - ${fmtTime(previous.end_at)}`;
   }
   return sendToUser({ userId: r.user_id, code: 'booking_modified', vars });
 }
@@ -433,14 +433,14 @@ export async function sendRefundRequestToAdmin(reservationId, { amount } = {}) {
   if (!r) return { sent: false, reason: 'RESA_INTROUVABLE' };
   const admins = adminEmailsStmt.all().map((a) => a.email).filter(Boolean);
   if (!admins.length) return { sent: false, reason: 'AUCUN_ADMIN' };
-  const subject = `Remboursement à effectuer — ${eurFromCents(amount ?? r.price_cents)} (${r.member_name})`;
+  const subject = `Remboursement à effectuer - ${eurFromCents(amount ?? r.price_cents)} (${r.member_name})`;
   const body =
     `<p>Une réservation payée en ligne a été annulée <strong>dans les délais</strong>. ` +
     `Un remboursement est à effectuer manuellement depuis le tableau de bord Stripe.</p>` +
     `<ul>` +
     `<li><strong>Membre :</strong> ${r.member_name} (${r.member_email})</li>` +
     `<li><strong>Espace :</strong> ${r.space_name}</li>` +
-    `<li><strong>Créneau :</strong> ${fmtDate(r.start_at)} ${fmtTime(r.start_at)} – ${fmtTime(r.end_at)}</li>` +
+    `<li><strong>Créneau :</strong> ${fmtDate(r.start_at)} ${fmtTime(r.start_at)} - ${fmtTime(r.end_at)}</li>` +
     `<li><strong>Montant à rembourser :</strong> ${eurFromCents(amount ?? r.price_cents)}</li>` +
     (r.payment_intent ? `<li><strong>Paiement Stripe :</strong> ${r.payment_intent}</li>` : '') +
     `</ul>`;

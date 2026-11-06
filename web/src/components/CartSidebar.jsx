@@ -6,9 +6,9 @@ import { useCart } from '../cart.jsx';
 // lignes ; la finalisation (CGV, paiement) se fait sur la page « Réserver ».
 const dFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', day: 'numeric', month: 'short' });
 const tFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hour12: false });
-const fmtSlot = (a, b) => `${dFmt.format(new Date(a))} · ${tFmt.format(new Date(a))}–${tFmt.format(new Date(b))}`;
+const fmtSlot = (a, b) => `${dFmt.format(new Date(a))} · ${tFmt.format(new Date(a))}-${tFmt.format(new Date(b))}`;
 const mmss = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
-const eur = (cents) => (cents == null ? '—' : (cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
+const eur = (cents) => (cents == null ? '-' : (cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
 
 export default function CartSidebar() {
   const { cart, refresh, remove } = useCart();

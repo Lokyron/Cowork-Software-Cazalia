@@ -74,7 +74,7 @@ export default function AdminCartModal({ onClose, onCreated }) {
 
           {done && (
             <div className="alert ok" style={{ marginTop: 12 }}>
-              {done.count} réservation{done.count > 1 ? 's' : ''} créée{done.count > 1 ? 's' : ''} pour {client.display_name} — {done.total} crédits débités.
+              {done.count} réservation{done.count > 1 ? 's' : ''} créée{done.count > 1 ? 's' : ''} pour {client.display_name} - {done.total} crédits débités.
               <div style={{ marginTop: 10 }}>
                 <button onClick={() => { onCreated?.(); onClose?.(); }}>Terminer</button>
               </div>

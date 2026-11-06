@@ -133,7 +133,7 @@ function ProviderSection({ settings, setSettings, flash }) {
           {webhook && (
             <div className="alert" style={{ marginTop: 8 }}>
               <p style={{ margin: '0 0 6px' }}>
-                <strong>URL du webhook — copiez-la maintenant</strong>, elle ne sera plus affichée.
+                <strong>URL du webhook - copiez-la maintenant</strong>, elle ne sera plus affichée.
                 {webhook.declared
                   ? ' Elle a déjà été déclarée automatiquement chez Brevo.'
                   : ' À coller dans Brevo → Transactionnel → Paramètres → Webhooks.'}
@@ -364,8 +364,8 @@ function LogSection() {
               <tr key={l.id}>
                 <td>{new Date(l.created_at + 'Z').toLocaleString('fr-FR')}</td>
                 <td>{l.to_email}</td>
-                <td className="muted">{l.template_code || '—'}</td>
-                <td className="muted">{l.provider || '—'}</td>
+                <td className="muted">{l.template_code || '-'}</td>
+                <td className="muted">{l.provider || '-'}</td>
                 <td>
                   <span className={`badge ${STY[l.status] ?? ''}`}>{LABEL[l.status] || l.status}</span>
                   {l.error && <span className="muted" style={{ fontSize: 11 }}> · {msg(l.error) !== 'Une erreur est survenue.' ? msg(l.error) : l.error}</span>}

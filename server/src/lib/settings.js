@@ -184,7 +184,7 @@ export function getBrevo() {
 
 /**
  * Vue Brevo destinée à l'interface d'administration : AUCUN secret.
- * La clé d'API et le jeton de webhook ne quittent jamais le serveur — le jeton
+ * La clé d'API et le jeton de webhook ne quittent jamais le serveur - le jeton
  * n'est montré qu'une seule fois, à sa génération (cf. `rotateBrevoWebhookToken`).
  *
  * @returns {{has_api_key: boolean, has_webhook_token: boolean, configured: boolean}}

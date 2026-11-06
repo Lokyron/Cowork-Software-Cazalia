@@ -8,9 +8,9 @@ const toGCalDate = (iso) => new Date(iso).toISOString().replace(/[-:]|\.\d{3}/g,
 export function googleCalendarUrl(r) {
   const params = new URLSearchParams({
     action: 'TEMPLATE',
-    text: `Cazalia — ${r.space_name}`,
+    text: `Cazalia - ${r.space_name}`,
     dates: `${toGCalDate(r.start_at)}/${toGCalDate(r.end_at)}`,
-    details: `Réservation — ${r.space_name} chez Cazalia.`,
+    details: `Réservation - ${r.space_name} chez Cazalia.`,
     location: 'Cazalia',
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;

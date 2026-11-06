@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MAQUETTE ISOLÉE — Tunnel d'achat unifié  (route : /test-checkout-flow)
+// MAQUETTE ISOLÉE - Tunnel d'achat unifié  (route : /test-checkout-flow)
 //
 // ⚠️ Prototype de travail, NON branché sur la production :
 //   • aucun appel aux API de réservation / abonnement / paiement ;
@@ -20,7 +20,7 @@ import { Link } from 'react-router-dom';
 import PasswordInput from '../components/PasswordInput.jsx';
 import { checkPassword, PASSWORD_RULE } from '../password.js';
 
-const TVA = 0.20; // hypothèse d'affichage — à confirmer selon le paramétrage Stripe
+const TVA = 0.20; // hypothèse d'affichage - à confirmer selon le paramétrage Stripe
 
 const eur = (n) => Number(n).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 const htFromTtc = (ttc) => ttc / (1 + TVA);
@@ -61,9 +61,9 @@ const PLANS = [
 
 // Formules ponctuelles par famille d'espace. `ttc` en euros.
 const OPEN_SPACE_FORMULES = [
-  { id: 'matin', label: 'Demi-journée — matin', horaire: '08:30 – 14:00', ttc: 12 },
-  { id: 'aprem', label: 'Demi-journée — après-midi', horaire: '14:00 – 19:30', ttc: 12 },
-  { id: 'journee', label: 'Journée complète', horaire: '08:30 – 19:30', ttc: 20 },
+  { id: 'matin', label: 'Demi-journée - matin', horaire: '08:30 - 14:00', ttc: 12 },
+  { id: 'aprem', label: 'Demi-journée - après-midi', horaire: '14:00 - 19:30', ttc: 12 },
+  { id: 'journee', label: 'Journée complète', horaire: '08:30 - 19:30', ttc: 20 },
 ];
 const MEETING_FORMULES = [
   { id: 'heure', label: "À l'heure", horaire: 'Créneau au choix', ttc: 20, perHour: true },
@@ -185,7 +185,7 @@ function InlineAuth({ onAuthed, registerFirst = false }) {
           </div>
           <p className="muted" style={{ marginTop: 4 }}>
             {mode === 'register'
-              ? 'Un compte en 30 secondes — votre sélection est conservée.'
+              ? 'Un compte en 30 secondes - votre sélection est conservée.'
               : 'Connectez-vous, on reprend votre sélection là où vous en étiez.'}
           </p>
         </>
@@ -279,7 +279,7 @@ export default function TestCheckoutFlow() {
       return {
         title: `Abonnement ${plan.name}`,
         lines: plan.features,
-        recurrence: 'Prélevé chaque mois — sans engagement',
+        recurrence: 'Prélevé chaque mois - sans engagement',
         ttc: plan.price,
         unit: '/ mois',
         inclus: plan.features.map(([k, v]) => `${k} : ${v}`),
@@ -299,7 +299,7 @@ export default function TestCheckoutFlow() {
       const f = MEETING_FORMULES.find((x) => x.id === salleFormule);
       const hours = Math.max(1, endH - startH);
       const ttc = f.perHour ? f.ttc * hours : f.ttc;
-      const horaire = f.perHour ? `${String(startH).padStart(2, '0')}:00 – ${String(endH).padStart(2, '0')}:00 (${hours} h)` : f.horaire;
+      const horaire = f.perHour ? `${String(startH).padStart(2, '0')}:00 - ${String(endH).padStart(2, '0')}:00 (${hours} h)` : f.horaire;
       return {
         title: 'Salle de réunion',
         lines: [['Date', frDate(date)], ['Formule', f.label], ['Créneau', horaire], ['Capacité', "jusqu'à 8 personnes"]],
@@ -331,7 +331,7 @@ export default function TestCheckoutFlow() {
       <TcfStyles />
 
       <div className="tcf-banner">
-        🧪 <strong>Maquette isolée</strong> — parcours d'achat unifié. Aucune donnée réelle, aucun paiement.
+        🧪 <strong>Maquette isolée</strong> - parcours d'achat unifié. Aucune donnée réelle, aucun paiement.
         <button className="tcf-banner-reset" onClick={reset}>Recommencer</button>
       </div>
 
@@ -497,7 +497,7 @@ export default function TestCheckoutFlow() {
                 <div className="tcf-pay-sim">
                   <span className="tcf-pay-ico" aria-hidden="true">💳</span>
                   <div>
-                    <strong>Simulation — aucune redirection Stripe réelle.</strong>
+                    <strong>Simulation - aucune redirection Stripe réelle.</strong>
                     <p className="muted" style={{ margin: '4px 0 0' }}>
                       En production, ce bouton appellerait {product === 'abonnement' ? <code>/api/subscriptions/checkout</code> : <code>/api/cart/checkout</code>} puis
                       redirigerait vers Stripe Checkout pour {eur(summary.ttc)}{summary.unit ? ` ${summary.unit}` : ''}.
@@ -509,7 +509,7 @@ export default function TestCheckoutFlow() {
                   <span>J'accepte les <Link to="/cgv" target="_blank">CGV</Link>{product !== 'abonnement' && <> et renonce à mon droit de rétractation pour une prestation exécutée immédiatement</>}.</span>
                 </label>
                 <button style={{ width: '100%', marginTop: 12 }} onClick={() => setStep('fin')}>
-                  {product === 'abonnement' ? `Souscrire — ${eur(summary.ttc)} / mois` : `Payer ${eur(summary.ttc)}`}
+                  {product === 'abonnement' ? `Souscrire - ${eur(summary.ttc)} / mois` : `Payer ${eur(summary.ttc)}`}
                 </button>
               </div>
             )}
@@ -522,7 +522,7 @@ export default function TestCheckoutFlow() {
                   {product === 'abonnement'
                     ? `Votre abonnement ${summary.title.replace('Abonnement ', '')} serait actif. `
                     : `Votre réservation ${summary.title} serait confirmée. `}
-                  (Simulation — rien n'a été prélevé.)
+                  (Simulation - rien n'a été prélevé.)
                 </p>
                 <button onClick={reset}>Tester un autre parcours</button>
               </div>

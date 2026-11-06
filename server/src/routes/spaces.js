@@ -10,7 +10,7 @@ import { sendBusinessError } from '../middleware.js';
 export const spacesRouter = Router();
 
 /**
- * GET /api/config — configuration PUBLIQUE consommée par le front.
+ * GET /api/config - configuration PUBLIQUE consommée par le front.
  * N'expose que des informations destinées à l'affichage (horaires, SSID,
  * consignes d'arrivée) : aucun réglage sensible ne transite par cette route.
  *
@@ -22,7 +22,7 @@ spacesRouter.get('/config', (_req, res) => {
 });
 
 /**
- * GET /api/spaces — espaces actifs (vitrine publique).
+ * GET /api/spaces - espaces actifs (vitrine publique).
  * La sélection de colonnes est explicite : rien d'interne ne fuit par un `*`.
  * @returns 200 `{spaces}`
  */
@@ -39,7 +39,7 @@ spacesRouter.get('/spaces', (_req, res) => {
 });
 
 /**
- * GET /api/availability?space_id&from&to&seats — places restantes et coût estimé.
+ * GET /api/availability?space_id&from&to&seats - places restantes et coût estimé.
  * Route publique : elle ne renvoie que des agrégats (nombre de places libres),
  * jamais l'identité des occupants.
  *

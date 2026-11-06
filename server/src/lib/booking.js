@@ -262,7 +262,7 @@ const reserveTx = db.transaction((userId, spaceId, startIso, endIso, seatsRaw, o
  * @param {{ignoreHours?: boolean, allowOverbooking?: boolean, customCost?: number, createdBy?: number}} [opts]
  *        Options RÉSERVÉES À L'ADMINISTRATEUR : elles permettent de passer outre
  *        les horaires, la capacité et le tarif. Les routes membres ne les
- *        transmettent jamais — c'est le point de contrôle de cette élévation.
+ *        transmettent jamais - c'est le point de contrôle de cette élévation.
  * @returns {{reservationId: number|bigint, cost: number, seats: number}}
  * @throws {Error} `ESPACE_INTROUVABLE`, `HORS_HORAIRES`, `COMPLET`, `CREDITS_INSUFFISANTS`,
  *         `CRENEAU_INVALIDE`, `CRENEAU_PASSE`.
@@ -332,7 +332,7 @@ const cancelResStmt = db.prepare(
   `UPDATE reservations SET status = 'cancelled' WHERE id = ? AND status = 'confirmed'`
 );
 // Recrédite le quota Open Space d'un abonné Essentiel à l'annulation d'une
-// réservation À VENIR couverte par le quota (brief §5.3 — règles d'annulation).
+// réservation À VENIR couverte par le quota (brief §5.3 - règles d'annulation).
 const recreditQuotaStmt = db.prepare(
   `UPDATE users SET open_space_quota_used = MAX(0, open_space_quota_used - ?) WHERE id = ?`
 );
@@ -372,7 +372,7 @@ const cancelTx = db.transaction((reservationId, actor) => {
  *
  * CONTRÔLE D'ACCÈS : la propriété de la réservation est vérifiée DANS la
  * transaction (`res.user_id !== actor.id` → `INTERDIT`), et non par la route.
- * Un membre ne peut donc pas annuler — ni faire rembourser — la réservation
+ * Un membre ne peut donc pas annuler - ni faire rembourser - la réservation
  * d'un autre en devinant son identifiant (IDOR/BOLA, OWASP A01).
  *
  * @param {number} reservationId Réservation visée.

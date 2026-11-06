@@ -119,7 +119,7 @@ export default function AdminProspects() {
                     <div className="muted" style={{ fontSize: 12 }}>{p.email}</div>
                   </td>
                   <td className="muted">{p.phone}</td>
-                  <td className="muted">{ACTIVITY_LABEL[p.activity] || '—'}</td>
+                  <td className="muted">{ACTIVITY_LABEL[p.activity] || '-'}</td>
                   <td><StatusBadge status={p.status} /></td>
                   <td className="muted" style={{ textAlign: 'right' }}>{fmtDate(p.created_at)}</td>
                 </tr>
@@ -203,7 +203,7 @@ function ProspectDetail({ prospect, onClose, onChanged, onDeleted }) {
           <tbody>
             <tr><td className="muted">E-mail</td><td style={{ textAlign: 'right' }}><a href={`mailto:${prospect.email}`}>{prospect.email}</a></td></tr>
             <tr><td className="muted">Téléphone</td><td style={{ textAlign: 'right' }}><a href={`tel:${prospect.phone}`}>{prospect.phone}</a></td></tr>
-            <tr><td className="muted">Activité</td><td style={{ textAlign: 'right' }}>{ACTIVITY_LABEL[prospect.activity] || '—'}</td></tr>
+            <tr><td className="muted">Activité</td><td style={{ textAlign: 'right' }}>{ACTIVITY_LABEL[prospect.activity] || '-'}</td></tr>
             <tr><td className="muted">Reçu le</td><td style={{ textAlign: 'right' }}>{fmtDate(prospect.created_at)}</td></tr>
             {prospect.source && <tr><td className="muted">Provenance</td><td style={{ textAlign: 'right' }}>{prospect.source}</td></tr>}
           </tbody>

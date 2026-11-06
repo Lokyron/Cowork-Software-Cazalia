@@ -3,7 +3,7 @@ import { eur, spacePrice } from '../price.js';
 
 // Fenêtre détaillée d'un espace (depuis la landing) : photo, descriptif complet,
 // prestations incluses, et appel à l'action adapté à la catégorie.
-//   • PRIVATE_OFFICE (Bureau privé) : hors des flux de commande en ligne —
+//   • PRIVATE_OFFICE (Bureau privé) : hors des flux de commande en ligne -
 //     accessible exclusivement sur devis / demande de privatisation.
 //   • CONFIDENTIAL : libre-service sur place, sans réservation.
 //   • autres (open space / salle) : réservation en ligne.
@@ -18,7 +18,7 @@ export default function SpaceModal({ space, photoSrc, onClose, onReserve, onDevi
   const priceLabel = p.kind === 'price'
     ? (p.from ? `À partir de ${eur(p.min)}` : eur(p.min))
     : p.kind === 'libre' ? 'Libre-service'
-    : '—';
+    : '-';
 
   return (
     <div className="modal-overlay" onClick={onClose}>

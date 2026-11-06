@@ -11,7 +11,7 @@ import CartSidebar from '../components/CartSidebar.jsx';
 const dFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' });
 const tFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hour12: false });
 const longDate = (iso) => dFmt.format(new Date(iso));
-const range = (a, b) => `${tFmt.format(new Date(a))} – ${tFmt.format(new Date(b))}`;
+const range = (a, b) => `${tFmt.format(new Date(a))} - ${tFmt.format(new Date(b))}`;
 const eur = (cents) => ((Number(cents) || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 
 // Badge de statut d'une réservation passée / en cours (cf. audit M3).
@@ -175,7 +175,7 @@ export default function MemberDashboard() {
       setTimeout(tick, 1500);
     }
     if (status === 'cancel') {
-      setFeedback({ type: 'error', text: "Souscription annulée — aucun montant n'a été prélevé." });
+      setFeedback({ type: 'error', text: "Souscription annulée - aucun montant n'a été prélevé." });
     }
     searchParams.delete('abonnement'); setSearchParams(searchParams, { replace: true });
   }, [searchParams, setSearchParams, refreshUser, loadSub]);
@@ -200,8 +200,8 @@ export default function MemberDashboard() {
       setFeedback({
         type: 'ok',
         text: r.refunded
-          ? `Réservation annulée — un remboursement de ${eur(r.amount)} vous sera effectué sous quelques jours.`
-          : 'Réservation annulée — hors délai, pas de remboursement.',
+          ? `Réservation annulée - un remboursement de ${eur(r.amount)} vous sera effectué sous quelques jours.`
+          : 'Réservation annulée - hors délai, pas de remboursement.',
       });
       load().catch(() => {});
     } catch (err) { setFeedback({ type: 'error', text: msg(err.code) }); }
@@ -252,7 +252,7 @@ export default function MemberDashboard() {
         </div>
       ))}
 
-      {/* HERO — prochaine réservation */}
+      {/* HERO - prochaine réservation */}
       {next ? (
         <div className="card hero-card" style={{ marginBottom: 20 }}>
           <div className="hero-tag">Prochaine réservation</div>
@@ -314,7 +314,7 @@ export default function MemberDashboard() {
           <p style={{ lineHeight: 1.7, margin: '6px 0' }}>☕ <strong>Café &amp; thé inclus</strong> dans toutes les réservations.</p>
           <p className="muted" style={{ fontSize: 14, lineHeight: 1.6 }}>
             Vous payez chaque réservation en ligne par carte, au moment de réserver.
-            À l'heure ou au forfait (demi-journée, journée) — le plus avantageux est indiqué.
+            À l'heure ou au forfait (demi-journée, journée) - le plus avantageux est indiqué.
           </p>
           <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Link to="/reserver"><button className="outline small">Réserver un espace</button></Link>

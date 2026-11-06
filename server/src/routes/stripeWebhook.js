@@ -3,7 +3,7 @@
 // en JSON invaliderait la signature.
 //
 // Authentification : signature `Stripe-Signature` vérifiée dans lib/stripe.js
-// avec le secret de webhook. Aucune session, aucun cookie — cet appel vient des
+// avec le secret de webhook. Aucune session, aucun cookie - cet appel vient des
 // serveurs de Stripe. Un POST forgé sans signature valide est rejeté en 400.
 
 import { constructEvent, getReceiptUrl } from '../lib/stripe.js';

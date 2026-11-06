@@ -9,7 +9,7 @@ export const config = {
   // Interface d'écoute. Par défaut 127.0.0.1 : l'API n'est joignable QUE par le
   // reverse proxy nginx local. L'exposer sur 0.0.0.0 permettrait de contacter
   // l'API en contournant nginx et, `trust proxy` étant actif, de forger
-  // `X-Forwarded-For` — donc de contourner toute la limitation de débit.
+  // `X-Forwarded-For` - donc de contourner toute la limitation de débit.
   host: process.env.HOST || '127.0.0.1',
   // Nombre de proxys de confiance devant l'API (nginx local = 1). Mettre 0 si
   // l'API est exposée directement : `req.ip` cesse alors d'être falsifiable.
@@ -67,17 +67,17 @@ export const config = {
   // l'administrateur peut forcer une réservation hors de ces horaires.
   openingHours: {
     0: [],              // dimanche : fermé
-    1: [[510, 1170]],   // lundi    : 8h30 – 19h30
+    1: [[510, 1170]],   // lundi    : 8h30 - 19h30
     2: [[510, 1170]],   // mardi
     3: [[510, 1170]],   // mercredi
     4: [[510, 1170]],   // jeudi
     5: [[510, 1170]],   // vendredi
-    6: [[540, 780]],    // samedi   : 9h00 – 13h00
+    6: [[540, 780]],    // samedi   : 9h00 - 13h00
   },
   // Créneaux FORFAITAIRES (heure de Paris, minutes depuis minuit), par jour de
   // semaine. Un créneau réservé « au forfait » doit correspondre EXACTEMENT à
-  // l'une de ces fenêtres. En semaine : matin 8h30–14h, après-midi 14h–19h30,
-  // journée 8h30–19h30. Samedi : une seule demi-journée 9h–13h (pas de journée).
+  // l'une de ces fenêtres. En semaine : matin 8h30-14h, après-midi 14h-19h30,
+  // journée 8h30-19h30. Samedi : une seule demi-journée 9h-13h (pas de journée).
   forfaitSlots: {
     0: { demi_journee: [], journee: [] },
     1: { demi_journee: [[510, 840], [840, 1170]], journee: [[510, 1170]] },
@@ -105,7 +105,7 @@ export const config = {
     // envoyer une réinitialisation de mot de passe ou une confirmation de résa.
     marketingReserve: process.env.MAIL_MARKETING_RESERVE ? Number(process.env.MAIL_MARKETING_RESERVE) : null,
   },
-  // Brevo (ex-Sendinblue) — fournisseur transactionnel hébergé en UE.
+  // Brevo (ex-Sendinblue) - fournisseur transactionnel hébergé en UE.
   // Secrets d'amorçage ; en exploitation ils sont saisis dans /admin/emails et
   // stockés CHIFFRÉS en base (cf. lib/crypto.js).
   brevo: {
@@ -113,7 +113,7 @@ export const config = {
     // Jeton de l'URL de webhook (authentifie les appels entrants de Brevo).
     webhookToken: process.env.BREVO_WEBHOOK_TOKEN || null,
   },
-  // Stripe — paiement en ligne (recharge de crédits par Checkout hébergé).
+  // Stripe - paiement en ligne (recharge de crédits par Checkout hébergé).
   // Secrets d'amorçage ; peuvent aussi être saisis en base (app_settings → `stripe`,
   // chiffrés via lib/crypto.js). La clé publiable n'est pas secrète. Tant que la
   // clé secrète ET le secret de webhook ne sont pas définis, le paiement en ligne
@@ -150,7 +150,7 @@ export const config = {
   // paramètres Node par défaut (N=2^14). Le palier supérieur recommandé
   // (N=2^17 → 128 Mio) est volontairement ÉCARTÉ ici : le conteneur cible ne
   // dispose que de 1 Gio de RAM et quelques connexions simultanées suffiraient
-  // à provoquer un OOM — le durcissement se retournerait en déni de service.
+  // à provoquer un OOM - le durcissement se retournerait en déni de service.
   // Relever SCRYPT_N si l'instance est redimensionnée.
   // `maxmem` doit suivre : la valeur par défaut de Node (32 Mio) est insuffisante.
   // Les empreintes produites avec les anciens paramètres restent vérifiables :
@@ -174,7 +174,7 @@ export const config = {
   cookieName: 'cowork_sid',
   isProd: process.env.NODE_ENV === 'production',
   // Secret de chiffrement au repos (AES-256-GCM) pour les données sensibles stockées
-  // en base — notamment le mot de passe SMTP (cf. lib/crypto.js + lib/settings.js).
+  // en base - notamment le mot de passe SMTP (cf. lib/crypto.js + lib/settings.js).
   // DOIT être défini en prod via l'env `APP_SECRET` (32+ octets aléatoires). À défaut,
   // une valeur aléatoire est générée à CHAQUE démarrage : les secrets déjà chiffrés
   // deviendraient illisibles → à ne pas laisser sans APP_SECRET en production.
@@ -228,7 +228,7 @@ export const config = {
     insecureTls: process.env.UNIFI_ACCESS_INSECURE_TLS === '1',
     tlsFingerprint: process.env.UNIFI_ACCESS_TLS_FINGERPRINT || null,
   },
-  // Mot de passe par défaut des comptes créés par l'admin — DOIT être défini via
+  // Mot de passe par défaut des comptes créés par l'admin - DOIT être défini via
   // l'env `DEFAULT_USER_PASSWORD` (secret du service). À défaut, on génère une
   // valeur aléatoire par démarrage (jamais de mot de passe faible en dur dans le repo).
   // L'admin voit la valeur dans l'écran de création de compte ; l'utilisateur est

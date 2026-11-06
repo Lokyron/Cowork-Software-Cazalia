@@ -9,7 +9,7 @@
  * d'un e-mail : plusieurs variables de gabarit proviennent de champs librement
  * modifiables (`client_name`, `first_name`, `space_name`, `note`…). Sans
  * échappement, un membre pourrait faire figurer un lien de sa composition dans
- * un e-mail transactionnel authentique émis par Cazalia — un vecteur de
+ * un e-mail transactionnel authentique émis par Cazalia - un vecteur de
  * hameçonnage particulièrement crédible (CWE-79 / CWE-116).
  *
  * L'échappement reste correct pour une valeur placée dans un attribut `href` :
@@ -31,7 +31,7 @@ export function escapeHtml(value) {
  * Nettoie une valeur destinée à un en-tête de message (sujet, nom d'expéditeur).
  *
  * Les retours chariot sont retirés : injectés dans un en-tête SMTP, ils
- * permettraient d'ajouter des en-têtes arbitraires — un `Bcc:` par exemple
+ * permettraient d'ajouter des en-têtes arbitraires - un `Bcc:` par exemple
  * (injection d'en-tête, CWE-93).
  *
  * @param {unknown} value Valeur à assainir.

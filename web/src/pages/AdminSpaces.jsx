@@ -81,7 +81,7 @@ export default function AdminSpaces() {
             <div className="field">
               <label>Catégorie <span className="muted" style={{ fontWeight: 400 }}>(tarification & réservabilité)</span></label>
               <select value={form.category} onChange={set('category')}>
-                <option value="">— Non catégorisé (non réservable en ligne) —</option>
+                <option value="">- Non catégorisé (non réservable en ligne) -</option>
                 <option value="OPEN_SPACE">Open Space (½-journée / journée)</option>
                 <option value="MEETING_ROOM">Salle de réunion (heure / forfaits)</option>
                 <option value="CONFIDENTIAL">Salle confidentielle (libre-service, non réservable)</option>
@@ -153,9 +153,9 @@ export default function AdminSpaces() {
                   <td>{s.exclusive ? 'Exclusive' : s.privatizable ? 'Focus' : 'Open-space'}</td>
                   <td>{s.capacity}</td>
                   <td className="muted seats">
-                    {centsToEur(s.price_per_hour_cents) || '—'}€
-                    {' · '}{s.price_half_day_cents != null ? `${s.price_half_day_cents / 100}€` : '—'}
-                    {' · '}{s.price_day_cents != null ? `${s.price_day_cents / 100}€` : '—'}
+                    {centsToEur(s.price_per_hour_cents) || '-'}€
+                    {' · '}{s.price_half_day_cents != null ? `${s.price_half_day_cents / 100}€` : '-'}
+                    {' · '}{s.price_day_cents != null ? `${s.price_day_cents / 100}€` : '-'}
                   </td>
                   <td><button className="outline small" onClick={() => startEdit(s)}>Éditer</button></td>
                 </tr>
@@ -171,7 +171,7 @@ export default function AdminSpaces() {
 /**
  * Champ « photo de l'espace » : aperçu, envoi (glisser-déposer ou sélection) et
  * retrait. La photo est réduite dans le navigateur, envoyée à la bibliothèque de
- * médias, et c'est son NOM DE FICHIER qui est enregistré avec l'espace — elle
+ * médias, et c'est son NOM DE FICHIER qui est enregistré avec l'espace - elle
  * n'est donc pas perdue à la prochaine mise à jour de l'application.
  */
 function SpacePhotoField({ photo, onChange, onError }) {

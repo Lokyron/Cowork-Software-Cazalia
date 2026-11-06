@@ -76,7 +76,7 @@ export default function Rejoindre() {
     return (
       <div className="auth-wrap" style={{ maxWidth: 540 }}>
         <div className="card" style={{ textAlign: 'center' }}>
-          <img src="/images/logo-cazalia.svg" className="login-logo" alt="CAZALIA — Coworking Boutonnet" />
+          <img src="/images/logo-cazalia.svg" className="login-logo" alt="CAZALIA - Coworking Boutonnet" />
           <h1 style={{ marginTop: 4 }}>Bienvenue chez Cazalia&nbsp;! 🎉</h1>
           <p className="subtitle">
             Votre compte est créé. Voici votre code pour profiter de votre journée découverte offerte.
@@ -95,7 +95,7 @@ export default function Rejoindre() {
           <p className="muted" style={{ fontSize: 14, textAlign: 'left', lineHeight: 1.6 }}>
             Pour l'utiliser, réservez comme d'habitude&nbsp;: choisissez la <strong>formule Journée</strong>,
             puis saisissez ce code dans le champ <em>Code promo</em> du panier avant de payer, pour que la
-            journée soit offerte. Ce code est valable <strong>uniquement sur la formule Journée</strong> —
+            journée soit offerte. Ce code est valable <strong>uniquement sur la formule Journée</strong> -
             les formules à l'heure et à la demi-journée n'y donnent pas droit.
           </p>
 
@@ -112,7 +112,7 @@ export default function Rejoindre() {
     <div className="auth-wrap" style={{ maxWidth: 540 }}>
       <div className="card">
         <BackLink to="/" label="Retour à l'accueil" />
-        <img src="/images/logo-cazalia.svg" className="login-logo" alt="CAZALIA — Coworking Boutonnet" />
+        <img src="/images/logo-cazalia.svg" className="login-logo" alt="CAZALIA - Coworking Boutonnet" />
         <h1 style={{ textAlign: 'center' }}>Rejoignez Cazalia. Nous vous offrons une journée gratuite.</h1>
         <p className="subtitle" style={{ textAlign: 'center' }}>
           Et si vous changiez d'environnement de travail le temps d'une journée&nbsp;? Inscrivez-vous
@@ -144,7 +144,7 @@ export default function Rejoindre() {
           <div className="field">
             <label>Vous êtes… <span className="muted" style={{ fontWeight: 400 }}>(facultatif)</span></label>
             <select value={form.activity} onChange={set('activity')}>
-              <option value="">— Je préfère ne pas préciser</option>
+              <option value="">- Je préfère ne pas préciser</option>
               {ACTIVITIES.map(([v, label]) => (
                 <option key={v} value={v}>{label}</option>
               ))}

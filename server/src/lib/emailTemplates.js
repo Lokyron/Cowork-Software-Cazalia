@@ -11,7 +11,7 @@ export const TEMPLATE_VARIABLES = [
   ['first_name', 'Prénom du client'],
   ['space_name', "Nom de l'espace réservé"],
   ['booking_date', 'Date de la réservation (ex. lun. 14 oct. 2026)'],
-  ['booking_time', 'Plage horaire (ex. 09:00 – 12:00)'],
+  ['booking_time', 'Plage horaire (ex. 09:00 - 12:00)'],
   ['credits_cost', 'Crédits consommés'],
   ['wifi_voucher', 'Code voucher Wi-Fi'],
   ['access_pin', "Code d'accès porte (PIN)"],
@@ -51,7 +51,7 @@ export function wrapHtml({ title, content, siteName = 'Cazalia', logoUrl = '' })
           ${content}
         </td></tr>
         <tr><td style="padding:18px 28px;background:#f4f6f9;color:#5b6577;font-size:12px;line-height:1.6;">
-          ${safeSite} — Espace de coworking · Boutonnet, Montpellier<br>
+          ${safeSite} - Espace de coworking · Boutonnet, Montpellier<br>
           Cet e-mail vous est envoyé suite à votre activité sur votre espace client.
         </td></tr>
       </table>
@@ -105,7 +105,7 @@ export const DEFAULT_TEMPLATES = [
   {
     code: 'booking_confirmation',
     label: 'Confirmation de réservation',
-    subject: 'Votre réservation {{space_name}} — {{booking_date}}',
+    subject: 'Votre réservation {{space_name}} - {{booking_date}}',
     body_html: `
 <h1 style="margin:0 0 12px;font-size:22px;">Réservation confirmée ✅</h1>
 <p style="margin:0 0 16px;line-height:1.6;">Bonjour {{first_name}},</p>
@@ -171,7 +171,7 @@ ${ctaStack('{{dashboard_url}}', 'Voir ma réservation')}`,
   {
     code: 'manual',
     label: 'Message ponctuel (envoi manuel)',
-    subject: '{{site_name}} — information',
+    subject: '{{site_name}} - information',
     body_html: `
 <p style="margin:0 0 16px;line-height:1.6;">Bonjour {{first_name}},</p>
 <p style="margin:0 0 16px;line-height:1.6;">[Votre message ici]</p>

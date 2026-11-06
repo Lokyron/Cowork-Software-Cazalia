@@ -5,7 +5,7 @@ import { requireAuth } from '../middleware.js';
 export const paymentsRouter = Router();
 
 /**
- * GET /api/payments/status — indique si le paiement en ligne (Stripe) est actif.
+ * GET /api/payments/status - indique si le paiement en ligne (Stripe) est actif.
  * Consommé par le front pour autoriser (ou non) la réservation payante. L'achat
  * de « crédits » n'existe plus : on paie chaque réservation en euros à la résa.
  *

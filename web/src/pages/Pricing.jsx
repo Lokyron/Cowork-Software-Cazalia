@@ -40,7 +40,7 @@ const COMPARE = [
   ['Open Space', '12 € ½j · 20 € j', '12 j/mois inclus', 'Illimité', 'Illimité'],
   ['Salle de réunion', '20 €/h · 35 € ½j · 50 € j', 'Tarif standard', '−50 %', 'Illimitée incluse'],
   ['Salle confidentielle', 'Libre-service', 'Libre-service', 'Libre-service', 'Libre-service'],
-  ['Abonnement mensuel', '—', '160 €', '220 €', '300 €'],
+  ['Abonnement mensuel', '-', '160 €', '220 €', '300 €'],
 ];
 
 // Univers du sélecteur segmenté. L'ordre fixe l'ordre d'affichage et la position
@@ -65,7 +65,7 @@ export default function Pricing() {
   // Retour d'un Checkout d'abonnement annulé.
   useEffect(() => {
     if (searchParams.get('abonnement') === 'cancel') {
-      setFeedback({ type: 'error', text: "Souscription annulée — aucun montant n'a été prélevé." });
+      setFeedback({ type: 'error', text: "Souscription annulée - aucun montant n'a été prélevé." });
       searchParams.delete('abonnement'); setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -153,7 +153,7 @@ export default function Pricing() {
       {tab === 'ponctuel' && (
       <div className="card ponctuel-card">
         <div>
-          <h3 style={{ marginTop: 0 }}>Accès ponctuel — sans abonnement</h3>
+          <h3 style={{ marginTop: 0 }}>Accès ponctuel - sans abonnement</h3>
           <p className="muted" style={{ margin: '4px 0 10px' }}>Réservez à la séance, payez en ligne au moment de réserver.</p>
           <div className="ponctuel-grid">
             <div><strong>Open Space</strong><div className="muted">12 € la demi-journée · 20 € la journée</div></div>
@@ -170,7 +170,7 @@ export default function Pricing() {
       <div className="card bureau-card">
         <div>
           <span className="badge grey">Entreprises & indépendants</span>
-          <h3 style={{ margin: '8px 0 4px' }}>Bureau Privé — Longue durée</h3>
+          <h3 style={{ margin: '8px 0 4px' }}>Bureau Privé - Longue durée</h3>
           <p className="muted" style={{ margin: '0 0 10px' }}>Un espace privatisé, un contrat sur mesure au trimestre ou à l'année.</p>
           <ul className="features">
             <li>Espace entièrement privatisé</li>

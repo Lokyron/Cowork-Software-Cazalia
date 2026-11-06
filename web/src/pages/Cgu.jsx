@@ -3,12 +3,12 @@ import BackLink from '../components/BackLink.jsx';
 // Conditions Générales d'Utilisation + mentions légales + politique de confidentialité (RGPD).
 // Mentions légales renseignées (CAZALIA, SIREN 109 422 121), contact contact@cazalia.fr.
 // Reste à compléter : coordonnées du médiateur de la consommation (art. 24) une fois
-// l'adhésion souscrite — cf. docs/juridique/AUDIT-JURIDIQUE.md §5.6.
+// l'adhésion souscrite - cf. docs/juridique/AUDIT-JURIDIQUE.md §5.6.
 export default function Cgu() {
   return (
     <div className="legal">
       <BackLink to="/" label="Retour à l'accueil" />
-      <img src="/images/logo-cazalia.svg" className="legal-logo" alt="CAZALIA — Coworking Boutonnet" />
+      <img src="/images/logo-cazalia.svg" className="legal-logo" alt="CAZALIA - Coworking Boutonnet" />
       <h1>Conditions générales d'utilisation</h1>
       <p className="muted">Dernière mise à jour : novembre 2026.</p>
 
@@ -16,7 +16,7 @@ export default function Cgu() {
         Les présentes conditions générales d'utilisation (les « <strong>CGU</strong> ») regroupent
         également les <strong>mentions légales</strong> et la <strong>politique de confidentialité</strong>
         du service. Elles constituent un document unique régissant l'ensemble de la relation entre
-        CAZALIA — Coworking Boutonnet et ses utilisateurs.
+        CAZALIA - Coworking Boutonnet et ses utilisateurs.
       </p>
 
       <nav className="legal-toc" aria-label="Sommaire">
@@ -92,7 +92,7 @@ export default function Cgu() {
       <p>
         Directrice de la publication : <strong>Lucie Cazanave Pin</strong>.
         Contact : <a href="mailto:contact@cazalia.fr">contact@cazalia.fr</a>
-        {' '}— téléphone : <a href="tel:+33766211483">07&nbsp;66&nbsp;21&nbsp;14&nbsp;83</a>.
+        {' '}- téléphone : <a href="tel:+33766211483">07&nbsp;66&nbsp;21&nbsp;14&nbsp;83</a>.
       </p>
       <p>
         Le Service est hébergé par <strong>CAZALIA</strong> en auto-hébergement, dans ses locaux au
@@ -159,7 +159,7 @@ export default function Cgu() {
         Les réservations sont décomptées d'un solde de <strong>crédits</strong>. Les crédits sont
         rechargeables. Ils <strong>n'ont pas de valeur monétaire</strong>, ne sont ni remboursables en
         numéraire ni cessibles ou transférables à un tiers, et sont utilisables exclusivement au sein de
-        CAZALIA — Coworking Boutonnet.
+        CAZALIA - Coworking Boutonnet.
       </p>
       <p>
         Les tarifs applicables (grille d'achat de crédits et coût en crédits des espaces) sont ceux
@@ -385,7 +385,7 @@ export default function Cgu() {
         suivant&nbsp;:
       </p>
       <p>
-        <strong>[Médiateur de la consommation — à compléter : nom, adresse postale et site internet]</strong>
+        <strong>[Médiateur de la consommation - à compléter : nom, adresse postale et site internet]</strong>
         {' '}<em>(dispositif de médiation en cours de souscription ; coordonnées communiquées ici dès
         finalisation).</em>
       </p>

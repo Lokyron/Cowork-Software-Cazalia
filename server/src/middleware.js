@@ -99,7 +99,7 @@ const CODE_TO_STATUS = {
 /**
  * Traduit une erreur métier en réponse HTTP.
  *
- * Seul le CODE d'erreur est renvoyé au client — jamais `err.message` ni la pile
+ * Seul le CODE d'erreur est renvoyé au client - jamais `err.message` ni la pile
  * d'appels, qui exposeraient chemins de fichiers, requêtes SQL et versions
  * (CWE-209). Un code inconnu retombe sur `fallbackStatus`.
  *

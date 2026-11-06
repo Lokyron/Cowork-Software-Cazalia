@@ -2,7 +2,7 @@ import { db } from '../db.js';
 import { topUp } from './wallet.js';
 
 // Achats de crédits Stripe : enregistrement de la session, puis crédit du
-// portefeuille à la confirmation de paiement — une seule fois (idempotence).
+// portefeuille à la confirmation de paiement - une seule fois (idempotence).
 
 const insertPending = db.prepare(
   `INSERT INTO credit_purchases (user_id, session_id, credits, amount_eur_cents, status)

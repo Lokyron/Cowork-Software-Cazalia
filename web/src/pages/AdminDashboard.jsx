@@ -72,7 +72,7 @@ export default function AdminDashboard() {
       {k.pending_orders > 0 && (
         <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
           ⚠️ <strong>{k.pending_orders}</strong> paiement{k.pending_orders > 1 ? 's' : ''} en attente depuis &gt; 15 min
-          (webhook non abouti ?) — à réconcilier.
+          (webhook non abouti ?) - à réconcilier.
         </p>
       )}
       {k.credits_outstanding !== 0 && (
@@ -84,7 +84,7 @@ export default function AdminDashboard() {
       {/* Réservations 14 j + occupation par espace */}
       <div className="dash-row2" style={{ marginTop: 16 }}>
         <Link className="card" to="/admin/planning" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <h2>Réservations — 14 derniers jours</h2>
+          <h2>Réservations - 14 derniers jours</h2>
           <div className="bars">
             {d.bookings14.map((b, i) => (
               <div key={i} className="bar-wrap" title={`${b.count} réservation(s)`}>

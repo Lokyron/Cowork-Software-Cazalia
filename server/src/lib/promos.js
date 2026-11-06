@@ -160,7 +160,7 @@ export function validatePromoForCheckout({ code, userId, items }) {
 /**
  * Calcule la remise (centimes) qu'un code applique à un panier, de la même façon
  * que Stripe : la réduction ne porte que sur les lignes éligibles (restriction de
- * formule). POUR AFFICHAGE UNIQUEMENT — Stripe reste la référence au paiement, et
+ * formule). POUR AFFICHAGE UNIQUEMENT - Stripe reste la référence au paiement, et
  * ce calcul n'enregistre aucune utilisation.
  *
  * @param {object} promo Ligne `promo_codes`.

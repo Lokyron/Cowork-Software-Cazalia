@@ -1,16 +1,16 @@
 import { Link } from 'react-router-dom';
 import BackLink from '../components/BackLink.jsx';
 
-// Conditions Générales de Vente (CGV) — distinctes des CGU (usage du Service).
+// Conditions Générales de Vente (CGV) - distinctes des CGU (usage du Service).
 // Elles encadrent l'ACHAT de crédits et la RÉSERVATION d'espaces, pour les
 // consommateurs (B2C) comme pour les professionnels (B2B).
 // À compléter : coordonnées du médiateur de la consommation (art. 11) une fois
-// l'adhésion souscrite — cf. docs/juridique/AUDIT-JURIDIQUE.md §5.6.
+// l'adhésion souscrite - cf. docs/juridique/AUDIT-JURIDIQUE.md §5.6.
 export default function Cgv() {
   return (
     <div className="legal">
       <BackLink to="/" label="Retour à l'accueil" />
-      <img src="/images/logo-cazalia.svg" className="legal-logo" alt="CAZALIA — Coworking Boutonnet" />
+      <img src="/images/logo-cazalia.svg" className="legal-logo" alt="CAZALIA - Coworking Boutonnet" />
       <h1>Conditions générales de vente</h1>
       <p className="muted">Dernière mise à jour : novembre 2026.</p>
 
@@ -45,7 +45,7 @@ export default function Cgv() {
         <strong>CAZALIA</strong>, entreprise individuelle exploitée par <strong>Lucie Cazanave Pin</strong>,
         SIREN <strong>109&nbsp;422&nbsp;121</strong> (R.C.S. Montpellier), siège&nbsp;: 99 rue du Faubourg
         Boutonnet, 34090 Montpellier. TVA non applicable, article 293&nbsp;B du Code général des impôts.
-        Contact&nbsp;: <a href="mailto:contact@cazalia.fr">contact@cazalia.fr</a> —{' '}
+        Contact&nbsp;: <a href="mailto:contact@cazalia.fr">contact@cazalia.fr</a> -{' '}
         <a href="tel:+33766211483">07&nbsp;66&nbsp;21&nbsp;14&nbsp;83</a>.
       </p>
 
@@ -167,7 +167,7 @@ export default function Cgv() {
         peut recourir gratuitement à un médiateur de la consommation&nbsp;:
       </p>
       <p>
-        <strong>[Médiateur de la consommation — à compléter : nom, adresse postale et site internet]</strong>
+        <strong>[Médiateur de la consommation - à compléter : nom, adresse postale et site internet]</strong>
         {' '}<em>(dispositif en cours de souscription).</em>
       </p>
       <p>

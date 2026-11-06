@@ -1,4 +1,4 @@
-// Contenu descriptif par défaut d'un espace (INVENTÉ — à remplacer par les vraies
+// Contenu descriptif par défaut d'un espace (INVENTÉ - à remplacer par les vraies
 // informations depuis l'admin Espaces). `amenities` = une prestation par ligne.
 
 const ZONE = {

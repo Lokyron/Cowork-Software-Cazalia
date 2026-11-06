@@ -1,4 +1,4 @@
-// Intégration Brevo (ex-Sendinblue) — envoi transactionnel par API HTTP.
+// Intégration Brevo (ex-Sendinblue) - envoi transactionnel par API HTTP.
 //
 //   Base      : https://api.brevo.com/v3
 //   Auth      : en-tête `api-key`
@@ -27,7 +27,7 @@ const BASE = 'https://api.brevo.com/v3';
  *
  * Volontairement SANS `opened` ni `click` : le suivi d'ouverture implique un
  * pixel espion et un traitement de données de comportement qui demanderaient une
- * base légale et une mention dans les CGU — pour un usage transactionnel, il
+ * base légale et une mention dans les CGU - pour un usage transactionnel, il
  * n'apporte rien. On ne collecte que ce qui sert à diagnostiquer un non-reçu.
  *
  * @type {string[]}

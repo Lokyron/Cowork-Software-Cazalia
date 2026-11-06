@@ -23,13 +23,13 @@ export const mediaRouter = Router();
 
 // ── Public ───────────────────────────────────────────────────────────────────
 /**
- * GET /api/media — photos publiées (carrousel, bandeau, présentation).
+ * GET /api/media - photos publiées (carrousel, bandeau, présentation).
  * @returns 200 `{carousel: string[], hero: string|null, presentation: string|null}`
  */
 mediaRouter.get('/media', (_req, res) => res.json(getMediaUrls()));
 
 /**
- * GET /api/gallery — ancienne forme, conservée pour compatibilité.
+ * GET /api/gallery - ancienne forme, conservée pour compatibilité.
  * @returns 200 `{images: string[]}`
  */
 mediaRouter.get('/gallery', (_req, res) => res.json({ images: getMediaUrls().carousel }));
@@ -66,7 +66,7 @@ const detachFromSpaces = (file) => {
 };
 
 /**
- * GET /api/admin/media — bibliothèque complète (noms de fichiers inclus).
+ * GET /api/admin/media - bibliothèque complète (noms de fichiers inclus).
  * @returns 200 `{files, carousel, hero, presentation, spaces}`
  */
 adminMediaRouter.get('/', (_req, res) => {
@@ -125,7 +125,7 @@ adminMediaRouter.post(
 );
 
 /**
- * PUT /api/admin/media/carousel — enregistre l'ordre d'affichage.
+ * PUT /api/admin/media/carousel - enregistre l'ordre d'affichage.
  * @returns 200 `{ok, carousel}`
  */
 adminMediaRouter.put('/carousel', (req, res) => {
@@ -136,7 +136,7 @@ adminMediaRouter.put('/carousel', (req, res) => {
 });
 
 /**
- * PUT /api/admin/media/slot — affecte (ou vide) un emplacement nommé.
+ * PUT /api/admin/media/slot - affecte (ou vide) un emplacement nommé.
  * Corps : `{slot: 'hero'|'presentation', file: string|null}`.
  * @returns 200 `{ok, hero, presentation}` · 400 `EMPLACEMENT_INCONNU` / `FICHIER_INTROUVABLE`
  */
@@ -159,7 +159,7 @@ adminMediaRouter.put('/slot', (req, res) => {
 });
 
 /**
- * DELETE /api/admin/media/:file — supprime le fichier et toutes ses affectations
+ * DELETE /api/admin/media/:file - supprime le fichier et toutes ses affectations
  * (carrousel, emplacements nommés, photo d'un espace).
  * @returns 200 `{ok}` · 404 `FICHIER_INTROUVABLE`
  */

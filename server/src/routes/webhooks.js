@@ -1,8 +1,8 @@
-// Webhooks entrants des fournisseurs d'e-mail — enrichissement du journal avec
+// Webhooks entrants des fournisseurs d'e-mail - enrichissement du journal avec
 // le statut RÉEL de délivrabilité (remis, rejeté, classé spam, désabonné).
 //
 // Sans ces événements, `email_log` ne dit qu'une chose : « le fournisseur a
-// accepté le message ». C'est insuffisant pour diagnostiquer le cas qui compte —
+// accepté le message ». C'est insuffisant pour diagnostiquer le cas qui compte -
 // un client qui n'a jamais reçu son lien de réinitialisation.
 //
 // AUTHENTIFICATION : la route est publique (Brevo n'offre ni signature HMAC ni
@@ -89,7 +89,7 @@ function applyEvent(ev) {
 }
 
 /**
- * POST /api/webhooks/brevo/:token — événements de délivrabilité Brevo.
+ * POST /api/webhooks/brevo/:token - événements de délivrabilité Brevo.
  *
  * Brevo poste soit un objet, soit un tableau d'événements. La réponse est
  * toujours 204 dès que le jeton est valide, même pour un message inconnu :

@@ -34,7 +34,7 @@ function sampleVars() {
   const a = getArrival();
   return {
     client_name: 'Marie Dupont', first_name: 'Marie', space_name: 'Salle Focus',
-    booking_date: 'lun. 14 oct. 2026', booking_time: '09:00 – 12:00', credits_cost: 6,
+    booking_date: 'lun. 14 oct. 2026', booking_time: '09:00 - 12:00', credits_cost: 6,
     wifi_voucher: '12345-67890', wifi_ssid: a.wifi_ssid, arrival_instructions: a.instructions,
     refund_info: 'Vos 6 crédits ont été recrédités sur votre compte.',
     calendar_url: 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=Cazalia',
@@ -51,11 +51,11 @@ function mailSettings() {
 }
 
 /**
- * GET /api/admin/email/settings — fournisseur, secrets (présence seulement),
+ * GET /api/admin/email/settings - fournisseur, secrets (présence seulement),
  * quota du jour, réglages SMTP et consignes d'arrivée.
  *
  * Aucun secret ne sort : ni le mot de passe SMTP ni la clé d'API Brevo ne sont
- * renvoyés — seuls des booléens `has_pass` / `has_api_key` en signalent
+ * renvoyés - seuls des booléens `has_pass` / `has_api_key` en signalent
  * l'existence (CWE-200).
  *
  * @returns 200 `{mail, smtp, brevo, quota, arrival, variables}`
@@ -72,7 +72,7 @@ emailsRouter.get('/settings', (_req, res) => {
 });
 
 /**
- * PUT /api/admin/email/settings — met à jour fournisseur, SMTP, Brevo et/ou
+ * PUT /api/admin/email/settings - met à jour fournisseur, SMTP, Brevo et/ou
  * consignes d'arrivée.
  *
  * Les secrets soumis sont chiffrés au repos (AES-256-GCM) avant stockage ; un
@@ -97,7 +97,7 @@ emailsRouter.put('/settings', (req, res) => {
 });
 
 /**
- * POST /api/admin/email/test — envoie un message de test.
+ * POST /api/admin/email/test - envoie un message de test.
  * Le destinataire est FORCÉ à l'adresse de l'administrateur connecté : la route
  * ne peut pas servir de relais pour envoyer un message arbitraire à un tiers.
  *
@@ -109,7 +109,7 @@ emailsRouter.post('/test', async (req, res) => {
 });
 
 /**
- * POST /api/admin/email/brevo/webhook — (re)génère le jeton du webhook de
+ * POST /api/admin/email/brevo/webhook - (re)génère le jeton du webhook de
  * délivrabilité et tente de le déclarer chez Brevo.
  *
  * L'URL complète, jeton inclus, n'est renvoyée QU'ICI et une seule fois :
@@ -149,7 +149,7 @@ emailsRouter.post('/brevo/webhook', async (req, res) => {
 
 // ── Templates ────────────────────────────────────────────────────────────────
 /**
- * GET /api/admin/email/templates — liste des gabarits (sans le corps HTML).
+ * GET /api/admin/email/templates - liste des gabarits (sans le corps HTML).
  * @returns 200 `{templates}`
  */
 emailsRouter.get('/templates', (_req, res) => {
@@ -157,7 +157,7 @@ emailsRouter.get('/templates', (_req, res) => {
 });
 
 /**
- * GET /api/admin/email/templates/:code — gabarit complet.
+ * GET /api/admin/email/templates/:code - gabarit complet.
  * @returns 200 `{template}` · 404 `TEMPLATE_INTROUVABLE`
  */
 emailsRouter.get('/templates/:code', (req, res) => {
@@ -167,7 +167,7 @@ emailsRouter.get('/templates/:code', (req, res) => {
 });
 
 /**
- * PUT /api/admin/email/templates/:code — met à jour un gabarit existant.
+ * PUT /api/admin/email/templates/:code - met à jour un gabarit existant.
  *
  * Le corps HTML est enregistré tel quel : le gabarit est un contenu de
  * CONFIANCE, rédigé par l'administrateur. Les variables qui y sont interpolées,
@@ -188,7 +188,7 @@ emailsRouter.put('/templates/:code', (req, res) => {
 });
 
 /**
- * POST /api/admin/email/preview — rend un gabarit avec des variables factices.
+ * POST /api/admin/email/preview - rend un gabarit avec des variables factices.
  * Aucun envoi n'est déclenché.
  *
  * @returns 200 `{subject, html}` · 404 `TEMPLATE_INTROUVABLE`
@@ -203,7 +203,7 @@ emailsRouter.post('/preview', (req, res) => {
 });
 
 /**
- * POST /api/admin/email/send — envoi manuel à un membre, une sélection ou tous.
+ * POST /api/admin/email/send - envoi manuel à un membre, une sélection ou tous.
  *
  * Corps attendu : `{code?, subject?, body_html?, target: {type:'user'|'users'|'all',
  * user_id?, user_ids?}}`. Les destinataires sont résolus DEPUIS LA BASE à partir
@@ -275,9 +275,9 @@ async function sendCustomToUser(userId, subject, bodyHtml) {
 
 // ── Journal ──────────────────────────────────────────────────────────────────
 /**
- * GET /api/admin/email/log — 100 derniers envois.
+ * GET /api/admin/email/log - 100 derniers envois.
  * Le journal ne contient ni corps de message ni pièce jointe : uniquement le
- * destinataire, le gabarit, le sujet, le fournisseur et le statut — ce dernier
+ * destinataire, le gabarit, le sujet, le fournisseur et le statut - ce dernier
  * étant enrichi par les webhooks de délivrabilité (remis, rejeté, spam…).
  *
  * L'identifiant de message du fournisseur n'est PAS exposé : il ne sert qu'au

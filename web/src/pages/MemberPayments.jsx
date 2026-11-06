@@ -11,7 +11,7 @@ function StatusBadge({ status }) {
   return <span className="badge green">Payé</span>;
 }
 
-// Historique des paiements en ligne du membre (audit §1 — transactions Stripe).
+// Historique des paiements en ligne du membre (audit §1 - transactions Stripe).
 // Les montants et statuts proviennent des commandes de réservation (source de
 // vérité des encaissements) ; le reçu renvoie vers le justificatif Stripe.
 export default function MemberPayments() {
@@ -63,7 +63,7 @@ export default function MemberPayments() {
                   <tr key={t.id}>
                     <td>{fmtDateTime(t.created_at)}</td>
                     <td>
-                      {t.spaces || '—'}
+                      {t.spaces || '-'}
                       {t.reservations_count > 1 && <span className="muted"> · {t.reservations_count} créneaux</span>}
                     </td>
                     <td>
@@ -76,7 +76,7 @@ export default function MemberPayments() {
                     <td style={{ textAlign: 'right' }}>
                       {t.receipt_url
                         ? <a href={t.receipt_url} target="_blank" rel="noopener noreferrer">Voir le reçu ↗</a>
-                        : <span className="muted">—</span>}
+                        : <span className="muted">-</span>}
                     </td>
                   </tr>
                 ))}

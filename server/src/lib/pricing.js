@@ -68,7 +68,7 @@ export function committedQuotaDays(userId) {
 }
 
 // Charge le profil de tarification d'un utilisateur (lecture autoritaire du
-// quota/abonnement en base — ne jamais se fier au snapshot de session pour le
+// quota/abonnement en base - ne jamais se fier au snapshot de session pour le
 // décompte). Renvoie un objet minimal pour `effectivePricing`.
 const pricingUserStmt = db.prepare(
   `SELECT id, role, subscription_tier, subscription_status, open_space_quota_used

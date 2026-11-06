@@ -12,7 +12,7 @@ import { requireAuth, sendBusinessError } from '../middleware.js';
 export const reservationsRouter = Router();
 
 /**
- * POST /api/reservations — démarre la réservation+PAIEMENT d'un créneau pour le
+ * POST /api/reservations - démarre la réservation+PAIEMENT d'un créneau pour le
  * membre connecté : pose un verrou puis crée une session Stripe Checkout. La
  * réservation réelle est créée à la confirmation du paiement (webhook). On
  * renvoie l'URL de paiement vers laquelle le client est redirigé.
@@ -47,7 +47,7 @@ reservationsRouter.post('/reservations', requireAuth, async (req, res) => {
 });
 
 /**
- * POST /api/reservations/batch — réserve+paie plusieurs créneaux en un seul
+ * POST /api/reservations/batch - réserve+paie plusieurs créneaux en un seul
  * paiement : pose un verrou par créneau puis crée une session Stripe du panier.
  *
  * Comme `/reservations`, un utilisateur de rôle `admin` n'est jamais facturé :
@@ -75,7 +75,7 @@ reservationsRouter.post('/reservations/batch', requireAuth, async (req, res) => 
 });
 
 /**
- * GET /api/reservations/me — réservations de l'utilisateur connecté.
+ * GET /api/reservations/me - réservations de l'utilisateur connecté.
  * `processing` = paiements en cours de traitement (commande payée côté Stripe
  * dont le webhook n'a pas encore créé la réservation). Permet au front d'afficher
  * un bandeau « paiement en cours » et de ne pas laisser croire à une résa perdue.
@@ -90,7 +90,7 @@ reservationsRouter.get('/reservations/me', requireAuth, (req, res) => {
 });
 
 /**
- * GET /api/transactions/me — historique des paiements en ligne de l'appelant.
+ * GET /api/transactions/me - historique des paiements en ligne de l'appelant.
  * L'identité vient de la SESSION (pas de paramètre) : aucune transaction d'un
  * autre membre n'est accessible.
  *
@@ -101,7 +101,7 @@ reservationsRouter.get('/transactions/me', requireAuth, (req, res) => {
 });
 
 /**
- * DELETE /api/reservations/:id — annule une réservation. La propriété est
+ * DELETE /api/reservations/:id - annule une réservation. La propriété est
  * contrôlée dans `cancelReservation` (anti-IDOR). Si un remboursement est dû
  * (annulation dans les délais d'une résa payée en ligne), l'admin est notifié
  * par e-mail pour l'effectuer dans Stripe (pas de remboursement automatique).

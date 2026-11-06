@@ -1,4 +1,4 @@
-// Panier de réservation — côté client (pour soi-même).
+// Panier de réservation - côté client (pour soi-même).
 import { Router } from 'express';
 import { config } from '../config.js';
 import { addHold, listCart, removeHold, startBookingCheckout, checkoutFree, previewPromo } from '../lib/cart.js';
@@ -8,7 +8,7 @@ import { requireAuth, sendBusinessError } from '../middleware.js';
 export const cartRouter = Router();
 
 /**
- * GET /api/cart — panier de l'utilisateur connecté.
+ * GET /api/cart - panier de l'utilisateur connecté.
  * @returns 200 `{holds, total, count}` · 401 `NON_AUTHENTIFIE`
  */
 cartRouter.get('/cart', requireAuth, (req, res) => {
@@ -16,7 +16,7 @@ cartRouter.get('/cart', requireAuth, (req, res) => {
 });
 
 /**
- * POST /api/cart — ajoute un créneau au panier (verrou de 10 min).
+ * POST /api/cart - ajoute un créneau au panier (verrou de 10 min).
  * Aucune option de contournement n'est transmise : horaires et capacité
  * s'appliquent pleinement côté membre. Le `tarif_type` choisi est pris en compte.
  *
@@ -34,7 +34,7 @@ cartRouter.post('/cart', requireAuth, (req, res) => {
 });
 
 /**
- * DELETE /api/cart/:id — retire une ligne du panier.
+ * DELETE /api/cart/:id - retire une ligne du panier.
  * @returns 200 `{ok, cart}` · 403 `INTERDIT`
  */
 cartRouter.delete('/cart/:id', requireAuth, (req, res) => {
@@ -43,7 +43,7 @@ cartRouter.delete('/cart/:id', requireAuth, (req, res) => {
 });
 
 /**
- * POST /api/cart/promo/preview — prévisualise l'effet d'un code sur le panier
+ * POST /api/cart/promo/preview - prévisualise l'effet d'un code sur le panier
  * (remise et nouveau total) SANS rien enregistrer. Le code n'est comptabilisé
  * comme utilisé qu'à la confirmation du paiement (webhook).
  *
@@ -59,7 +59,7 @@ cartRouter.post('/cart/promo/preview', requireAuth, (req, res) => {
 });
 
 /**
- * POST /api/cart/checkout — valide le panier de l'utilisateur connecté.
+ * POST /api/cart/checkout - valide le panier de l'utilisateur connecté.
  *   • Membre : lance le PAIEMENT CB (session Stripe) ; les réservations sont
  *     créées à la confirmation du paiement (webhook). On renvoie l'URL Stripe.
  *   • Admin : réservation GRATUITE immédiate (un admin n'est jamais facturé,

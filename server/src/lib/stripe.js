@@ -1,4 +1,4 @@
-// Intégration Stripe — recharge de crédits par Checkout hébergé.
+// Intégration Stripe - recharge de crédits par Checkout hébergé.
 //
 // Choix d'architecture :
 //   - Checkout HÉBERGÉ : la page de paiement est servie par Stripe, aucune donnée
@@ -53,7 +53,7 @@ export async function ensureFormuleProducts(stripe) {
   const ids = {};
   for (const [key, name] of Object.entries(FORMULE_NAMES)) {
     const product = await stripe.products.create({
-      name: `Cazalia — ${name}`,
+      name: `Cazalia - ${name}`,
       metadata: { formule: key },
     });
     ids[key] = product.id;
@@ -97,7 +97,7 @@ export async function createCheckoutSession({ userId, pack, baseUrl }) {
       price_data: {
         currency: 'eur',
         unit_amount: pack.eur_cents,
-        product_data: { name: `CAZALIA — ${pack.label}`, description: `${pack.credits} crédits de réservation` },
+        product_data: { name: `CAZALIA - ${pack.label}`, description: `${pack.credits} crédits de réservation` },
       },
     }],
     success_url: `${base}/mon-espace?recharge=success`,
@@ -107,7 +107,7 @@ export async function createCheckoutSession({ userId, pack, baseUrl }) {
 
 /**
  * Crée une session Checkout pour PAYER une réservation (ou un panier de créneaux).
- * Une ligne par créneau ; le crédit du portefeuille n'existe plus — on paie le
+ * Une ligne par créneau ; le crédit du portefeuille n'existe plus - on paie le
  * montant réel en euros. La réservation est créée au webhook (cf. lib/orders.js).
  *
  * @param {object} params
@@ -239,7 +239,7 @@ export async function retrieveSubscription(subscriptionId) {
 /**
  * Récupère l'URL du reçu Stripe (hosted receipt) associé à un PaymentIntent.
  * Best-effort : renvoie `null` si Stripe n'est pas configuré, si le PI est absent
- * ou si l'appel échoue — la capture du reçu ne doit JAMAIS faire échouer le flux
+ * ou si l'appel échoue - la capture du reçu ne doit JAMAIS faire échouer le flux
  * de confirmation de réservation.
  *
  * @param {string|null} paymentIntentId Identifiant du PaymentIntent.

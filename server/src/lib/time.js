@@ -69,7 +69,7 @@ const _utcPartsFmt = new Intl.DateTimeFormat('en-GB', {
  * Début du jour civil de Paris (minuit local), exprimé en UTC.
  *
  * Sert à compter les envois « du jour » : les horodatages du journal sont en
- * UTC, les comparer à `date('now')` compterait le jour UTC — décalé d'une à deux
+ * UTC, les comparer à `date('now')` compterait le jour UTC - décalé d'une à deux
  * heures, donc faux en soirée (un envoi de 23 h 30 serait compté le lendemain).
  *
  * @param {Date} [ref] Instant de référence (injectable pour les tests).

@@ -3,7 +3,7 @@
 // ⚠️ Ce contrôle est un CONFORT D'INTERFACE, pas une protection : il donne un
 // retour immédiat au lieu d'un aller-retour serveur. La règle qui fait foi est
 // celle de `server/src/lib/passwords.js` (`assertStrongPassword`), appliquée à
-// chaque requête — un client modifié ne peut donc rien contourner.
+// chaque requête - un client modifié ne peut donc rien contourner.
 // Les deux implémentations doivent rester alignées.
 
 export const PASSWORD_MIN_LENGTH = 10;

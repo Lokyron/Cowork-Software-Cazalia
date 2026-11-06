@@ -148,7 +148,7 @@ export default function Landing() {
         <div className="info-grid">
           <div className="card info-card">
             <h3>Horaires</h3>
-            <p>Lun – Ven : 8h30 – 19h30<br />Samedi : 9h – 13h<br />Dimanche : fermé</p>
+            <p>Lun - Ven : 8h30 - 19h30<br />Samedi : 9h - 13h<br />Dimanche : fermé</p>
           </div>
           <div className="card info-card">
             <h3>Adresse</h3>
@@ -188,7 +188,7 @@ export default function Landing() {
           <Link to="/cgu#confidentialite">Confidentialité</Link>
           <Link to="/reclamation">Réclamation</Link>
         </nav>
-        <span className="muted">© {new Date().getFullYear()} — Espace de co-working</span>
+        <span className="muted">© {new Date().getFullYear()} - Espace de co-working</span>
       </footer>
 
       {openSpace && (

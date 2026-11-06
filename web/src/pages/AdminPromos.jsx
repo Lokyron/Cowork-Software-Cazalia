@@ -12,9 +12,9 @@ const TARIF_LABEL = {
 };
 
 const fmtDate = (iso) => {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const d = new Date(String(iso).replace(' ', 'T'));
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' });
+  return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' });
 };
 const fmtReduction = (p) =>
   p.reduction_type === 'percent' ? `-${p.reduction_value} %` : `-${(p.reduction_value / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`;
@@ -158,7 +158,7 @@ export default function AdminPromos() {
                   <td><code className="voucher-code" style={{ fontSize: 14, padding: '2px 8px' }}>{p.code}</code></td>
                   <td>{fmtReduction(p)}</td>
                   <td>{TARIF_LABEL[p.tarif_restriction || '']}</td>
-                  <td>{p.used != null ? p.used : (p.times_redeemed ?? '—')}{p.max_redemptions ? ` / ${p.max_redemptions}` : ''}</td>
+                  <td>{p.used != null ? p.used : (p.times_redeemed ?? '-')}{p.max_redemptions ? ` / ${p.max_redemptions}` : ''}</td>
                   <td>{p.max_per_user ? p.max_per_user : '∞'}</td>
                   <td>{fmtDate(p.expires_at)}</td>
                   <td><span className={`badge ${p.active ? 'green' : 'grey'}`}>{p.active ? 'Actif' : 'Inactif'}</span></td>

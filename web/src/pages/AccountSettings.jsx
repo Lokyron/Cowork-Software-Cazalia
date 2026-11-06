@@ -67,7 +67,7 @@ export default function AccountSettings() {
       {/* FACTURATION */}
       <div className="card" style={{ marginTop: 16 }}>
         <h2>Facturation & entreprise</h2>
-        <p className="muted" style={{ fontSize: 13, marginTop: -4 }}>Optionnel — utilisé sur vos reçus et factures.</p>
+        <p className="muted" style={{ fontSize: 13, marginTop: -4 }}>Optionnel - utilisé sur vos reçus et factures.</p>
         <div className="row">
           <div className="field"><label>Raison sociale</label><input value={p.company_name || ''} onChange={set('company_name')} placeholder="Nom de l'entreprise" /></div>
           <div className="field"><label>N° TVA intracommunautaire</label><input value={p.vat_number || ''} onChange={set('vat_number')} placeholder="FR..." /></div>

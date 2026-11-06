@@ -3,7 +3,7 @@
 // Le secret TOTP est un facteur d'authentification à part entière : stocké en
 // clair, il rendrait la 2FA inopérante dès qu'un attaquant lit la base. Il est
 // donc CHIFFRÉ AU REPOS (AES-256-GCM, clé dérivée de `APP_SECRET`) via
-// `lib/crypto.js` — le même mécanisme que le mot de passe SMTP.
+// `lib/crypto.js` - le même mécanisme que le mot de passe SMTP.
 //
 // ⚠️ Conséquence d'exploitation : changer `APP_SECRET` rend les secrets TOTP
 // illisibles. Les membres concernés devront reconfigurer leur 2FA.
@@ -19,7 +19,7 @@ const ISSUER = 'Cazalia';
 
 /**
  * Génère un secret TOTP base32 (160 bits).
- * @returns {string} Secret EN CLAIR — à chiffrer avant stockage (`sealSecret`).
+ * @returns {string} Secret EN CLAIR - à chiffrer avant stockage (`sealSecret`).
  */
 export function generateSecret() {
   return authenticator.generateSecret();

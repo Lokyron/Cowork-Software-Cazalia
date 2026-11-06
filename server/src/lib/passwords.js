@@ -19,7 +19,7 @@ const COMMON_PASSWORDS = new Set([
  * Règles (CWE-521) :
  *  - longueur comprise entre `config.password.minLength` et `maxLength` ;
  *  - au moins trois familles de caractères sur quatre (minuscule, majuscule,
- *    chiffre, autre) — un critère de diversité, pas une contrainte de
+ *    chiffre, autre) - un critère de diversité, pas une contrainte de
  *    composition rigide, qui pousse aux mots de passe mémorisables longs ;
  *  - refus des séquences répétitives et des mots de passe notoirement fuités.
  *
@@ -88,8 +88,8 @@ export function adminSetPassword(targetUserId, newPassword) {
 
 // ── Jetons de réinitialisation ────────────────────────────────────────────────
 // Le jeton envoyé par e-mail est un secret équivalent à un mot de passe : il est
-// donc stocké HACHÉ (SHA-256). Une lecture de la base — sauvegarde égarée, accès
-// au fichier SQLite — ne permet plus de fabriquer un lien de réinitialisation
+// donc stocké HACHÉ (SHA-256). Une lecture de la base - sauvegarde égarée, accès
+// au fichier SQLite - ne permet plus de fabriquer un lien de réinitialisation
 // valide (CWE-522). SHA-256 non salé est suffisant ici : le jeton porte déjà
 // 256 bits d'entropie, il n'est pas exposé au dictionnaire.
 const insertReset = db.prepare(
@@ -102,7 +102,7 @@ const invalidatePending = db.prepare(
 );
 
 // Marqueur de format. Il rend une valeur stockée distinguable d'un jeton en
-// clair — indispensable, les deux étant sinon 64 caractères hexadécimaux.
+// clair - indispensable, les deux étant sinon 64 caractères hexadécimaux.
 const DIGEST_PREFIX = 'sha256:';
 
 /**
@@ -120,7 +120,7 @@ function tokenDigest(token) {
  *
  * Recherche d'abord l'empreinte (format courant). À défaut, une recherche sur
  * la valeur brute permet aux jetons émis AVANT ce durcissement de rester
- * utilisables jusqu'à leur expiration (2 h) — mais uniquement si la ligne
+ * utilisables jusqu'à leur expiration (2 h) - mais uniquement si la ligne
  * trouvée est elle-même au format historique. Sans cette dernière condition, la
  * valeur lue en base servirait directement de jeton, ce qui annulerait tout
  * l'intérêt du hachage.

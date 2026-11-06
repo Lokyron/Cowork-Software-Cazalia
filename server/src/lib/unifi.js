@@ -1,4 +1,4 @@
-// Intégration UniFi (UDM Pro) — génération/révocation d'un voucher Wi-Fi par
+// Intégration UniFi (UDM Pro) - génération/révocation d'un voucher Wi-Fi par
 // réservation via l'API d'intégration OFFICIELLE (UniFi Network 9.x+).
 //
 //   Base locale : https://{host}/proxy/network/integration/v1
@@ -10,7 +10,7 @@
 //
 // Contraintes de contexte :
 //  - Le contrôleur LOCAL présente un certificat AUTO-SIGNÉ : la stratégie TLS est
-//    explicite (épinglage d'empreinte, ou désactivation assumée) — cf. plus bas.
+//    explicite (épinglage d'empreinte, ou désactivation assumée) - cf. plus bas.
 //  - better-sqlite3 est SYNCHRONE : les appels réseau (async) se font APRÈS le commit
 //    de la transaction de réservation, puis on met à jour la ligne (best-effort).
 //  - L'intégration est DÉGRADABLE : si elle est inactive ou en échec, la réservation
@@ -232,7 +232,7 @@ const clearVoucherIdStmt = db.prepare(`UPDATE reservations SET voucher_id = NULL
 // Renvoie le code formaté, ou null si intégration inactive / en échec.
 /**
  * Génère si besoin le voucher Wi-Fi d'une réservation et l'enregistre en base.
- * Fonctionnement DÉGRADABLE : toute erreur est journalisée et absorbée — une
+ * Fonctionnement DÉGRADABLE : toute erreur est journalisée et absorbée - une
  * indisponibilité du contrôleur ne doit jamais invalider une réservation payée.
  *
  * @param {number} reservationId Réservation concernée.
@@ -246,7 +246,7 @@ export async function ensureVoucherForReservation(reservationId) {
   try {
     // Nom du client en tête (visible même si la liste UDM tronque), id de résa pour la traçabilité.
     const clientName = (r.display_name || '').trim() || `Utilisateur #${r.user_id}`;
-    const v = await createVoucher({ name: `${clientName} — Résa #${r.id}` });
+    const v = await createVoucher({ name: `${clientName} - Résa #${r.id}` });
     const code = formatCode(v.code);
     const expires = v.expiresAt || v.expires_at || null;
     setVoucherStmt.run(code, String(v.id), expires, r.id);

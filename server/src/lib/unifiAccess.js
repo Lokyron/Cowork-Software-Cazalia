@@ -1,4 +1,4 @@
-// Intégration UniFi Access — PIN de porte temporaire par réservation.
+// Intégration UniFi Access - PIN de porte temporaire par réservation.
 //
 // Modèle : pour chaque réservation on crée un « visiteur » UniFi Access avec une
 // fenêtre de validité = le créneau réservé (+ marges de grâce), on lui génère un
@@ -12,7 +12,7 @@
 // auto-signé. Enveloppe de réponse : { code: 'SUCCESS', msg, data }.
 //
 // Best-effort : les appels réseau se font APRÈS le commit de la réservation ; un
-// échec (console injoignable, etc.) n'invalide JAMAIS la réservation — on log un
+// échec (console injoignable, etc.) n'invalide JAMAIS la réservation - on log un
 // avertissement et le PIN reste nul (le membre peut être accueilli autrement).
 
 import https from 'node:https';
@@ -29,7 +29,7 @@ export function isConfigured() {
 
 // Agent TLS : la console présente un certificat auto-signé. Validation standard
 // par défaut ; désactivée seulement si l'exploitant l'assume
-// (UNIFI_ACCESS_INSECURE_TLS=1) ou épingle l'empreinte SHA-256 — sinon on refuse
+// (UNIFI_ACCESS_INSECURE_TLS=1) ou épingle l'empreinte SHA-256 - sinon on refuse
 // plutôt que de se connecter en aveugle (CWE-295).
 function agent() {
   const c = config.unifiAccess;
@@ -60,7 +60,7 @@ function request(method, pathname, body) {
   const ag = agent();
   if (!ag) {
     return Promise.reject(new Error(
-      'UniFi Access : certificat auto-signé — définir UNIFI_ACCESS_TLS_FINGERPRINT ' +
+      'UniFi Access : certificat auto-signé - définir UNIFI_ACCESS_TLS_FINGERPRINT ' +
       '(recommandé) ou UNIFI_ACCESS_INSECURE_TLS=1 pour accepter la console.'
     ));
   }

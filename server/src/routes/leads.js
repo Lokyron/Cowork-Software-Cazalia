@@ -23,7 +23,7 @@ const ACTIVITY_LABEL = {
 const leadsLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 6 });
 
 /**
- * POST /api/leads — pré-inscription publique (aucun compte requis).
+ * POST /api/leads - pré-inscription publique (aucun compte requis).
  *
  * Deux protections complémentaires : un champ piège (`website`), invisible pour
  * un humain mais rempli par la plupart des robots, et une limitation de débit
@@ -48,7 +48,7 @@ leadsRouter.post('/leads', leadsLimiter, async (req, res) => {
     // Notification best-effort à la gérante (ne fait jamais échouer la saisie).
     try {
       const { subject, html } = renderRaw(
-        isDevis ? `Demande de devis — Bureau Privé #{{id}}` : `Nouveau contact #{{id}}`,
+        isDevis ? `Demande de devis - Bureau Privé #{{id}}` : `Nouveau contact #{{id}}`,
         `<h1 style="font-size:20px;margin:0 0 12px;">{{title}}</h1>
          <p style="margin:0 0 6px;"><strong>Nom :</strong> {{first_name}} {{last_name}}</p>
          <p style="margin:0 0 6px;"><strong>E-mail :</strong> <a href="mailto:{{email}}">{{email}}</a></p>
@@ -59,19 +59,19 @@ leadsRouter.post('/leads', leadsLimiter, async (req, res) => {
          <p style="line-height:1.6;white-space:pre-wrap;margin:0;">{{message}}</p>`,
         {
           id,
-          title: isDevis ? 'Demande de devis — Bureau Privé longue durée' : 'Nouveau contact',
+          title: isDevis ? 'Demande de devis - Bureau Privé longue durée' : 'Nouveau contact',
           first_name: data.first_name,
           last_name: data.last_name,
           email: data.email,
           phone: data.phone,
-          activity: ACTIVITY_LABEL[data.activity] || data.activity || '—',
-          source: source || '—',
-          message: message || '—',
+          activity: ACTIVITY_LABEL[data.activity] || data.activity || '-',
+          source: source || '-',
+          message: message || '-',
         }
       );
       await sendMail({
         to: LEADS_RECIPIENT, subject, html, templateCode: 'lead_notification',
-        fromEmail: NOTIFY_FROM, fromName: isDevis ? 'Cazalia — Devis' : 'Cazalia — Contact', replyTo: data.email,
+        fromEmail: NOTIFY_FROM, fromName: isDevis ? 'Cazalia - Devis' : 'Cazalia - Contact', replyTo: data.email,
       });
     } catch { /* journalisé par le mailer ; le prospect est déjà enregistré */ }
 

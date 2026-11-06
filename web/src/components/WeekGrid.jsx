@@ -122,7 +122,7 @@ export default function WeekGrid({ days, today, events, renderEvent, onEventClic
                   <div className="cal-sel" style={{
                     top: `${((sel.from - START_MIN) / TOTAL_MIN) * 100}%`,
                     height: `${((sel.to - sel.from) / TOTAL_MIN) * 100}%`,
-                  }}>{hm(sel.from)}–{hm(sel.to)}</div>
+                  }}>{hm(sel.from)}-{hm(sel.to)}</div>
                 )}
 
                 {evs.map((ev) => {

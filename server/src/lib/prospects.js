@@ -152,7 +152,7 @@ export function deleteProspect(id) {
  * Les prospects sont saisis publiquement, sans authentification : un prénom
  * valant `=cmd|'/c calc'!A1` s'exécuterait à l'ouverture du fichier sur le poste
  * de l'administrateur. On préfixe donc d'une apostrophe toute cellule commençant
- * par un caractère déclencheur — Excel, LibreOffice et Google Sheets affichent
+ * par un caractère déclencheur - Excel, LibreOffice et Google Sheets affichent
  * alors le texte tel quel, sans l'évaluer.
  *
  * @param {string} value Contenu brut de la cellule.

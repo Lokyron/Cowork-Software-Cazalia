@@ -45,8 +45,8 @@ const app = express();
 // N'annonce pas la pile technique dans les réponses (réduction d'empreinte).
 app.disable('x-powered-by');
 
-// Nombre de proxys de confiance. `req.ip` — sur lequel repose toute la
-// limitation de débit — n'est fiable QUE si cette valeur correspond à la
+// Nombre de proxys de confiance. `req.ip` - sur lequel repose toute la
+// limitation de débit - n'est fiable QUE si cette valeur correspond à la
 // réalité du déploiement : avec `trust proxy` actif et une API joignable
 // directement, `X-Forwarded-For` devient falsifiable (CWE-348).
 app.set('trust proxy', config.trustProxy);
@@ -55,7 +55,7 @@ app.use(securityHeaders);
 
 // Webhook Stripe : monté AVANT express.json, car la vérification de signature
 // exige le corps BRUT. Il court-circuite donc le parseur JSON, la garde CSRF et
-// `attachUser` (ajoutés ensuite) : c'est voulu — l'appel vient de Stripe, est
+// `attachUser` (ajoutés ensuite) : c'est voulu - l'appel vient de Stripe, est
 // authentifié par signature, et ne porte ni cookie ni session.
 app.post('/api/webhooks/stripe', express.raw({ type: '*/*', limit: '1mb' }), stripeWebhookHandler);
 
@@ -77,7 +77,7 @@ app.use('/api', paymentsRouter);
 app.use('/api', leadsRouter);
 app.use('/api', claimsRouter);
 app.use('/api', mediaRouter);
-// Webhooks entrants (fournisseur d'e-mail). Authentifiés par un jeton d'URL —
+// Webhooks entrants (fournisseur d'e-mail). Authentifiés par un jeton d'URL -
 // aucune session, aucun cookie : ces appels viennent d'un serveur tiers.
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/admin/update', updateRouter);
@@ -101,7 +101,7 @@ if (fs.existsSync(webDist)) {
 }
 
 // Filet de sécurité pour erreurs non gérées. La trace complète part dans le
-// journal du service ; le client ne reçoit qu'un code générique — une pile
+// journal du service ; le client ne reçoit qu'un code générique - une pile
 // d'appels révélerait chemins, versions et structure interne (CWE-209).
 app.use((err, req, res, _next) => {
   console.error('[erreur]', req.method, req.path, err);
@@ -113,6 +113,6 @@ app.use((err, req, res, _next) => {
 setInterval(purgeExpiredSessions, 60 * 60 * 1000).unref();
 
 app.listen(config.port, config.host, () => {
-  console.log(`Cazalia — API → http://${config.host}:${config.port}`);
+  console.log(`Cazalia - API → http://${config.host}:${config.port}`);
   securityEvent('demarrage', { host: config.host, port: config.port, prod: config.isProd });
 });

@@ -6,9 +6,9 @@
 // affectation (carrousel, bandeau, présentation) est un réglage en base.
 //
 // Compatibilité : avant cet écran, le carrousel était simplement « tous les
-// fichiers du dossier, par ordre alphabétique ». Ce comportement est conservé —
+// fichiers du dossier, par ordre alphabétique ». Ce comportement est conservé -
 // une photo déposée à la main sur le serveur apparaît toujours, en fin de
-// carrousel — et l'ordre enregistré depuis l'administration prime.
+// carrousel - et l'ordre enregistré depuis l'administration prime.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -135,7 +135,7 @@ export function getMediaUrls() {
 
 /**
  * Construit un nom de fichier sûr et unique à partir du nom d'origine.
- * Le suffixe aléatoire évite qu'un second envoi écrase la photo précédente —
+ * Le suffixe aléatoire évite qu'un second envoi écrase la photo précédente -
  * et qu'un nom choisi par le client permette de viser un fichier existant.
  *
  * @param {string} originalName Nom proposé par le client (indicatif).
@@ -154,7 +154,7 @@ function buildName(originalName, ext) {
  * Indique si le dossier des médias est inscriptible par le service.
  *
  * Cas réel en Docker : si le dossier hôte bind-monté n'existe pas, Docker le
- * crée en root alors que le conteneur tourne en `node` (uid 1000) — tout envoi
+ * crée en root alors que le conteneur tourne en `node` (uid 1000) - tout envoi
  * échouerait alors en EACCES. On préfère le dire dans l'écran d'administration
  * plutôt que de laisser l'exploitant devant une erreur 500.
  *

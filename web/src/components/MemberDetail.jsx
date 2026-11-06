@@ -14,14 +14,14 @@ function describe(t) {
   switch (t.reason) {
     case 'topup': {
       const e = eur(t.amount_eur_cents);
-      return `Recharge de crédits${e ? ` (payé ${e})` : ''}${t.note ? ` — ${t.note}` : ''}`;
+      return `Recharge de crédits${e ? ` (payé ${e})` : ''}${t.note ? ` - ${t.note}` : ''}`;
     }
     case 'booking':
-      return `Réservation${t.space_name ? ` — ${t.space_name}` : ''}${slot ? `, ${slot}` : ''}`;
+      return `Réservation${t.space_name ? ` - ${t.space_name}` : ''}${slot ? `, ${slot}` : ''}`;
     case 'refund':
-      return `Remboursement${t.space_name ? ` — ${t.space_name}` : ''}${slot ? `, ${slot}` : ''}`;
+      return `Remboursement${t.space_name ? ` - ${t.space_name}` : ''}${slot ? `, ${slot}` : ''}`;
     case 'adjust':
-      return `Ajustement${t.note ? ` — ${t.note}` : ''}`;
+      return `Ajustement${t.note ? ` - ${t.note}` : ''}`;
     default:
       return t.note || t.reason;
   }
@@ -94,7 +94,7 @@ export default function MemberDetail({ memberId, onClose, onChanged, onBook }) {
     try {
       const res = await api.post(`/admin/users/${memberId}/reset-link`);
       if (res.email_sent) flash('ok', `Email de réinitialisation envoyé à ${res.email}.`);
-      else { setResetLink(res.reset_url); flash('ok', 'Lien généré (SMTP non configuré — à transmettre manuellement).'); }
+      else { setResetLink(res.reset_url); flash('ok', 'Lien généré (SMTP non configuré - à transmettre manuellement).'); }
     } catch (err) { flash('error', msg(err.code)); }
   };
 

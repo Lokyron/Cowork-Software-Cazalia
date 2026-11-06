@@ -12,9 +12,9 @@ import TimeSelect from './TimeSelect.jsx';
 //             redirige (le retour se fait sur /mon-espace).
 const dFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', day: 'numeric', month: 'short' });
 const tFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hour12: false });
-const fmtSlot = (a, b) => `${dFmt.format(new Date(a))} · ${tFmt.format(new Date(a))}–${tFmt.format(new Date(b))}`;
+const fmtSlot = (a, b) => `${dFmt.format(new Date(a))} · ${tFmt.format(new Date(a))}-${tFmt.format(new Date(b))}`;
 const mmss = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
-const eur = (cents) => (cents == null ? '—' : (cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
+const eur = (cents) => (cents == null ? '-' : (cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
 
 // Affiche le prix effectif, avec le prix de référence barré et la mention de
 // remise/inclusion quand l'abonnement de l'utilisateur modifie le tarif.
@@ -178,7 +178,7 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
         <div className="field">
           <label>Espace</label>
           <select value={spaceId} onChange={(e) => setSpaceId(e.target.value)}>
-            <option value="">— Choisir —</option>
+            <option value="">- Choisir -</option>
             {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
@@ -200,7 +200,7 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
           ) : (
             <div className="field" style={{ alignSelf: 'end' }}>
               <label>Horaire</label>
-              <div className="muted" style={{ paddingTop: 8 }}>{times ? `${times.start} – ${times.end}` : 'Indisponible ce jour'}</div>
+              <div className="muted" style={{ paddingTop: 8 }}>{times ? `${times.start} - ${times.end}` : 'Indisponible ce jour'}</div>
             </div>
           )}
         </div>
@@ -302,7 +302,7 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
                 {promoError && <div className="alert error" style={{ marginTop: 8 }}>{promoError}</div>}
                 {promoApplied && (
                   <div className="alert ok" style={{ marginTop: 8 }}>
-                    Code appliqué{promoApplied.new_total_cents === 0 ? ' — c\'est offert ! 🎉' : ` : −${eur(promoApplied.discount_cents)}`}
+                    Code appliqué{promoApplied.new_total_cents === 0 ? ' - c\'est offert ! 🎉' : ` : −${eur(promoApplied.discount_cents)}`}
                   </div>
                 )}
               </div>

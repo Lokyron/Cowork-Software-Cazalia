@@ -62,7 +62,7 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
     };
     try {
       const r = await api.post(`/admin/members/${member.id}/reservations`, payload);
-      onDone?.(`${r.count} réservation${r.count > 1 ? 's' : ''} créée${r.count > 1 ? 's' : ''} pour ${member.display_name} (gratuite — paiement hors ligne).`);
+      onDone?.(`${r.count} réservation${r.count > 1 ? 's' : ''} créée${r.count > 1 ? 's' : ''} pour ${member.display_name} (gratuite - paiement hors ligne).`);
     } catch (err) {
       const idx = err.data?.slot_index;
       if (idx != null) setBadSlot(idx);
@@ -79,7 +79,7 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
           <h2 style={{ margin: 0 }}>Réserver pour {member.display_name}</h2>
           <button className="ghost" style={{ color: 'var(--ink)', border: '1px solid var(--line)' }} onClick={onClose}>✕</button>
         </div>
-        <p className="subtitle" style={{ marginBottom: 14 }}>Réservation enregistrée pour le membre (gratuite — paiement géré hors ligne).</p>
+        <p className="subtitle" style={{ marginBottom: 14 }}>Réservation enregistrée pour le membre (gratuite - paiement géré hors ligne).</p>
 
         {feedback && <div className="alert error">{feedback.text}</div>}
 
@@ -88,7 +88,7 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
           <select value={spaceId} onChange={(e) => setSpaceId(e.target.value)}>
             {spaces.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} — {s.price_per_hour_cents != null ? `${eur(s.price_per_hour_cents)}/h` : '—'} {s.exclusive ? '(salle, forfait)' : s.privatizable ? '(focus, /poste)' : '(open-space, /place)'}
+                {s.name} - {s.price_per_hour_cents != null ? `${eur(s.price_per_hour_cents)}/h` : '-'} {s.exclusive ? '(salle, forfait)' : s.privatizable ? '(focus, /poste)' : '(open-space, /place)'}
               </option>
             ))}
           </select>

@@ -56,7 +56,7 @@ export default function Reclamation() {
     return (
       <div className="auth-wrap" style={{ maxWidth: 560 }}>
         <div className="card" style={{ textAlign: 'center' }}>
-          <img src="/images/logo-cazalia.svg" className="login-logo" alt="CAZALIA — Coworking Boutonnet" />
+          <img src="/images/logo-cazalia.svg" className="login-logo" alt="CAZALIA - Coworking Boutonnet" />
           <h1 style={{ marginTop: 4 }}>Réclamation envoyée</h1>
           <p className="subtitle" style={{ marginBottom: 6 }}>
             Nous avons bien reçu votre demande et reviendrons vers vous dans les meilleurs délais à
@@ -73,7 +73,7 @@ export default function Reclamation() {
   return (
     <div className="legal">
       <BackLink to="/" label="Retour à l'accueil" />
-      <img src="/images/logo-cazalia.svg" className="legal-logo" alt="CAZALIA — Coworking Boutonnet" />
+      <img src="/images/logo-cazalia.svg" className="legal-logo" alt="CAZALIA - Coworking Boutonnet" />
       <h1>Réclamation & remboursement</h1>
 
       <p>

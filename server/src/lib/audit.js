@@ -2,8 +2,8 @@
 //
 // Objectif : disposer d'une trace exploitable des tentatives d'accès et des
 // actions sensibles (CWE-778), SANS y déverser de données personnelles ni de
-// secrets (CWE-532). Les identifiants directs — adresse e-mail, jeton, mot de
-// passe — ne sont jamais écrits : une adresse est réduite à une empreinte
+// secrets (CWE-532). Les identifiants directs - adresse e-mail, jeton, mot de
+// passe - ne sont jamais écrits : une adresse est réduite à une empreinte
 // tronquée, qui permet de corréler des tentatives entre elles sans révéler qui
 // est visé si le journal fuite.
 //

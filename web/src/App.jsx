@@ -126,7 +126,7 @@ function SiteFooter() {
         <Link to="/cgu#confidentialite">Confidentialité</Link>
         <Link to="/reclamation">Réclamation</Link>
       </nav>
-      <span className="muted">© {new Date().getFullYear()} CAZALIA — Coworking Boutonnet</span>
+      <span className="muted">© {new Date().getFullYear()} CAZALIA - Coworking Boutonnet</span>
     </footer>
   );
 }

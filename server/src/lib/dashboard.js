@@ -1,7 +1,7 @@
 import { db } from '../db.js';
 
 const PARIS = 'Europe/Paris';
-const OPEN_HOURS = 12; // fenêtre d'ouverture retenue pour le taux d'occupation (07h–19h)
+const OPEN_HOURS = 12; // fenêtre d'ouverture retenue pour le taux d'occupation (07h-19h)
 
 const dayKeyFmt = new Intl.DateTimeFormat('en-CA', { timeZone: PARIS });
 const weekdayFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: PARIS, weekday: 'narrow' });
@@ -12,7 +12,7 @@ const weekdayNarrow = (dateStr) => weekdayFmt.format(new Date(`${dateStr}T12:00:
 /**
  * Instant UTC correspondant au début d'un jour donné, en heure de Paris.
  * Technique dite « guess » : on compare l'interprétation de la même date dans
- * les deux fuseaux pour en déduire le décalage réel — donc correcte au passage
+ * les deux fuseaux pour en déduire le décalage réel - donc correcte au passage
  * à l'heure d'été, contrairement à un décalage fixe.
  *
  * @param {string} dateStr Date au format `YYYY-MM-DD`.

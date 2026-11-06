@@ -61,7 +61,7 @@ export function securityHeaders(req, res, next) {
 const MAX_KEYS = 5_000;
 
 /**
- * Purge les entrées expirées, puis — si la table reste saturée — les plus
+ * Purge les entrées expirées, puis - si la table reste saturée - les plus
  * anciennes, afin de garantir une empreinte mémoire constante.
  *
  * @param {Map<string, {count: number, first: number}>} store
@@ -127,7 +127,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  *
  * Les clients non-navigateur (curl, scripts d'exploitation, sondes de
  * supervision) n'envoient pas d'`Origin` : ils ne portent pas non plus de
- * cookie ambiant, la garde les laisse donc passer — elle ne protège que du
+ * cookie ambiant, la garde les laisse donc passer - elle ne protège que du
  * scénario CSRF, elle ne remplace pas l'authentification.
  *
  * @param {import('express').Request} req

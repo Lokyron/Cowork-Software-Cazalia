@@ -107,7 +107,7 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 6px 24px rgba(15, 23, 42, 0.18);
 }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
-/* Lockup complet « CAZALIA » — détouré, sans pastille (fond transparent). */
+/* Lockup complet « CAZALIA » - détouré, sans pastille (fond transparent). */
 .brand-lockup {
   height: 42px;
   display: block;
@@ -800,7 +800,7 @@ a.kpi:hover { transform: translateY(-2px); }
   background-clip: text;
   color: transparent;
 }
-/* Logotype complet « CAZALIA » — détouré, sans puce (fond transparent). */
+/* Logotype complet « CAZALIA » - détouré, sans puce (fond transparent). */
 .public-header .brand-full {
   display: block;
   height: 58px;
@@ -939,7 +939,7 @@ h2.big { font-size: clamp(24px, 3.4vw, 36px); letter-spacing: -0.8px; margin: 10
 .price { font-size: 22px; font-weight: 800; color: var(--navy); }
 .price small { font-size: 13px; font-weight: 600; color: var(--muted); }
 
-/* Galerie — carrousel auto-défilant en boucle */
+/* Galerie - carrousel auto-défilant en boucle */
 .carousel {
   overflow: hidden;
   padding: 14px 0;

@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
   subscription_tier      TEXT NOT NULL DEFAULT 'NONE', -- 'NONE'|'ESSENTIEL'|'CONFORT'|'PREMIUM'
   subscription_status    TEXT NOT NULL DEFAULT 'none', -- 'none'|'active'|'past_due'|'canceled'
   current_period_start   TEXT,                          -- début de la période de facturation en cours (ISO/UTC)
-  current_period_end     TEXT,                          -- fin de la période (ISO/UTC) — synchro Stripe
+  current_period_end     TEXT,                          -- fin de la période (ISO/UTC) - synchro Stripe
   -- Jours Open Space consommés sur la période en cours (Essentiel). Réel : une
   -- demi-journée vaut 0,5 j, une journée 1 j. Réinitialisé à chaque renouvellement.
   open_space_quota_used  REAL NOT NULL DEFAULT 0,
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS spaces (
   capacity         INTEGER NOT NULL CHECK (capacity >= 1),  -- inventaire: nb de places ; exclusif: nb d'occupants max
   exclusive        INTEGER NOT NULL DEFAULT 0,              -- 1 = réservation bloque toute la salle (forfait), sinon inventaire de places
   privatizable     INTEGER NOT NULL DEFAULT 0,             -- 1 = espace inventaire offrant l'option "privatiser" (prendre toute la capacité)
-  credits_per_hour INTEGER NOT NULL CHECK (credits_per_hour >= 0),  -- LEGACY (crédits) — conservé, plus utilisé pour le prix
+  credits_per_hour INTEGER NOT NULL CHECK (credits_per_hour >= 0),  -- LEGACY (crédits) - conservé, plus utilisé pour le prix
   -- Tarification en EUROS (centimes). price_per_hour_cents : tarif horaire (par
   -- place en inventaire, forfait salle en exclusif). Les forfaits demi-journée /
   -- journée sont facultatifs (NULL = non proposé pour cet espace).
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS reservations (
   start_at     TEXT    NOT NULL,                       -- ISO 8601 / UTC
   end_at       TEXT    NOT NULL,
   status       TEXT    NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed','cancelled')),
-  credits_cost INTEGER NOT NULL DEFAULT 0,            -- LEGACY (crédits) — conservé, plus alimenté
+  credits_cost INTEGER NOT NULL DEFAULT 0,            -- LEGACY (crédits) - conservé, plus alimenté
   seats        INTEGER NOT NULL DEFAULT 1,             -- places consommées (inventaire) ; 1 pour un espace exclusif
   -- Paiement en EUROS. price_cents = montant dû/payé. tarif_type = heure | demi_journee | journee.
   -- payment_status : 'paid' (payé Stripe), 'free' (résa admin gratuite / paiement hors ligne),
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
 );
 CREATE INDEX IF NOT EXISTS idx_credit_user ON credit_transactions(user_id);
 
--- Jetons de réinitialisation de mot de passe (lien envoyé par email — SMTP à venir).
+-- Jetons de réinitialisation de mot de passe (lien envoyé par email - SMTP à venir).
 CREATE TABLE IF NOT EXISTS password_resets (
   token      TEXT    PRIMARY KEY,                       -- aléatoire (hex)
   user_id    INTEGER NOT NULL REFERENCES users(id),
@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS email_log (
 CREATE INDEX IF NOT EXISTS idx_email_log_created ON email_log(created_at);
 -- ⚠️ L'index sur `message_id` est créé dans db.js, APRÈS les migrations : ce
 -- fichier est rejoué à chaque démarrage, y compris sur une base antérieure où
--- `CREATE TABLE IF NOT EXISTS` n'ajoute pas la colonne — l'index échouerait ici
+-- `CREATE TABLE IF NOT EXISTS` n'ajoute pas la colonne - l'index échouerait ici
 -- avec « no such column », et l'application ne démarrerait pas. Tout index
 -- portant sur une colonne ajoutée par migration se déclare donc dans db.js.
 

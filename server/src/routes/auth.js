@@ -31,7 +31,7 @@ export const authRouter = Router();
 // ── Limitation de débit des points d'entrée sensibles ────────────────────────
 // Le compteur `loginThrottle` (par couple e-mail|IP) reste en place ; ces
 // limiteurs s'y ajoutent au niveau de l'IP pour couvrir le balayage d'e-mails
-// (énumération, création massive de comptes, mail-bombing) — CWE-307/CWE-770.
+// (énumération, création massive de comptes, mail-bombing) - CWE-307/CWE-770.
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
 const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10 });
 const forgotLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 8 });
@@ -48,7 +48,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  *
  * - `httpOnly` : inaccessible au JavaScript de la page (vol par XSS).
  * - `sameSite: 'lax'` : le cookie n'accompagne aucune requête mutante venue
- *   d'un autre site — première ligne de défense contre le CSRF, complétée par
+ *   d'un autre site - première ligne de défense contre le CSRF, complétée par
  *   `sameOriginGuard`.
  * - `secure` : suit le protocole RÉEL de la requête (`req.secure` dépend de
  *   `trust proxy` + `X-Forwarded-Proto`). Le cookie reste utilisable en HTTP
@@ -71,7 +71,7 @@ const cookieOptions = (req) => ({
  * Les attributs doivent refléter ceux de la pose : un navigateur appliquant la
  * politique « Strict Secure Cookies » refuse qu'un cookie non-`Secure` écrase un
  * cookie `Secure`. Sans cet alignement, la déconnexion laisserait le cookie en
- * place côté navigateur — la session est bien détruite côté serveur, mais autant
+ * place côté navigateur - la session est bien détruite côté serveur, mais autant
  * ne pas laisser traîner un jeton périmé.
  *
  * @param {import('express').Request} req Requête en cours.
@@ -113,7 +113,7 @@ const insertUser = db.prepare(
 const countUsers = db.prepare(`SELECT COUNT(*) AS n FROM users`);
 
 /**
- * POST /api/auth/register — inscription publique.
+ * POST /api/auth/register - inscription publique.
  * Le tout premier compte créé devient administrateur (amorçage du gestionnaire).
  *
  * @returns 201 `{user}` · 400 `CHAMPS_INVALIDES` · 400 `MOT_DE_PASSE_FAIBLE` · 409 `EMAIL_DEJA_PRIS`
@@ -176,7 +176,7 @@ authRouter.post('/register', registerLimiter, (req, res) => {
 const rehashStmt = db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`);
 
 /**
- * POST /api/auth/login — authentification par e-mail + mot de passe, puis code
+ * POST /api/auth/login - authentification par e-mail + mot de passe, puis code
  * TOTP si la 2FA est active sur le compte.
  *
  * @returns 200 `{user}` · 200 `{mfa_required:true}` · 401 `IDENTIFIANTS_INVALIDES`
@@ -238,7 +238,7 @@ authRouter.post('/logout', (req, res) => {
 });
 
 /**
- * GET /api/auth/me — profil de session (ou `null` si non authentifié).
+ * GET /api/auth/me - profil de session (ou `null` si non authentifié).
  * @returns 200 `{user}`
  */
 authRouter.get('/me', (req, res) => {
@@ -259,7 +259,7 @@ authRouter.patch('/me', requireAuth, (req, res) => {
 // Demande publique de réinitialisation (« mot de passe oublié »). Réponse toujours
 // identique (anti-énumération) ; l'e-mail n'est envoyé que si le compte existe.
 /**
- * POST /api/auth/forgot-password — demande publique de réinitialisation.
+ * POST /api/auth/forgot-password - demande publique de réinitialisation.
  * Réponse toujours identique, que le compte existe ou non (anti-énumération).
  *
  * @returns 200 `{ok:true}` · 429 `TROP_DE_TENTATIVES`
@@ -282,7 +282,7 @@ authRouter.post('/forgot-password', forgotLimiter, async (req, res) => {
   return res.json({ ok: true });
 });
 
-// ── Double authentification (TOTP) — optionnelle ─────────────────────────────
+// ── Double authentification (TOTP) - optionnelle ─────────────────────────────
 const getUserFull = db.prepare(`SELECT * FROM users WHERE id = ?`);
 const setTotpSecret = db.prepare(`UPDATE users SET totp_secret = ?, totp_enabled = 0 WHERE id = ?`);
 const enableTotp = db.prepare(`UPDATE users SET totp_enabled = 1 WHERE id = ?`);
@@ -290,7 +290,7 @@ const disableTotp = db.prepare(`UPDATE users SET totp_secret = NULL, totp_enable
 
 // 1) Démarrer la configuration : génère un secret + QR (pas encore actif).
 /**
- * POST /api/auth/2fa/setup — génère un secret TOTP et son QR code.
+ * POST /api/auth/2fa/setup - génère un secret TOTP et son QR code.
  * Le secret est enregistré CHIFFRÉ et la 2FA reste inactive tant qu'un premier
  * code n'a pas été validé par `/2fa/enable`.
  *
@@ -310,7 +310,7 @@ authRouter.post('/2fa/setup', requireAuth, twoFactorLimiter, async (req, res) =>
 
 // 2) Activer : vérifie un premier code contre le secret configuré.
 /**
- * POST /api/auth/2fa/enable — active la 2FA après vérification d'un premier code.
+ * POST /api/auth/2fa/enable - active la 2FA après vérification d'un premier code.
  * @returns 200 `{ok:true}` · 400 `SETUP_2FA_REQUIS` · 400 `CODE_2FA_INVALIDE` · 429 `TROP_DE_TENTATIVES`
  */
 authRouter.post('/2fa/enable', requireAuth, twoFactorLimiter, (req, res) => {
@@ -325,7 +325,7 @@ authRouter.post('/2fa/enable', requireAuth, twoFactorLimiter, (req, res) => {
 
 // 3) Désactiver : exige un code valide si la 2FA est active.
 /**
- * POST /api/auth/2fa/disable — désactive la 2FA.
+ * POST /api/auth/2fa/disable - désactive la 2FA.
  * Un code valide est exigé tant que la 2FA est active : un cookie volé ne suffit
  * pas à retirer le second facteur.
  *
@@ -344,7 +344,7 @@ authRouter.post('/2fa/disable', requireAuth, twoFactorLimiter, (req, res) => {
 
 // ── Suppression de son propre compte (confirmation "SUPPRIMER") ──────────────
 /**
- * DELETE /api/auth/me — suppression définitive de son propre compte.
+ * DELETE /api/auth/me - suppression définitive de son propre compte.
  * Exige la confirmation littérale « SUPPRIMER » dans le corps de la requête.
  *
  * @returns 200 `{ok:true}` · 400 `CONFIRMATION_INVALIDE` · 409 `DERNIER_ADMIN`
@@ -365,7 +365,7 @@ authRouter.delete('/me', requireAuth, (req, res) => {
 
 // ── Changement de mot de passe par l'utilisateur lui-même ────────────────────
 /**
- * POST /api/auth/change-password — changement de mot de passe par l'utilisateur.
+ * POST /api/auth/change-password - changement de mot de passe par l'utilisateur.
  * Toutes les autres sessions sont invalidées ; l'appareil courant reçoit une
  * session neuve (pas de réutilisation de l'identifiant précédent).
  *
@@ -390,7 +390,7 @@ authRouter.post('/change-password', requireAuth, passwordChangeLimiter, (req, re
 // ── Réinitialisation via lien (public, consommé depuis l'email) ──────────────
 // Valide un jeton et renvoie l'email associé (pour afficher la page de reset).
 /**
- * GET /api/auth/reset-password/:token — valide un jeton et renvoie de quoi
+ * GET /api/auth/reset-password/:token - valide un jeton et renvoie de quoi
  * afficher la page de réinitialisation. Aucune distinction entre jeton
  * inexistant, expiré ou déjà consommé.
  *
@@ -404,7 +404,7 @@ authRouter.get('/reset-password/:token', resetLimiter, (req, res) => {
 
 // Applique le nouveau mot de passe à partir d'un jeton valide.
 /**
- * POST /api/auth/reset-password — applique un nouveau mot de passe à partir
+ * POST /api/auth/reset-password - applique un nouveau mot de passe à partir
  * d'un jeton valide, puis détruit toutes les sessions du compte.
  *
  * @returns 200 `{ok:true}` · 400 `TOKEN_INVALIDE` · 400 `MOT_DE_PASSE_FAIBLE` · 429 `TROP_DE_TENTATIVES`

@@ -2,7 +2,7 @@ import { db } from '../db.js';
 
 // Réclamations consommateur : validation + insertion. Le formulaire est public
 // (un consommateur peut réclamer sans compte), donc toutes les longueurs sont
-// bornées — surface d'insertion directe en base, comme la pré-inscription.
+// bornées - surface d'insertion directe en base, comme la pré-inscription.
 
 function bizErr(code) {
   const e = new Error(code);
