@@ -17,7 +17,8 @@ export default function SpaceModal({ space, photoSrc, onClose, onReserve, onDevi
   if (space.price_per_hour_cents != null) priceParts.push(`${eur(space.price_per_hour_cents)}/h`);
   if (space.price_half_day_cents != null) priceParts.push(`${eur(space.price_half_day_cents)} la demi-journée`);
   if (space.price_day_cents != null) priceParts.push(`${eur(space.price_day_cents)} la journée`);
-  const priceLabel = isDevis ? 'Sur devis' : isLibreService ? 'Libre-service' : (priceParts.join(' · ') || '—');
+  // Bureau privé (isDevis) : le prix n'est pas affiché du tout (voir plus bas).
+  const priceLabel = isLibreService ? 'Libre-service' : (priceParts.join(' · ') || '—');
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -38,8 +39,9 @@ export default function SpaceModal({ space, photoSrc, onClose, onReserve, onDevi
           <span className="muted seats">
             {isDevis ? 'Privatisation longue durée'
               : space.kind === 'room' ? 'Réservation exclusive'
-              : `Jusqu'à ${space.capacity} places`} ·{' '}
-            <strong style={{ color: 'var(--navy)' }}>{priceLabel}</strong>
+              : `Jusqu'à ${space.capacity} places`}
+            {/* Bureau privé : aucune notion de prix affichée (uniquement sur devis). */}
+            {!isDevis && <> · <strong style={{ color: 'var(--navy)' }}>{priceLabel}</strong></>}
           </span>
         </div>
 

@@ -102,7 +102,10 @@ export default function Landing() {
                   </p>
                   <div className="flex-between">
                     <span className="price">
-                      {s.price_per_hour_cents != null
+                      {/* Bureau privé : aucune notion de prix (accès uniquement sur devis). */}
+                      {s.category === 'PRIVATE_OFFICE'
+                        ? null
+                        : s.price_per_hour_cents != null
                         ? <>{(s.price_per_hour_cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} <small>/ h</small></>
                         : s.price_half_day_cents != null
                         ? <>{(s.price_half_day_cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} <small>/ ½ j</small></>
