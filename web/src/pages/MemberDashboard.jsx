@@ -7,6 +7,7 @@ import VoucherBlock from '../components/VoucherBlock.jsx';
 import AccessPinBlock from '../components/AccessPinBlock.jsx';
 import GoogleCalendarLink from '../components/GoogleCalendarLink.jsx';
 import CartSidebar from '../components/CartSidebar.jsx';
+import ReservationNotice from '../components/ReservationNotice.jsx';
 
 const dFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' });
 const tFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hour12: false });
@@ -79,6 +80,7 @@ function SubscriptionCard({ sub, onManage, busy }) {
           ✓ Open Space illimité inclus{sub.tier === 'PREMIUM' ? ' · Salle de réunion illimitée incluse' : ' · −50 % sur la salle de réunion'}.
         </p>
       )}
+      <ReservationNotice variant="abonnement" compact style={{ marginTop: 14 }} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useCart } from '../cart.jsx';
 import CartBuilder from '../components/CartBuilder.jsx';
+import ReservationNotice from '../components/ReservationNotice.jsx';
 
 // Parcours de réservation client = panier multi-espaces (verrous 10 min + paiement crédits groupé).
 export default function Booking() {
@@ -28,6 +29,8 @@ export default function Booking() {
           Composez votre panier (plusieurs espaces et créneaux), puis validez en une seule fois.
         </p>
       </div>
+
+      <ReservationNotice variant="generic" style={{ marginBottom: 16 }} />
 
       {done ? (
         <div className="alert ok">

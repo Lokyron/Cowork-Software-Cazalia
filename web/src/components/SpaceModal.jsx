@@ -1,5 +1,6 @@
 import Photo from './Photo.jsx';
 import { eur, spacePrice } from '../price.js';
+import ReservationNotice from './ReservationNotice.jsx';
 
 // Fenêtre détaillée d'un espace (depuis la landing) : photo, descriptif complet,
 // prestations incluses, et appel à l'action adapté à la catégorie.
@@ -66,6 +67,12 @@ export default function SpaceModal({ space, photoSrc, onClose, onReserve, onDevi
           <div className="alert" style={{ marginTop: 16, background: 'rgba(59,130,246,0.06)', border: '1px solid var(--line)' }}>
             Accès <strong>libre-service</strong> sur place, sans réservation ni paiement en ligne.
           </div>
+        )}
+        {!isDevis && !isLibreService && (
+          <ReservationNotice
+            variant={space.category === 'MEETING_ROOM' ? 'salle' : 'open_space'}
+            style={{ marginTop: 16 }}
+          />
         )}
 
         <div style={{ marginTop: 20, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

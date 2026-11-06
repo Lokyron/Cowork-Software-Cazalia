@@ -18,6 +18,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import PasswordInput from '../components/PasswordInput.jsx';
+import ReservationNotice from '../components/ReservationNotice.jsx';
 import { checkPassword, PASSWORD_RULE } from '../password.js';
 
 const TVA = 0.20; // hypothèse d'affichage - à confirmer selon le paramétrage Stripe
@@ -465,6 +466,11 @@ export default function TestCheckoutFlow() {
                     <ul>{summary.inclus.map((x) => <li key={x}>✓ {x}</li>)}</ul>
                   </div>
                 </div>
+
+                <ReservationNotice
+                  variant={product === 'abonnement' ? 'abonnement' : product === 'salle' ? 'salle' : 'open_space'}
+                  style={{ marginTop: 16 }}
+                />
 
                 <h3 style={{ margin: '22px 0 6px' }}>En toute sérénité</h3>
                 <Reassurance product={product} />

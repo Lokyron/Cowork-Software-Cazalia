@@ -4,6 +4,7 @@ import { api, msg } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import DevisModal from '../components/DevisModal.jsx';
 import PublicHeader from '../components/PublicHeader.jsx';
+import ReservationNotice from '../components/ReservationNotice.jsx';
 
 // Formules d'abonnement (affichage). Les montants réels sont prélevés par Stripe
 // selon les Prices configurés ; ces valeurs doivent rester en phase avec
@@ -125,6 +126,7 @@ export default function Pricing() {
 
       {/* ── Abonnement : les 3 cartes ─────────────────────────────────────── */}
       {tab === 'abonnement' && (
+      <>
       <div className="plan-grid">
         {PLANS.map((p) => (
           <div key={p.tier} className={`card plan-card ${p.popular ? 'popular' : ''}`}>
@@ -136,6 +138,10 @@ export default function Pricing() {
                 <li key={k}><span className="plan-check">✓</span> <span><strong>{k} :</strong> {v}</span></li>
               ))}
             </ul>
+            <p className="muted" style={{ fontSize: 12, margin: '0 0 12px', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+              <span aria-hidden="true">📌</span>
+              <span>Réservation du créneau à faire sur votre espace avant chaque venue.</span>
+            </p>
             <button
               className={p.popular ? '' : 'outline'}
               style={{ width: '100%', marginTop: 'auto' }}
@@ -147,6 +153,8 @@ export default function Pricing() {
           </div>
         ))}
       </div>
+      <ReservationNotice variant="abonnement" style={{ maxWidth: 720, margin: '16px auto 0' }} />
+      </>
       )}
 
       {/* ── Ponctuel : la grille à la carte ───────────────────────────────── */}
