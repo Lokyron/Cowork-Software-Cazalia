@@ -4,6 +4,7 @@ import { useAuth } from '../auth.jsx';
 import { api } from '../api.js';
 import Photo from '../components/Photo.jsx';
 import SpaceModal from '../components/SpaceModal.jsx';
+import DevisModal from '../components/DevisModal.jsx';
 import PublicHeader from '../components/PublicHeader.jsx';
 
 export default function Landing() {
@@ -15,6 +16,7 @@ export default function Landing() {
   // garde celles livrées avec l'application : la page n'est jamais vide.
   const [media, setMedia] = useState({ hero: null, presentation: null });
   const [openSpace, setOpenSpace] = useState(null); // { space, photoSrc } pour la modale
+  const [devis, setDevis] = useState(false); // modale « Demander un devis » (Bureau privé)
 
   useEffect(() => {
     api.get('/spaces').then((r) => setSpaces(r.spaces)).catch(() => {});
@@ -191,8 +193,11 @@ export default function Landing() {
           photoSrc={openSpace.photoSrc}
           onClose={() => setOpenSpace(null)}
           onReserve={goReserve}
+          onDevis={() => { setOpenSpace(null); setDevis(true); }}
         />
       )}
+
+      {devis && <DevisModal onClose={() => setDevis(false)} />}
     </div>
   );
 }

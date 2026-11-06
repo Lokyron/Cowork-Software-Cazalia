@@ -15,6 +15,7 @@ import ResetPassword from './pages/ResetPassword.jsx';
 import ForcePasswordChange from './pages/ForcePasswordChange.jsx';
 import Booking from './pages/Booking.jsx';
 import Pricing from './pages/Pricing.jsx';
+import TestCheckoutFlow from './pages/TestCheckoutFlow.jsx';
 import MemberDashboard from './pages/MemberDashboard.jsx';
 import MemberPayments from './pages/MemberPayments.jsx';
 import AccountSettings from './pages/AccountSettings.jsx';
@@ -137,7 +138,7 @@ export default function App() {
   // La landing (/) et les pages publiques (/rejoindre, /cgu) ont leur propre
   // présentation ; on masque la nav applicative.
   const isLanding = location.pathname === '/';
-  const isPublic = isLanding || ['/rejoindre', '/cgu', '/tarifs'].includes(location.pathname);
+  const isPublic = isLanding || ['/rejoindre', '/cgu', '/tarifs', '/test-checkout-flow'].includes(location.pathname);
 
   // Compte créé par l'admin : changement de mot de passe forcé avant tout accès.
   if (user && user.must_change_password) {
@@ -158,6 +159,8 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/rejoindre" element={<Shell><Rejoindre /></Shell>} />
         <Route path="/tarifs" element={<Pricing />} />
+        {/* Maquette isolée du tunnel d'achat unifié (prototype, hors production). */}
+        <Route path="/test-checkout-flow" element={<Shell><TestCheckoutFlow /></Shell>} />
         <Route path="/cgu" element={<Shell><Cgu /></Shell>} />
         <Route path="/cgv" element={<Shell><Cgv /></Shell>} />
         <Route path="/reclamation" element={<Shell><Reclamation /></Shell>} />

@@ -23,7 +23,7 @@ export default function Rejoindre() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
     first_name: '', last_name: '', email: '', phone: '', activity: '',
-    password: '', optin: false, website: '',
+    password: '', password2: '', optin: false, website: '',
   });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -40,6 +40,7 @@ export default function Rejoindre() {
     // la même politique et reste seul juge).
     const faiblesse = checkPassword(form.password);
     if (faiblesse) { setError(faiblesse); return; }
+    if (form.password !== form.password2) { setError('Les deux mots de passe ne correspondent pas.'); return; }
     setBusy(true);
     try {
       await register({
@@ -153,6 +154,15 @@ export default function Rejoindre() {
             <label>Mot de passe</label>
             <PasswordInput value={form.password} onChange={set('password')} autoComplete="new-password" required />
             <small className="hint">{PASSWORD_RULE}</small>
+          </div>
+          <div className="field">
+            <label>Confirmer le mot de passe</label>
+            <PasswordInput value={form.password2} onChange={set('password2')} autoComplete="new-password" required />
+            {form.password2 && form.password !== form.password2
+              ? <small className="hint" style={{ color: 'var(--red)' }}>Les deux mots de passe ne correspondent pas.</small>
+              : form.password2
+                ? <small className="hint" style={{ color: 'var(--green)' }}>✓ Les mots de passe correspondent</small>
+                : null}
           </div>
 
           {/* Champ piège anti-robot : masqué aux humains, doit rester vide. */}

@@ -9,9 +9,15 @@ import { checkPassword, PASSWORD_RULE } from '../password.js';
 export default function Login() {
   const { login, register } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState('login');
+  // Arrivée avec une intention d'abonnement (cf. Pricing : sessionStorage
+  // `pendingTier`) : on ouvre directement sur la création de compte, car la
+  // personne non connectée est presque toujours un nouveau client.
+  const [mode, setMode] = useState(() => {
+    try { return sessionStorage.getItem('pendingTier') ? 'register' : 'login'; }
+    catch { return 'login'; }
+  });
   const [form, setForm] = useState({
-    email: '', password: '', first_name: '', last_name: '', phone: '',
+    email: '', password: '', password2: '', first_name: '', last_name: '', phone: '',
   });
   const [cguAccepted, setCguAccepted] = useState(false);
   const [error, setError] = useState(null);
@@ -36,8 +42,10 @@ export default function Login() {
       // politique (`assertStrongPassword`) et reste seul juge.
       const faiblesse = checkPassword(form.password);
       if (faiblesse) { setError(faiblesse); return; }
+      if (form.password !== form.password2) { setError('Les deux mots de passe ne correspondent pas.'); return; }
       if (!cguAccepted) { setError(msg('CGU_NON_ACCEPTEES')); return; }
-      await register({ ...form, cgu_accepted: true });
+      const { password2: _ignore, ...payload } = form;
+      await register({ ...payload, cgu_accepted: true });
       navigate('/mon-espace');
     } catch (err) {
       setError(msg(err.code));
@@ -116,6 +124,17 @@ export default function Login() {
             <PasswordInput value={form.password} onChange={set('password')} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required />
             {mode !== 'login' && <small className="hint">{PASSWORD_RULE}</small>}
           </div>
+          {mode === 'register' && (
+            <div className="field">
+              <label>Confirmer le mot de passe</label>
+              <PasswordInput value={form.password2} onChange={set('password2')} autoComplete="new-password" required />
+              {form.password2 && form.password !== form.password2
+                ? <small className="hint" style={{ color: 'var(--red)' }}>Les deux mots de passe ne correspondent pas.</small>
+                : form.password2
+                  ? <small className="hint" style={{ color: 'var(--green)' }}>✓ Les mots de passe correspondent</small>
+                  : null}
+            </div>
+          )}
           {mode === 'register' && (
             <label className="consent">
               <input type="checkbox" checked={cguAccepted} onChange={(e) => setCguAccepted(e.target.checked)} />
