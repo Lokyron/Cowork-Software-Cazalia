@@ -109,13 +109,14 @@ export async function getAccount(apiKey) {
  * @throws {Error} Si l'envoi est refusé (clé invalide, domaine non authentifié,
  *         quota épuisé…).
  */
-export async function sendEmail({ apiKey, sender, to, subject, html, tag = null }) {
+export async function sendEmail({ apiKey, sender, to, subject, html, tag = null, replyTo = null }) {
   const body = {
     sender: sender.name ? { name: sender.name, email: sender.email } : { email: sender.email },
     to: [{ email: to }],
     subject,
     htmlContent: html,
   };
+  if (replyTo && replyTo.email) body.replyTo = replyTo.name ? { name: replyTo.name, email: replyTo.email } : { email: replyTo.email };
   if (tag) body.tags = [tag];
   const out = await call(apiKey, '/smtp/email', { method: 'POST', body });
   return { messageId: normalizeMessageId(out.messageId) };

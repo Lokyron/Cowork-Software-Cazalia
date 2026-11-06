@@ -8,6 +8,11 @@ export const claimsRouter = Router();
 
 // Adresse de réception des réclamations (boîte de la gérante).
 const CLAIMS_RECIPIENT = 'contact@cazalia.fr';
+// Expéditeur des notifications internes : une adresse DISTINCTE du destinataire
+// (no-reply@ sur le même domaine, authentifié Brevo) pour éviter l'envoi « à
+// soi-même » contact@→contact@, souvent classé en indésirables. Le Reply-To
+// pointe sur l'auteur du formulaire pour répondre directement.
+const NOTIFY_FROM = `no-reply@${CLAIMS_RECIPIENT.split('@')[1]}`;
 
 const KIND_LABEL = { annulation: 'Annulation', remboursement: 'Remboursement', autre: 'Autre' };
 
@@ -55,7 +60,10 @@ claimsRouter.post('/claims', claimsLimiter, async (req, res) => {
           message: data.message,
         }
       );
-      await sendMail({ to: CLAIMS_RECIPIENT, subject, html, templateCode: 'claim_notification' });
+      await sendMail({
+        to: CLAIMS_RECIPIENT, subject, html, templateCode: 'claim_notification',
+        fromEmail: NOTIFY_FROM, fromName: 'Cazalia — Réclamations', replyTo: data.email,
+      });
     } catch { /* journalisé par le mailer ; la réclamation est déjà enregistrée */ }
 
     res.status(201).json({ ok: true });

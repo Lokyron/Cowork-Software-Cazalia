@@ -238,7 +238,7 @@ function quotaRefusal(kind) {
  * @param {boolean} [params.marketing] Envoi commercial : soumis à la réserve de quota.
  * @returns {Promise<{sent: boolean, reason?: string, error?: string, messageId?: string | null}>}
  */
-export async function sendMail({ to, toUserId = null, subject, html, templateCode = null, marketing = false }) {
+export async function sendMail({ to, toUserId = null, subject, html, templateCode = null, marketing = false, fromEmail = null, fromName = null, replyTo = null }) {
   const { provider } = getMail();
   const base = { to_email: to, to_user_id: toUserId, template_code: templateCode, subject, provider };
 
@@ -258,16 +258,22 @@ export async function sendMail({ to, toUserId = null, subject, html, templateCod
 
   try {
     let messageId = null;
+    // Expéditeur : par défaut l'adresse configurée ; un appelant peut l'imposer
+    // (ex. notifications internes envoyées depuis no-reply@ pour éviter l'envoi
+    // « à soi-même » vers contact@, souvent filtré). `replyTo` permet de répondre
+    // directement à la personne qui a rempli le formulaire.
+    const replyToObj = replyTo ? { email: replyTo } : null;
     if (provider === 'brevo') {
       const sender = getSender();
       const out = await brevo.sendEmail({
         apiKey: getBrevo().apiKey,
-        sender: { name: sender.fromName, email: sender.fromEmail },
-        to, subject, html, tag: templateCode,
+        sender: { name: fromName || sender.fromName, email: fromEmail || sender.fromEmail },
+        to, subject, html, tag: templateCode, replyTo: replyToObj,
       });
       messageId = out.messageId;
     } else {
-      const info = await buildTransport().sendMail({ from: fromHeader(), to, subject, html });
+      const fromStr = fromEmail ? (fromName ? `${fromName} <${fromEmail}>` : fromEmail) : fromHeader();
+      const info = await buildTransport().sendMail({ from: fromStr, to, subject, html, ...(replyTo ? { replyTo } : {}) });
       messageId = info?.messageId ? String(info.messageId).replace(/^<|>$/g, '') : null;
     }
     logEmail({ ...base, status: 'sent', message_id: messageId });

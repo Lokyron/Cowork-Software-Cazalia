@@ -8,6 +8,9 @@ export const leadsRouter = Router();
 
 // Boîte de réception des contacts / demandes de devis (gérante).
 const LEADS_RECIPIENT = 'contact@cazalia.fr';
+// Expéditeur distinct (no-reply@ même domaine) pour éviter l'envoi « à soi-même »
+// contact@→contact@ souvent filtré ; Reply-To = l'auteur du formulaire.
+const NOTIFY_FROM = `no-reply@${LEADS_RECIPIENT.split('@')[1]}`;
 
 const ACTIVITY_LABEL = {
   independant: 'Indépendant', salarie_teletravail: 'Salarié en télétravail',
@@ -66,7 +69,10 @@ leadsRouter.post('/leads', leadsLimiter, async (req, res) => {
           message: message || '—',
         }
       );
-      await sendMail({ to: LEADS_RECIPIENT, subject, html, templateCode: 'lead_notification' });
+      await sendMail({
+        to: LEADS_RECIPIENT, subject, html, templateCode: 'lead_notification',
+        fromEmail: NOTIFY_FROM, fromName: isDevis ? 'Cazalia — Devis' : 'Cazalia — Contact', replyTo: data.email,
+      });
     } catch { /* journalisé par le mailer ; le prospect est déjà enregistré */ }
 
     res.status(201).json({ ok: true });
