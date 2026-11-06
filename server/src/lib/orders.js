@@ -28,6 +28,8 @@ const markOrderPaid = db.prepare(
 );
 // Les verrous du panier ne servent plus une fois la commande transformée en résas.
 const clearUserHolds = db.prepare(`DELETE FROM reservation_holds WHERE user_id = ?`);
+// Décompte du quota Open Space pour les lignes couvertes par le quota Essentiel.
+const consumeQuota = db.prepare(`UPDATE users SET open_space_quota_used = open_space_quota_used + ? WHERE id = ?`);
 
 /**
  * Enregistre une commande en attente de paiement.
@@ -67,11 +69,19 @@ export const fulfillOrder = db.transaction((sessionId, paymentIntent = null, amo
     // insérées dans CETTE transaction sont comptées (status='confirmed').
     const left = availableSeats(it.space_id, it.start_at, it.end_at, { countHolds: false });
     if (left < it.seats) conflicts.push({ space_id: it.space_id, start_at: it.start_at, end_at: it.end_at, seats: it.seats, seats_left: left });
+    // Mode de couverture figé au moment du panier. Les lignes couvertes par
+    // l'abonnement (SUBSCRIPTION_*) sont « payées » à 0 € (payment_status 'free') ;
+    // seules les lignes STRIPE_ONE_OFF ont été réellement encaissées.
+    const method = it.payment_method || 'STRIPE_ONE_OFF';
+    const paid = method === 'STRIPE_ONE_OFF';
     const reservationId = insertReservation({
       userId: order.user_id, spaceId: it.space_id, startIso: it.start_at, endIso: it.end_at,
       seats: it.seats, priceCents: it.price_cents, tarifType: it.tarif_type,
-      paymentStatus: 'paid', stripeSessionId: sessionId, paymentIntent,
+      paymentStatus: paid ? 'paid' : 'free', paymentMethod: method, quotaDays: it.quota_days || 0,
+      stripeSessionId: sessionId, paymentIntent,
     });
+    // Décompte du quota (une seule fois, dans la transaction idempotente).
+    if (method === 'SUBSCRIPTION_QUOTA' && it.quota_days > 0) consumeQuota.run(it.quota_days, order.user_id);
     created.push(reservationId);
   }
   markOrderPaid.run({ id: order.id, pi: paymentIntent, amount_paid_cents: amountPaidCents });

@@ -98,6 +98,10 @@ function publicUser(u) {
     role: u.role,
     must_change_password: !!u.must_change_password,
     totp_enabled: !!u.totp_enabled,
+    subscription_tier: u.subscription_tier || 'NONE',
+    subscription_status: u.subscription_status || 'none',
+    open_space_quota_used: Number(u.open_space_quota_used) || 0,
+    current_period_end: u.current_period_end || null,
   };
 }
 

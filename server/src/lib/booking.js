@@ -164,9 +164,11 @@ export function quoteCost(spaceId, startIso, endIso, seatsRaw = 1, tarifType = '
 const insertResStmt = db.prepare(
   `INSERT INTO reservations
      (user_id, space_id, start_at, end_at, credits_cost, seats,
-      price_cents, tarif_type, payment_status, stripe_session_id, payment_intent)
+      price_cents, tarif_type, payment_status, payment_method, quota_days,
+      stripe_session_id, payment_intent)
    VALUES (@user_id, @space_id, @start_at, @end_at, 0, @seats,
-           @price_cents, @tarif_type, @payment_status, @stripe_session_id, @payment_intent)`
+           @price_cents, @tarif_type, @payment_status, @payment_method, @quota_days,
+           @stripe_session_id, @payment_intent)`
 );
 
 /**
@@ -188,6 +190,8 @@ function insertReservation(p) {
     price_cents: p.priceCents ?? 0,
     tarif_type: p.tarifType ?? null,
     payment_status: p.paymentStatus ?? 'free',
+    payment_method: p.paymentMethod ?? null,
+    quota_days: p.quotaDays ?? 0,
     stripe_session_id: p.stripeSessionId ?? null,
     payment_intent: p.paymentIntent ?? null,
   });
@@ -238,6 +242,7 @@ const reserveTx = db.transaction((userId, spaceId, startIso, endIso, seatsRaw, o
     userId, spaceId, startIso, endIso, seats,
     priceCents: price, tarifType,
     paymentStatus: o.paymentStatus || 'free',
+    paymentMethod: o.paymentMethod || 'FREE_ADMIN',
     stripeSessionId: o.stripeSessionId, paymentIntent: o.paymentIntent,
   });
   return { reservationId, cost: price, seats };
@@ -311,6 +316,7 @@ export function reserveBatch(userId, spaceId, rawSlots, opts = {}) {
         userId, spaceId, startIso: sl.startIso, endIso: sl.endIso, seats: sl.seats,
         priceCents: sl.cost, tarifType: sl.tarifType,
         paymentStatus: o.paymentStatus || 'free',
+        paymentMethod: o.paymentMethod || 'FREE_ADMIN',
         stripeSessionId: o.stripeSessionId, paymentIntent: o.paymentIntent,
       });
       created.push({ reservationId, cost: sl.cost, seats: sl.seats, start_at: sl.startIso, end_at: sl.endIso });
@@ -325,6 +331,17 @@ const getResStmt = db.prepare(`SELECT * FROM reservations WHERE id = ?`);
 const cancelResStmt = db.prepare(
   `UPDATE reservations SET status = 'cancelled' WHERE id = ? AND status = 'confirmed'`
 );
+// Recrédite le quota Open Space d'un abonné Essentiel à l'annulation d'une
+// réservation À VENIR couverte par le quota (brief §5.3 — règles d'annulation).
+const recreditQuotaStmt = db.prepare(
+  `UPDATE users SET open_space_quota_used = MAX(0, open_space_quota_used - ?) WHERE id = ?`
+);
+function recreditQuotaIfDue(res) {
+  if (res.payment_method === 'SUBSCRIPTION_QUOTA' && res.quota_days > 0
+      && new Date(res.start_at).getTime() > Date.now()) {
+    recreditQuotaStmt.run(res.quota_days, res.user_id);
+  }
+}
 // Charge une réservation confirmée ou lève (RESA_INTROUVABLE / DEJA_ANNULEE).
 function getConfirmed(id) {
   const res = getResStmt.get(id);
@@ -340,6 +357,7 @@ const cancelTx = db.transaction((reservationId, actor) => {
   if (actor.role !== 'admin' && res.user_id !== actor.id) throw fail('INTERDIT');
   if (res.status !== 'confirmed') throw fail('DEJA_ANNULEE');
   cancelResStmt.run(reservationId);
+  recreditQuotaIfDue(res);
 
   // Remboursement DÛ (à effectuer manuellement dans Stripe par l'admin) si
   // l'annulation intervient avant la fenêtre ET que la résa a été payée en ligne.
@@ -457,6 +475,7 @@ export function moveReservation(id, startRaw, endRaw) {
 const adminCancelTx = db.transaction((id, _actorId) => {
   const res = getConfirmed(id);
   cancelResStmt.run(id);
+  recreditQuotaIfDue(res);
   // Remboursement dû si la résa avait été payée en ligne (à faire dans Stripe).
   const refundDue = res.payment_status === 'paid' && res.price_cents > 0;
   return { cancelled: true, refunded: refundDue, amount: refundDue ? res.price_cents : 0 };

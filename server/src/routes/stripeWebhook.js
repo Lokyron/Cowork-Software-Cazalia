@@ -8,6 +8,9 @@
 
 import { constructEvent, getReceiptUrl } from '../lib/stripe.js';
 import { fulfillOrder, attachReceipt, applyRefund } from '../lib/orders.js';
+import {
+  activateFromCheckoutSession, applySubscriptionUpdate, applySubscriptionDeleted, applyInvoicePaid,
+} from '../lib/subscriptions.js';
 import { ensureVoucherForReservation } from '../lib/unifi.js';
 import { ensureAccessPinForReservation } from '../lib/unifiAccess.js';
 import { sendBookingConfirmation } from '../lib/mailer.js';
@@ -37,7 +40,7 @@ async function finalizeReservations(ids) {
  * @param {import('express').Request} req `req.body` est un Buffer (express.raw).
  * @param {import('express').Response} res
  */
-export function stripeWebhookHandler(req, res) {
+export async function stripeWebhookHandler(req, res) {
   const signature = req.headers['stripe-signature'];
   let event;
   try {
@@ -50,6 +53,12 @@ export function stripeWebhookHandler(req, res) {
   try {
     if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
+      // Abonnement : activation du compte (lecture de l'abonnement réel chez Stripe).
+      if (s.mode === 'subscription' || s.metadata?.kind === 'subscription') {
+        const r = await activateFromCheckoutSession(s);
+        securityEvent('stripe_abonnement_active', { session: s.id, user: r.userId, tier: r.tier, ok: r.matched });
+        return res.json({ received: true });
+      }
       // On crée les réservations une fois le paiement réglé. `no_payment_required`
       // couvre le cas d'un code promo à 100 % (total 0 €) : Stripe valide la
       // session sans encaissement, la réservation gratuite doit tout de même être créée.
@@ -86,6 +95,20 @@ export function stripeWebhookHandler(req, res) {
         amountCents: Number.isInteger(c.amount) ? c.amount : 0,
       });
       securityEvent('stripe_remboursement', { pi: paymentIntent, resas: r.matched, total: r.fully });
+    } else if (event.type === 'invoice.paid') {
+      // Renouvellement mensuel d'un abonnement : réinitialise le quota Open Space
+      // et met à jour la période de facturation en cours.
+      const inv = event.data.object;
+      const r = applyInvoicePaid(inv);
+      securityEvent('stripe_abonnement_renouvele', { invoice: inv?.id, user: r.userId, ok: r.matched });
+    } else if (event.type === 'customer.subscription.updated') {
+      // Upgrade/downgrade de formule, passage en impayé (past_due), etc.
+      const r = applySubscriptionUpdate(event.data.object);
+      securityEvent('stripe_abonnement_maj', { sub: event.data.object?.id, user: r.userId, tier: r.tier, status: r.status, ok: r.matched });
+    } else if (event.type === 'customer.subscription.deleted') {
+      // Fin d'engagement : le membre repasse en NONE.
+      const r = applySubscriptionDeleted(event.data.object);
+      securityEvent('stripe_abonnement_resilie', { sub: event.data.object?.id, user: r.userId, ok: r.matched });
     } else if (event.type === 'payment_intent.payment_failed') {
       // Échec de paiement : la session n'est pas complétée (aucune réservation).
       // On journalise pour le diagnostic (le client reste sur la page Stripe).

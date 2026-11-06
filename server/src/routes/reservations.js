@@ -35,7 +35,7 @@ reservationsRouter.post('/reservations', requireAuth, async (req, res) => {
     if (!spaceId || !start_at || !end_at) return res.status(400).json({ error: 'CHAMPS_INVALIDES' });
     const isAdmin = req.user.role === 'admin';
     if (!isAdmin && !getStripe().enabled) return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });
-    addHold(req.user.id, spaceId, start_at, end_at, seats, { tarifType: tarif_type });
+    addHold(req.user.id, spaceId, start_at, end_at, seats, { tarifType: tarif_type, adminMode: isAdmin });
     if (isAdmin) return res.json(await checkoutFree(req.user.id));
     const baseUrl = config.publicBaseUrl || `${req.protocol}://${req.get('host')}`;
     const result = await startBookingCheckout(req.user.id, baseUrl, { promoCode: req.body?.promo_code || null });
@@ -63,7 +63,7 @@ reservationsRouter.post('/reservations/batch', requireAuth, async (req, res) => 
     if (!spaceId || !Array.isArray(slots) || slots.length === 0) return res.status(400).json({ error: 'CHAMPS_INVALIDES' });
     const isAdmin = req.user.role === 'admin';
     if (!isAdmin && !getStripe().enabled) return res.status(409).json({ error: 'PAIEMENT_INDISPONIBLE' });
-    slots.forEach((s, i) => addHold(req.user.id, spaceId, s.start_at, s.end_at, s.seats, { tarifType: s.tarif_type }));
+    slots.forEach((s, i) => addHold(req.user.id, spaceId, s.start_at, s.end_at, s.seats, { tarifType: s.tarif_type, adminMode: isAdmin }));
     if (isAdmin) return res.json(await checkoutFree(req.user.id));
     const baseUrl = config.publicBaseUrl || `${req.protocol}://${req.get('host')}`;
     const result = await startBookingCheckout(req.user.id, baseUrl, { promoCode: req.body?.promo_code || null });

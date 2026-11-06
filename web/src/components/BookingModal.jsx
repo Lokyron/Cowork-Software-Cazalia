@@ -30,7 +30,14 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
   const [overbook, setOverbook] = useState(false);
   const [customCost, setCustomCost] = useState('');
 
-  useEffect(() => { api.get('/spaces').then((r) => setSpaces(r.spaces)).catch(() => {}); }, []);
+  // Côté client, on ne propose que les espaces réservables en ligne. L'admin
+  // garde l'accès à tous les espaces (gestion back-office).
+  useEffect(() => {
+    api.get('/spaces').then((r) => {
+      const all = r.spaces || [];
+      setSpaces(isAdmin ? all : all.filter((s) => s.category === 'OPEN_SPACE' || s.category === 'MEETING_ROOM'));
+    }).catch(() => {});
+  }, [isAdmin]);
   useEffect(() => { if (isAdmin) api.get('/admin/members').then((r) => setMembers(r.members)).catch(() => {}); }, [isAdmin]);
 
   const space = spaces.find((s) => String(s.id) === String(spaceId));
@@ -62,11 +69,16 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
   const customCents = customCost !== '' ? Math.round(Number(customCost) * 100) : null;
   const effectiveCents = isAdmin && customCents != null ? customCents : costCents;
   const full = avail && avail.seats_left < seats;
+  // Open Space : réservation par forfait (demi-journée / journée) depuis la page
+  // Réserver — ce modal horaire ne le gère pas côté client.
+  const openSpaceBlocked = !isAdmin && space?.category === 'OPEN_SPACE';
 
   const canSubmit = () => {
     if (!space || !iso || !iso.valid || busy) return false;
     if (isAdmin && !client) return false;
     if (!isAdmin && full) return false; // règles strictes côté client
+    if (openSpaceBlocked) return false;
+    if (!isAdmin && effectiveCents == null) return false; // tarif indisponible
     return true;
   };
 
@@ -81,10 +93,12 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
         });
         onCreated?.(`Réservation créée pour ${client.display_name}.`);
       } else {
-        // Membre : paiement CB → on redirige vers Stripe. La résa est créée au webhook.
-        const { url } = await api.post('/reservations', { space_id: space.id, start_at: iso.s, end_at: iso.e, seats, tarif_type: 'heure' });
-        if (url) { window.location.assign(url); return; }
-        onCreated?.('Réservation confirmée.');
+        // Membre : si un paiement est dû → redirection Stripe (résa créée au
+        // webhook). Si l'abonnement couvre le créneau (0 €) → {free:true} et la
+        // réservation est déjà confirmée.
+        const r = await api.post('/reservations', { space_id: space.id, start_at: iso.s, end_at: iso.e, seats, tarif_type: 'heure' });
+        if (r?.url) { window.location.assign(r.url); return; }
+        onCreated?.(r?.free ? 'Réservation confirmée (incluse dans votre abonnement).' : 'Réservation confirmée.');
       }
     } catch (err) {
       setFeedback({ type: 'error', text: msg(err.code) });
@@ -170,9 +184,20 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
                   {avail.exclusive
                     ? <span className={`badge ${full ? 'red' : 'green'}`}>{full ? 'Réservé' : 'Disponible'}</span>
                     : <span className={`badge ${full ? 'red' : 'green'}`}>{avail.seats_left} place{avail.seats_left > 1 ? 's' : ''} restante{avail.seats_left > 1 ? 's' : ''}</span>}
-                  {' '}<span className="muted">{effectiveCents != null ? eur(effectiveCents) : 'tarif indisponible'}</span>
+                  {' '}<span className="muted">
+                    {effectiveCents == null ? 'tarif indisponible'
+                      : (!isAdmin && avail.base_cents != null && avail.base_cents !== effectiveCents)
+                        ? <><s>{eur(avail.base_cents)}</s> <strong>{eur(effectiveCents)}</strong>{avail.discount_label ? <> <span className="badge green">{avail.discount_label}</span></> : null}</>
+                        : eur(effectiveCents)}
+                  </span>
                 </>}
           </div>
+
+          {openSpaceBlocked && (
+            <div className="alert" style={{ background: 'rgba(59,130,246,0.08)', borderColor: 'rgba(59,130,246,0.3)' }}>
+              L'Open Space se réserve par demi-journée ou journée depuis la page <strong>Réserver</strong>.
+            </div>
+          )}
 
           {isAdmin && (
             <div className="card" style={{ background: 'rgba(59,130,246,0.06)', padding: 12, marginBottom: 12 }}>

@@ -14,6 +14,7 @@ import Reclamation from './pages/Reclamation.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import ForcePasswordChange from './pages/ForcePasswordChange.jsx';
 import Booking from './pages/Booking.jsx';
+import Pricing from './pages/Pricing.jsx';
 import MemberDashboard from './pages/MemberDashboard.jsx';
 import MemberPayments from './pages/MemberPayments.jsx';
 import AccountSettings from './pages/AccountSettings.jsx';
@@ -63,6 +64,7 @@ function Nav() {
           {user.role !== 'admin' && (
             <>
               <NavLink to="/reserver">Réserver</NavLink>
+              <NavLink to="/tarifs">Abonnements</NavLink>
               <NavLink to="/mon-planning">Mon planning</NavLink>
               <NavLink to="/mes-paiements">Mes paiements</NavLink>
             </>
@@ -155,6 +157,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/rejoindre" element={<Shell><Rejoindre /></Shell>} />
+        <Route path="/tarifs" element={<Shell><Pricing /></Shell>} />
         <Route path="/cgu" element={<Shell><Cgu /></Shell>} />
         <Route path="/cgv" element={<Shell><Cgv /></Shell>} />
         <Route path="/reclamation" element={<Shell><Reclamation /></Shell>} />

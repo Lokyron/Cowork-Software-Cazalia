@@ -32,6 +32,7 @@ function PublicHeader({ user }) {
           {SECTIONS.map((s) => (
             <a key={s.id} href={`#${s.id}`}>{s.label}</a>
           ))}
+          <Link to="/tarifs">Tarifs</Link>
         </nav>
         <div className="public-cta">
           {user ? (
@@ -82,7 +83,7 @@ export default function Landing() {
           </p>
           <div className="hero-actions">
             <button onClick={goReserve}>Réserver une place</button>
-            <a href="#presentation" className="btn-secondary">Découvrir le lieu</a>
+            <Link to="/tarifs" className="btn-secondary">Voir les abonnements</Link>
           </div>
         </div>
       </section>
@@ -215,6 +216,7 @@ export default function Landing() {
       <footer className="landing-footer">
         <span>Cazalia</span>
         <nav className="footer-links">
+          <Link to="/tarifs">Tarifs</Link>
           <Link to="/cgu">CGU &amp; mentions légales</Link>
           <Link to="/cgv">CGV</Link>
           <Link to="/cgu#confidentialite">Confidentialité</Link>

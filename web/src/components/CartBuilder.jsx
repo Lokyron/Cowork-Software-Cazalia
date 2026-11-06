@@ -16,6 +16,20 @@ const fmtSlot = (a, b) => `${dFmt.format(new Date(a))} · ${tFmt.format(new Date
 const mmss = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
 const eur = (cents) => (cents == null ? '—' : (cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }));
 
+// Affiche le prix effectif, avec le prix de référence barré et la mention de
+// remise/inclusion quand l'abonnement de l'utilisateur modifie le tarif.
+function PriceTag({ cents, baseCents, label }) {
+  if (cents == null) return <span className="muted">tarif indisponible</span>;
+  const discounted = baseCents != null && baseCents !== cents;
+  if (cents === 0) {
+    return <span className="muted"><span className="badge green">{label || 'Offert'}</span>{discounted ? <> <s>{eur(baseCents)}</s></> : null} 0 €</span>;
+  }
+  if (discounted) {
+    return <span className="muted"><s>{eur(baseCents)}</s> <strong>{eur(cents)}</strong>{label ? <> <span className="badge green">{label}</span></> : null}</span>;
+  }
+  return <span className="muted">{eur(cents)}</span>;
+}
+
 // Formules de réservation. Les demi-journées / journées sont des forfaits à
 // créneau fixe (cf. config.forfaitSlots côté serveur). Samedi : seul le matin.
 const FORMULES = [
@@ -57,7 +71,13 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
   const [promoBusy, setPromoBusy] = useState(false);
 
   const reload = () => adapter.list().then(setCart).catch(() => {});
-  useEffect(() => { api.get('/spaces').then((r) => setSpaces(r.spaces)).catch(() => {}); }, []);
+  // Seuls l'Open Space et la Salle de réunion sont réservables en ligne : la salle
+  // confidentielle (libre-service) et le bureau privé (sur devis) sont exclus.
+  useEffect(() => {
+    api.get('/spaces')
+      .then((r) => setSpaces((r.spaces || []).filter((s) => s.category === 'OPEN_SPACE' || s.category === 'MEETING_ROOM')))
+      .catch(() => {});
+  }, []);
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [adapter.key]);
 
   const expiredRef = useRef(false);
@@ -72,6 +92,11 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
 
   const space = spaces.find((s) => String(s.id) === String(spaceId));
   useEffect(() => { setSeats(1); }, [spaceId]);
+
+  // Open Space : forfaits demi-journée / journée uniquement (pas d'horaire).
+  const isOpenSpace = space?.category === 'OPEN_SPACE';
+  const availFormules = isOpenSpace ? FORMULES.filter((f) => f.id !== 'heure') : FORMULES;
+  useEffect(() => { if (isOpenSpace && formule === 'heure') setFormule('matin'); }, [isOpenSpace, formule]);
 
   const tarifType = FORMULES.find((f) => f.id === formule)?.tarif || 'heure';
   // Créneau effectif : plage libre à l'heure, sinon fenêtre du forfait choisi.
@@ -161,7 +186,7 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
         <div className="field">
           <label>Formule</label>
           <select value={formule} onChange={(e) => setFormule(e.target.value)}>
-            {FORMULES.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+            {availFormules.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
           </select>
         </div>
 
@@ -204,7 +229,7 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
                 {avail.exclusive
                   ? <span className={`badge ${full ? 'red' : 'green'}`}>{full ? 'Réservé' : 'Disponible'}</span>
                   : <span className={`badge ${full ? 'red' : 'green'}`}>{avail.seats_left} place{avail.seats_left > 1 ? 's' : ''} restante{avail.seats_left > 1 ? 's' : ''}</span>}
-                {' '}<span className="muted">{effectiveCents != null ? eur(effectiveCents) : 'tarif indisponible'}</span>
+                {' '}<PriceTag cents={effectiveCents} baseCents={admin ? null : avail.base_cents} label={admin ? null : avail.discount_label} />
               </>}
         </div>
 
@@ -324,8 +349,8 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
             >
               {admin
                 ? `Valider (${eur(total)})`
-                : promoApplied && promoApplied.new_total_cents === 0
-                  ? 'Confirmer ma réservation (offerte)'
+                : (promoApplied ? promoApplied.new_total_cents : total) === 0
+                  ? 'Confirmer ma réservation (incluse)'
                   : `Payer ${eur(promoApplied ? promoApplied.new_total_cents : total)}`}
             </button>
           </>

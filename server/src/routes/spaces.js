@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { spaceAvailability, quoteCost } from '../lib/booking.js';
+import { spaceAvailability, getActiveSpace } from '../lib/booking.js';
+import { effectivePricing } from '../lib/pricing.js';
 import { toUtcIso } from '../lib/time.js';
 import { config } from '../config.js';
 import { getArrival } from '../lib/settings.js';
@@ -28,7 +29,7 @@ spacesRouter.get('/config', (_req, res) => {
 spacesRouter.get('/spaces', (_req, res) => {
   const rows = db
     .prepare(
-      `SELECT id, name, kind, capacity, exclusive, privatizable,
+      `SELECT id, name, kind, category, capacity, exclusive, privatizable,
               price_per_hour_cents, price_half_day_cents, price_day_cents,
               color, description, amenities, photo
          FROM spaces WHERE active = 1 ORDER BY kind, name`
@@ -56,15 +57,21 @@ spacesRouter.get('/availability', (req, res) => {
 
     const a = spaceAvailability(spaceId, from, to);
     if (!a) return res.status(404).json({ error: 'ESPACE_INTROUVABLE' });
-    // Prix EN CENTIMES pour le type de tarif demandé (défaut 'heure'). Si le
-    // créneau ne correspond pas au forfait demandé, on renvoie cost = null.
+    // Prix EFFECTIF EN CENTIMES selon l'abonnement de l'utilisateur connecté
+    // (moteur lib/pricing.js). `base_cents` = prix de référence (barré à l'UI),
+    // `discount_label` = mention à afficher (ex. « −50 % Confort », « Inclus »).
+    // Si le créneau ne correspond pas au forfait / tarif indisponible → cost null.
     const tarifType = ['heure', 'demi_journee', 'journee'].includes(req.query.tarif_type) ? req.query.tarif_type : 'heure';
-    let cost = null;
-    try { cost = quoteCost(spaceId, from, to, seats, tarifType); } catch { cost = null; }
+    const space = getActiveSpace(spaceId);
+    let cost = null; let baseCents = null; let discountLabel = null; let method = null;
+    try {
+      const p = effectivePricing({ user: req.user || null, space, startIso: from, endIso: to, seats, tarifType });
+      cost = p.cents; baseCents = p.baseCents; discountLabel = p.discountLabel; method = p.method;
+    } catch { cost = null; }
     res.json({
       space_id: spaceId, from, to, tarif_type: tarifType,
       exclusive: a.exclusive, privatizable: a.privatizable, capacity: a.capacity,
-      seats_left: a.seats_left, cost,
+      seats_left: a.seats_left, cost, base_cents: baseCents, discount_label: discountLabel, payment_method: method,
     });
   } catch (err) {
     sendBusinessError(res, err);

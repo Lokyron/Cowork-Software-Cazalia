@@ -24,14 +24,75 @@ function HistoryBadge({ r, now }) {
   return <span className="badge">Terminée</span>;
 }
 
+const TIER_LABEL = { NONE: 'Aucun', ESSENTIEL: 'Essentiel', CONFORT: 'Confort', PREMIUM: 'Premium' };
+const periodFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'long', year: 'numeric' });
+
+// Encart abonnement : formule active, période, jauge de quota (Essentiel), accès
+// au portail Stripe. Invite à s'abonner si aucun abonnement actif.
+function SubscriptionCard({ sub, onManage, busy }) {
+  if (!sub) return null;
+  const active = sub.status === 'active' || sub.status === 'past_due';
+  if (!active || sub.tier === 'NONE') {
+    return (
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="flex-between" style={{ flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <h2 style={{ margin: '0 0 4px' }}>Aucun abonnement actif</h2>
+            <p className="muted" style={{ margin: 0 }}>Économisez avec une formule mensuelle, ou continuez à la carte.</p>
+          </div>
+          <Link to="/tarifs"><button>Voir les abonnements</button></Link>
+        </div>
+      </div>
+    );
+  }
+  const pct = Math.min(100, Math.round((sub.quota_used / sub.quota_total) * 100));
+  return (
+    <div className="card" style={{ marginBottom: 20 }}>
+      <div className="flex-between" style={{ flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <div className="hero-tag" style={{ marginBottom: 6 }}>Mon abonnement</div>
+          <h2 style={{ margin: '0 0 2px' }}>
+            Formule {TIER_LABEL[sub.tier] || sub.tier}
+            {sub.status === 'past_due' && <span className="badge red" style={{ marginLeft: 8 }}>Paiement en attente</span>}
+          </h2>
+          {sub.current_period_end && (
+            <div className="muted seats">Période en cours jusqu'au {periodFmt.format(new Date(sub.current_period_end))}</div>
+          )}
+        </div>
+        <button className="outline" onClick={onManage} disabled={busy}>Gérer mon abonnement</button>
+      </div>
+
+      {sub.tier === 'ESSENTIEL' && (
+        <div style={{ marginTop: 14 }}>
+          <div className="flex-between seats" style={{ marginBottom: 6 }}>
+            <span>Jours Open Space utilisés ce mois-ci</span>
+            <strong>{sub.quota_used} / {sub.quota_total}</strong>
+          </div>
+          <div className="quota-bar"><div className="quota-fill" style={{ width: `${pct}%` }} /></div>
+          <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>
+            Au-delà de {sub.quota_total} jours, les réservations Open Space passent au tarif ponctuel (12 € / 20 €).
+          </p>
+        </div>
+      )}
+      {(sub.tier === 'CONFORT' || sub.tier === 'PREMIUM') && (
+        <p className="muted" style={{ fontSize: 13, margin: '12px 0 0' }}>
+          ✓ Open Space illimité inclus{sub.tier === 'PREMIUM' ? ' · Salle de réunion illimitée incluse' : ' · −50 % sur la salle de réunion'}.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function MemberDashboard() {
-  const { user } = useAuth();
+  const { user, refresh: refreshUser } = useAuth();
   const [reservations, setReservations] = useState([]);
   const [processing, setProcessing] = useState([]);
   const [arrival, setArrival] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
+  const [sub, setSub] = useState(null);
+  const [subBusy, setSubBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const load = useCallback(async () => {
@@ -42,6 +103,29 @@ export default function MemberDashboard() {
     return r;
   }, []);
   useEffect(() => { load().catch(() => setLoading(false)); api.get('/config').then(setArrival).catch(() => {}); }, [load]);
+
+  const loadSub = useCallback(() => api.get('/subscriptions/me').then(setSub).catch(() => {}), []);
+  useEffect(() => { loadSub(); }, [loadSub]);
+
+  // Reprise de souscription : l'utilisateur a cliqué « S'abonner » sans être
+  // connecté ; après connexion, on relance le Checkout Stripe de la formule choisie.
+  useEffect(() => {
+    let pending = null;
+    try { pending = sessionStorage.getItem('pendingTier'); } catch { pending = null; }
+    if (!pending) return;
+    try { sessionStorage.removeItem('pendingTier'); } catch { /* ignore */ }
+    api.post('/subscriptions/checkout', { tier: pending })
+      .then((r) => { if (r?.url) window.location.assign(r.url); })
+      .catch(() => { /* déjà abonné / indisponible : on ignore silencieusement */ });
+  }, []);
+
+  // Ouvre le portail Stripe (gestion CB, factures, résiliation).
+  const managePortal = async () => {
+    setSubBusy(true);
+    try { const { url } = await api.post('/subscriptions/portal'); if (url) { window.location.assign(url); return; } }
+    catch (err) { setFeedback({ type: 'error', text: msg(err.code) }); }
+    setSubBusy(false);
+  };
 
   // Horloge basse fréquence : garde le statut « en cours » à jour sans recharger.
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
@@ -77,6 +161,24 @@ export default function MemberDashboard() {
       searchParams.delete('reservation'); setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams, load]);
+
+  // Retour depuis le Checkout d'ABONNEMENT.
+  useEffect(() => {
+    const status = searchParams.get('abonnement');
+    if (!status) return;
+    if (status === 'success') {
+      setFeedback({ type: 'ok', text: 'Abonnement activé ! Il apparaît ici dès sa confirmation (quelques secondes).' });
+      // Recharge le profil (tier) + le résumé d'abonnement, à cadence décroissante
+      // le temps que le webhook mette la base à jour.
+      let tries = 0;
+      const tick = () => { tries += 1; refreshUser?.(); loadSub(); if (tries < 6) setTimeout(tick, 2000); };
+      setTimeout(tick, 1500);
+    }
+    if (status === 'cancel') {
+      setFeedback({ type: 'error', text: "Souscription annulée — aucun montant n'a été prélevé." });
+    }
+    searchParams.delete('abonnement'); setSearchParams(searchParams, { replace: true });
+  }, [searchParams, setSearchParams, refreshUser, loadSub]);
 
   const { current, next, upcoming, past } = useMemo(() => {
     const confirmed = reservations.filter((r) => r.status === 'confirmed');
@@ -127,6 +229,9 @@ export default function MemberDashboard() {
           (quelques secondes). Inutile de payer à nouveau.
         </div>
       )}
+
+      {/* ABONNEMENT */}
+      <SubscriptionCard sub={sub} onManage={managePortal} busy={subBusy} />
 
       {/* EN COURS */}
       {current.map((r) => (

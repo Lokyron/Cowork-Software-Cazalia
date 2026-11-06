@@ -41,6 +41,23 @@ export const config = {
     betaBranch: process.env.UPDATE_BETA_BRANCH === undefined ? 'beta' : process.env.UPDATE_BETA_BRANCH,
     checkHours: Number(process.env.UPDATE_CHECK_HOURS) || 24,
   },
+  // ── Grille tarifaire (refonte modèle éco.) ──────────────────────────────────
+  // Source de vérité UNIQUE des prix Open Space / Salle de réunion (en centimes
+  // d'euro). Les prix par espace en base ne servent plus pour ces deux catégories :
+  // le moteur lib/pricing.js calcule le prix effectif selon la catégorie de
+  // l'espace et l'abonnement de l'utilisateur. Open Space : demi-journée / journée
+  // uniquement (pas d'horaire). Salle de réunion : heure / demi-journée / journée.
+  pricing: {
+    OPEN_SPACE: { demi_journee: 1200, journee: 2000 },
+    MEETING_ROOM: { heure: 2000, demi_journee: 3500, journee: 5000 },
+    // Remise Salle de réunion pour l'abonnement Confort (−50 %).
+    CONFORT_MEETING_DISCOUNT: 0.5,
+    // Prix mensuels des abonnements (affichage ; le montant réel vient des Prices
+    // Stripe configurés dans l'admin). En centimes.
+    SUBSCRIPTIONS: { ESSENTIEL: 16000, CONFORT: 22000, PREMIUM: 30000 },
+    // Quota mensuel de jours Open Space inclus dans l'abonnement Essentiel.
+    ESSENTIEL_QUOTA_DAYS: 12,
+  },
   // Durée de vie d'une session serveur.
   sessionTtlMs: 1000 * 60 * 60 * 24 * 14, // 14 jours
   // Fenêtre de remboursement total à l'annulation (cf. brief §5.3).
@@ -105,6 +122,15 @@ export const config = {
     secretKey: process.env.STRIPE_SECRET_KEY || null,
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || null,
+    // Price IDs récurrents des abonnements (créés dans le Dashboard Stripe,
+    // test ET live). Amorçage par l'environnement ; surchargés par le réglage
+    // `stripe.subscription_prices` en base s'il existe. Tant que les trois ne
+    // sont pas définis, la souscription en ligne reste désactivée.
+    subscriptionPrices: {
+      ESSENTIEL: process.env.STRIPE_PRICE_ESSENTIEL || null,
+      CONFORT: process.env.STRIPE_PRICE_CONFORT || null,
+      PREMIUM: process.env.STRIPE_PRICE_PREMIUM || null,
+    },
   },
   // SMTP : tant que SMTP_HOST n'est pas défini, le mailer reste en STUB (rien n'est envoyé).
   smtp: {

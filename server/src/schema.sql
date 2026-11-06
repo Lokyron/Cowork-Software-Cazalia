@@ -12,6 +12,16 @@ CREATE TABLE IF NOT EXISTS users (
   must_change_password INTEGER NOT NULL DEFAULT 0,     -- 1 => changement forcé à la connexion
   totp_secret   TEXT,                                  -- secret base32 (2FA), null si non configurée
   totp_enabled  INTEGER NOT NULL DEFAULT 0,            -- 1 => 2FA active (OTP exigé au login)
+  -- ── Abonnement mensuel récurrent (Stripe Subscriptions) ──────────────────────
+  stripe_customer_id     TEXT,                         -- client Stripe (créé à la 1re souscription)
+  stripe_subscription_id TEXT,                         -- abonnement Stripe actif (NULL si aucun)
+  subscription_tier      TEXT NOT NULL DEFAULT 'NONE', -- 'NONE'|'ESSENTIEL'|'CONFORT'|'PREMIUM'
+  subscription_status    TEXT NOT NULL DEFAULT 'none', -- 'none'|'active'|'past_due'|'canceled'
+  current_period_start   TEXT,                          -- début de la période de facturation en cours (ISO/UTC)
+  current_period_end     TEXT,                          -- fin de la période (ISO/UTC) — synchro Stripe
+  -- Jours Open Space consommés sur la période en cours (Essentiel). Réel : une
+  -- demi-journée vaut 0,5 j, une journée 1 j. Réinitialisé à chaque renouvellement.
+  open_space_quota_used  REAL NOT NULL DEFAULT 0,
   created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -19,6 +29,12 @@ CREATE TABLE IF NOT EXISTS spaces (
   id               INTEGER PRIMARY KEY,
   name             TEXT    NOT NULL,
   kind             TEXT    NOT NULL CHECK (kind IN ('zone', 'room')),
+  -- Catégorie métier (refonte modèle éco.) : pilote la tarification et la
+  -- réservabilité en ligne. 'OPEN_SPACE' | 'MEETING_ROOM' | 'CONFIDENTIAL' |
+  -- 'PRIVATE_OFFICE'. NULL = non catégorisé (non réservable en ligne par défaut).
+  -- CONFIDENTIAL (libre-service) et PRIVATE_OFFICE (sur devis) ne sont pas
+  -- réservables en ligne.
+  category         TEXT,
   capacity         INTEGER NOT NULL CHECK (capacity >= 1),  -- inventaire: nb de places ; exclusif: nb d'occupants max
   exclusive        INTEGER NOT NULL DEFAULT 0,              -- 1 = réservation bloque toute la salle (forfait), sinon inventaire de places
   privatizable     INTEGER NOT NULL DEFAULT 0,             -- 1 = espace inventaire offrant l'option "privatiser" (prendre toute la capacité)
@@ -53,6 +69,14 @@ CREATE TABLE IF NOT EXISTS reservations (
   price_cents       INTEGER NOT NULL DEFAULT 0,
   tarif_type        TEXT,
   payment_status    TEXT    NOT NULL DEFAULT 'paid',
+  -- Mode de couverture de la réservation (refonte modèle éco.) :
+  --   'STRIPE_ONE_OFF'          : payée à l'acte (CB)
+  --   'SUBSCRIPTION_QUOTA'      : couverte par le quota Essentiel (décompte quota_days)
+  --   'SUBSCRIPTION_UNLIMITED'  : incluse illimitée (Confort/Premium selon espace)
+  --   'FREE_ADMIN'              : créée gratuitement par l'admin / paiement hors ligne
+  payment_method    TEXT,
+  -- Jours de quota Open Space consommés par cette réservation (0 sauf SUBSCRIPTION_QUOTA).
+  quota_days        REAL    NOT NULL DEFAULT 0,
   stripe_session_id TEXT,
   payment_intent    TEXT,
   receipt_url       TEXT,                                 -- lien reçu Stripe (hosted) capté au webhook
@@ -175,6 +199,9 @@ CREATE TABLE IF NOT EXISTS reservation_holds (
   seats             INTEGER NOT NULL DEFAULT 1,
   cost              INTEGER NOT NULL,                 -- montant en EUROS (centimes) pour ce verrou
   tarif_type        TEXT,                             -- heure | demi_journee | journee
+  -- Mode de couverture résolu à l'ajout au panier (cf. reservations.payment_method).
+  payment_method    TEXT,
+  quota_days        REAL    NOT NULL DEFAULT 0,       -- jours de quota engagés par ce verrou
   ignore_hours      INTEGER NOT NULL DEFAULT 0,
   allow_overbooking INTEGER NOT NULL DEFAULT 0,
   created_by        INTEGER REFERENCES users(id),
@@ -195,6 +222,7 @@ CREATE TABLE IF NOT EXISTS claims (
   first_name      TEXT    NOT NULL,
   last_name       TEXT    NOT NULL,
   email           TEXT    NOT NULL,
+  phone           TEXT,                                 -- téléphone de rappel (requis au formulaire)
   reservation_ref TEXT,                                 -- n° de réservation (facultatif)
   kind            TEXT    NOT NULL,                      -- 'annulation' | 'remboursement' | 'autre'
   message         TEXT    NOT NULL,

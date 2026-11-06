@@ -14,6 +14,8 @@ export const CLAIM_KINDS = ['annulation', 'remboursement', 'autre'];
 export const CLAIM_STATUSES = ['nouveau', 'en_cours', 'resolu'];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Téléphone : chiffres, espaces et séparateurs courants (FR/international).
+const PHONE_RE = /^[+()\d][\d\s().-]{5,25}$/;
 
 /**
  * Nettoie et valide une réclamation.
@@ -27,12 +29,14 @@ function sanitize(input = {}) {
   const first_name = String(input.first_name ?? '').trim();
   const last_name = String(input.last_name ?? '').trim();
   const email = String(input.email ?? '').trim().toLowerCase();
+  const phone = String(input.phone ?? '').trim();
   const reservation_ref_raw = String(input.reservation_ref ?? '').trim();
   let kind = String(input.kind ?? '').trim();
   const message = String(input.message ?? '').trim();
 
   if (!first_name || !last_name || first_name.length > 80 || last_name.length > 80) throw bizErr('CHAMPS_INVALIDES');
   if (!EMAIL_RE.test(email) || email.length > 160) throw bizErr('EMAIL_INVALIDE');
+  if (!PHONE_RE.test(phone)) throw bizErr('TELEPHONE_INVALIDE');
   if (!CLAIM_KINDS.includes(kind)) kind = 'autre';
   if (!message || message.length < 10) throw bizErr('CHAMPS_INVALIDES');
 
@@ -40,6 +44,7 @@ function sanitize(input = {}) {
     first_name,
     last_name,
     email,
+    phone: phone.slice(0, 30),
     reservation_ref: reservation_ref_raw ? reservation_ref_raw.slice(0, 40) : null,
     kind,
     message: message.slice(0, 4000),
@@ -47,8 +52,8 @@ function sanitize(input = {}) {
 }
 
 const insertStmt = db.prepare(
-  `INSERT INTO claims (user_id, first_name, last_name, email, reservation_ref, kind, message)
-   VALUES (@user_id, @first_name, @last_name, @email, @reservation_ref, @kind, @message)`
+  `INSERT INTO claims (user_id, first_name, last_name, email, phone, reservation_ref, kind, message)
+   VALUES (@user_id, @first_name, @last_name, @email, @phone, @reservation_ref, @kind, @message)`
 );
 
 /**

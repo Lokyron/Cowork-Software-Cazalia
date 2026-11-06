@@ -57,14 +57,14 @@ const insertStmt = db.prepare(
  *
  * @param {Record<string, unknown>} input Champs du formulaire.
  * @param {string | null} [source] Origine de la saisie (page, campagne), tronquée à 120 caractères.
- * @returns {{id: number | bigint}} Identifiant du prospect créé.
+ * @returns {{id: number | bigint, data: object}} Identifiant + données nettoyées (pour l'e-mail).
  * @throws {Error} Erreur métier de validation (cf. `sanitize`).
  */
 export function createProspect(input, source = null) {
   const data = sanitize(input);
   data.source = source ? String(source).slice(0, 120) : null;
   const info = insertStmt.run(data);
-  return { id: info.lastInsertRowid };
+  return { id: info.lastInsertRowid, data };
 }
 
 /**

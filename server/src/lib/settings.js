@@ -269,6 +269,31 @@ function sanitizePacks(packs) {
  * @returns {{secretKey:string, publishableKey:string, webhookSecret:string,
  *            packs:Array, enabled:boolean}}
  */
+// Normalise les Price IDs d'abonnement (chaînes `price_…` ; on ne force pas le
+// préfixe pour rester tolérant, mais on borne et on trim). Clés attendues :
+// ESSENTIEL / CONFORT / PREMIUM.
+function sanitizeSubPrices(v) {
+  const out = { ESSENTIEL: '', CONFORT: '', PREMIUM: '' };
+  if (v && typeof v === 'object') {
+    for (const k of Object.keys(out)) {
+      const id = String(v[k] ?? '').trim();
+      if (id && id.length <= 120) out[k] = id;
+    }
+  }
+  return out;
+}
+
+// Fusionne les Price IDs du réglage en base et ceux de l'environnement (le
+// réglage en base prime, champ par champ ; l'environnement sert d'amorçage).
+function resolveSubPrices(stored) {
+  const base = sanitizeSubPrices(stored);
+  const env = config.stripe.subscriptionPrices || {};
+  for (const k of ['ESSENTIEL', 'CONFORT', 'PREMIUM']) {
+    if (!base[k] && env[k]) base[k] = String(env[k]).trim();
+  }
+  return base;
+}
+
 export function getStripe() {
   const s = getSetting('stripe', {}) || {};
   const secretKey = s.secret_key_enc ? decryptSecret(s.secret_key_enc) : (config.stripe.secretKey ?? '');
@@ -276,9 +301,16 @@ export function getStripe() {
   const publishableKey = s.publishable_key ?? config.stripe.publishableKey ?? '';
   const packsCustom = sanitizePacks(s.packs);
   const packs = packsCustom.length ? packsCustom : DEFAULT_CREDIT_PACKS;
+  const subscriptionPrices = resolveSubPrices(s.subscription_prices);
+  const subscriptionsEnabled = Boolean(secretKey && webhookSecret
+    && subscriptionPrices.ESSENTIEL && subscriptionPrices.CONFORT && subscriptionPrices.PREMIUM);
   // Le paiement en ligne n'est actif qu'avec clé secrète ET secret de webhook :
   // sans vérification de signature, un POST forgé pourrait créditer un compte.
-  return { secretKey, publishableKey, webhookSecret, packs, enabled: Boolean(secretKey && webhookSecret) };
+  return {
+    secretKey, publishableKey, webhookSecret, packs, subscriptionPrices,
+    enabled: Boolean(secretKey && webhookSecret),
+    subscriptionsEnabled,
+  };
 }
 
 /**
@@ -293,7 +325,9 @@ export function getStripePublic() {
     has_webhook_secret: Boolean(c.webhookSecret),
     publishable_key: c.publishableKey,
     packs: c.packs,
+    subscription_prices: c.subscriptionPrices,
     enabled: c.enabled,
+    subscriptions_enabled: c.subscriptionsEnabled,
   };
 }
 
@@ -311,6 +345,9 @@ export function setStripe(b) {
     webhook_secret_enc: cur.webhook_secret_enc || null,
     publishable_key: (b.publishable_key ?? cur.publishable_key ?? '').trim(),
     packs: Array.isArray(b.packs) ? sanitizePacks(b.packs) : (cur.packs ?? null),
+    subscription_prices: b.subscription_prices != null
+      ? sanitizeSubPrices(b.subscription_prices)
+      : (cur.subscription_prices ?? null),
   };
   if (b.secret_key != null && b.secret_key !== '') next.secret_key_enc = encryptSecret(String(b.secret_key).trim());
   if (b.clear_secret_key) next.secret_key_enc = null;

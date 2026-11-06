@@ -70,6 +70,11 @@ export const api = {
 const MESSAGES = {
   COMPLET: 'Ce créneau est complet.',
   PAIEMENT_INDISPONIBLE: 'Le paiement en ligne n’est pas disponible pour le moment.',
+  ESPACE_NON_RESERVABLE: 'Cet espace ne se réserve pas en ligne.',
+  ABONNEMENT_INDISPONIBLE: 'La souscription en ligne n’est pas disponible pour le moment.',
+  TIER_INVALIDE: 'Formule d’abonnement invalide.',
+  DEJA_ABONNE: 'Vous avez déjà un abonnement actif. Gérez-le depuis votre espace client.',
+  AUCUN_ABONNEMENT: 'Aucun abonnement à gérer.',
   PANIER_VIDE: 'Votre panier est vide.',
   TARIF_INDISPONIBLE: 'Cette formule n’est pas proposée pour cet espace.',
   CRENEAU_FORFAIT_INVALIDE: 'Ce créneau ne correspond pas au forfait choisi (demi-journée / journée).',

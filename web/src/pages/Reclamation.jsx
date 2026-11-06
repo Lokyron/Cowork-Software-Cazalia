@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, msg } from '../api.js';
+import { useAuth } from '../auth.jsx';
 import BackLink from '../components/BackLink.jsx';
 
 const KINDS = [
@@ -12,8 +13,14 @@ const KINDS = [
 // Formulaire public de réclamation / demande de remboursement (art. L612-1 s.
 // C. conso.). Envoie vers POST /api/claims : trace en base + e-mail à la gérante.
 export default function Reclamation() {
+  const { user } = useAuth();
+  const [fn = '', ...rest] = (user?.display_name || '').trim().split(' ');
   const [form, setForm] = useState({
-    first_name: '', last_name: '', email: '', reservation_ref: '', kind: 'annulation', message: '', website: '',
+    first_name: user?.first_name || fn || '',
+    last_name: user?.last_name || rest.join(' ') || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    reservation_ref: '', kind: 'annulation', message: '', website: '',
   });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -31,6 +38,7 @@ export default function Reclamation() {
         first_name: form.first_name,
         last_name: form.last_name,
         email: form.email,
+        phone: form.phone,
         reservation_ref: form.reservation_ref || null,
         kind: form.kind,
         message: form.message,
@@ -98,9 +106,15 @@ export default function Reclamation() {
             <input value={form.last_name} onChange={set('last_name')} autoComplete="family-name" required />
           </div>
         </div>
-        <div className="field">
-          <label>E-mail</label>
-          <input type="email" value={form.email} onChange={set('email')} autoComplete="email" placeholder="nom@exemple.fr" required />
+        <div className="row">
+          <div className="field">
+            <label>E-mail</label>
+            <input type="email" value={form.email} onChange={set('email')} autoComplete="email" placeholder="nom@exemple.fr" required />
+          </div>
+          <div className="field">
+            <label>Téléphone</label>
+            <input type="tel" value={form.phone} onChange={set('phone')} autoComplete="tel" placeholder="06 12 34 56 78" required />
+          </div>
         </div>
         <div className="row">
           <div className="field">

@@ -232,6 +232,46 @@ if (!spaceCols.includes('amenities')) db.exec(`ALTER TABLE spaces ADD COLUMN ame
 // Photo de l'espace : nom de fichier dans le dossier des médias (cf. lib/media.js).
 if (!spaceCols.includes('photo')) db.exec(`ALTER TABLE spaces ADD COLUMN photo TEXT`);
 
+// ── Refonte modèle éco. : abonnements + catégories d'espaces + quota ──────────
+// Catégorie métier de l'espace (pilote tarification + réservabilité en ligne).
+const addingSpaceCategory = !spaceCols.includes('category');
+if (addingSpaceCategory) db.exec(`ALTER TABLE spaces ADD COLUMN category TEXT`);
+
+// Abonnement sur les comptes membres (Stripe Subscriptions + quota Open Space).
+const subUserCols = db.prepare(`PRAGMA table_info(users)`).all().map((c) => c.name);
+if (!subUserCols.includes('stripe_customer_id')) db.exec(`ALTER TABLE users ADD COLUMN stripe_customer_id TEXT`);
+if (!subUserCols.includes('stripe_subscription_id')) db.exec(`ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT`);
+if (!subUserCols.includes('subscription_tier')) db.exec(`ALTER TABLE users ADD COLUMN subscription_tier TEXT NOT NULL DEFAULT 'NONE'`);
+if (!subUserCols.includes('subscription_status')) db.exec(`ALTER TABLE users ADD COLUMN subscription_status TEXT NOT NULL DEFAULT 'none'`);
+if (!subUserCols.includes('current_period_start')) db.exec(`ALTER TABLE users ADD COLUMN current_period_start TEXT`);
+if (!subUserCols.includes('current_period_end')) db.exec(`ALTER TABLE users ADD COLUMN current_period_end TEXT`);
+if (!subUserCols.includes('open_space_quota_used')) db.exec(`ALTER TABLE users ADD COLUMN open_space_quota_used REAL NOT NULL DEFAULT 0`);
+
+// Mode de couverture + jours de quota sur réservations et verrous de panier.
+const covResCols = db.prepare(`PRAGMA table_info(reservations)`).all().map((c) => c.name);
+if (!covResCols.includes('payment_method')) db.exec(`ALTER TABLE reservations ADD COLUMN payment_method TEXT`);
+if (!covResCols.includes('quota_days')) db.exec(`ALTER TABLE reservations ADD COLUMN quota_days REAL NOT NULL DEFAULT 0`);
+const covHoldCols = db.prepare(`PRAGMA table_info(reservation_holds)`).all().map((c) => c.name);
+if (!covHoldCols.includes('payment_method')) db.exec(`ALTER TABLE reservation_holds ADD COLUMN payment_method TEXT`);
+if (!covHoldCols.includes('quota_days')) db.exec(`ALTER TABLE reservation_holds ADD COLUMN quota_days REAL NOT NULL DEFAULT 0`);
+
+// Téléphone de rappel sur les réclamations (formulaire conso.).
+const claimCols = db.prepare(`PRAGMA table_info(claims)`).all().map((c) => c.name);
+if (claimCols.length && !claimCols.includes('phone')) db.exec(`ALTER TABLE claims ADD COLUMN phone TEXT`);
+
+// Backfill UNIQUE de la catégorie au 1er ajout (n'écrase pas un réglage admin
+// ultérieur). Heuristique par nom ; corrigeable ensuite dans l'admin Espaces.
+if (addingSpaceCategory) {
+  db.exec(`UPDATE spaces SET category = 'MEETING_ROOM'
+             WHERE category IS NULL AND (name LIKE '%éunion%' OR name LIKE '%eunion%')`);
+  db.exec(`UPDATE spaces SET category = 'CONFIDENTIAL'
+             WHERE category IS NULL AND (name LIKE '%ocus%' OR name LIKE '%onfiden%')`);
+  db.exec(`UPDATE spaces SET category = 'PRIVATE_OFFICE'
+             WHERE category IS NULL AND (name LIKE '%riv%')`);
+  db.exec(`UPDATE spaces SET category = 'OPEN_SPACE'
+             WHERE category IS NULL AND (kind = 'zone' OR name LIKE '%pen%space%' OR name LIKE '%pen-space%')`);
+}
+
 // Typologie de réservation : exclusif (bloque toute la salle, tarif forfait) vs
 // inventaire de places (tarif par place) + option de privatisation.
 const addingSpaceTypology = !spaceCols.includes('exclusive');

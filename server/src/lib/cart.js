@@ -18,8 +18,9 @@ import { ensureVoucherForReservation } from './unifi.js';
 import { ensureAccessPinForReservation } from './unifiAccess.js';
 import { sendBookingConfirmation } from './mailer.js';
 import {
-  getActiveSpace, resolveSeats, quoteCost, validateSlot, withinOpeningHours, availableSeats, insertReservation,
+  getActiveSpace, resolveSeats, priceCents, validateSlot, withinOpeningHours, availableSeats, insertReservation,
 } from './booking.js';
+import { effectivePricing, isOnlineBookable, loadPricingUser } from './pricing.js';
 
 export const HOLD_MINUTES = 10;
 // Fenêtre élargie pendant un paiement Stripe en cours : on prolonge les verrous
@@ -34,8 +35,10 @@ const countActiveHolds = db.prepare(
 );
 const insertHold = db.prepare(
   `INSERT INTO reservation_holds
-     (user_id, space_id, start_at, end_at, seats, cost, tarif_type, ignore_hours, allow_overbooking, created_by, expires_at)
-   VALUES (@user_id, @space_id, @start_at, @end_at, @seats, @cost, @tarif_type, @ignore_hours, @allow_overbooking, @created_by, @expires_at)`
+     (user_id, space_id, start_at, end_at, seats, cost, tarif_type, payment_method, quota_days,
+      ignore_hours, allow_overbooking, created_by, expires_at)
+   VALUES (@user_id, @space_id, @start_at, @end_at, @seats, @cost, @tarif_type, @payment_method, @quota_days,
+           @ignore_hours, @allow_overbooking, @created_by, @expires_at)`
 );
 const getHold = db.prepare(`SELECT * FROM reservation_holds WHERE id = ?`);
 const getHoldView = db.prepare(
@@ -87,10 +90,32 @@ export function addHold(userId, spaceId, startRaw, endRaw, seatsRaw = 1, opts = 
   if (!o.ignoreHours && !withinOpeningHours(startIso, endIso)) throw fail('HORS_HORAIRES');
   const seats = resolveSeats(space, seatsRaw);
   if (!o.allowOverbooking && availableSeats(spaceId, startIso, endIso) < seats) throw fail('COMPLET');
-  const cost = o.customCostCents != null ? Math.max(0, Math.round(o.customCostCents)) : quoteCost(spaceId, startIso, endIso, seats, tarifType);
+
+  // Deux régimes de tarification :
+  //   • ADMIN (opts.adminMode) : prix libre/custom, réservation gratuite hors
+  //     ligne (FREE_ADMIN), sans impact sur le quota du client — l'admin décide.
+  //   • MEMBRE : prix effectif selon l'abonnement du bénéficiaire (moteur
+  //     lib/pricing.js) ; refuse les espaces non réservables en ligne.
+  let cost, paymentMethod, quotaDays;
+  if (o.adminMode) {
+    cost = o.customCostCents != null
+      ? Math.max(0, Math.round(o.customCostCents))
+      : priceCents(space, startIso, endIso, seats, tarifType);
+    paymentMethod = 'FREE_ADMIN';
+    quotaDays = 0;
+  } else {
+    if (!isOnlineBookable(space)) throw fail('ESPACE_NON_RESERVABLE');
+    const user = loadPricingUser(userId);
+    const p = effectivePricing({ user, space, startIso, endIso, seats, tarifType });
+    cost = p.cents;
+    paymentMethod = p.method;
+    quotaDays = p.quotaDays;
+  }
+
   const expiresAt = new Date(Date.now() + HOLD_MINUTES * 60000).toISOString();
   const info = insertHold.run({
     user_id: userId, space_id: spaceId, start_at: startIso, end_at: endIso, seats, cost, tarif_type: tarifType,
+    payment_method: paymentMethod, quota_days: quotaDays,
     ignore_hours: o.ignoreHours ? 1 : 0, allow_overbooking: o.allowOverbooking ? 1 : 0,
     created_by: o.createdBy ?? userId, expires_at: expiresAt,
   });
@@ -145,6 +170,7 @@ export function checkout(userId) {
       const reservationId = insertReservation({
         userId, spaceId: h.space_id, startIso: h.start_at, endIso: h.end_at, seats: h.seats,
         priceCents: h.cost, tarifType: h.tarif_type, paymentStatus: 'free',
+        paymentMethod: h.payment_method || 'FREE_ADMIN', quotaDays: h.quota_days || 0,
       });
       created.push({ reservationId, cost: h.cost });
       delHold.run(h.id);
@@ -152,6 +178,48 @@ export function checkout(userId) {
     return { reservations: created, total, count: created.length };
   });
   return tx();
+}
+
+// Décompte du quota Open Space (abonné Essentiel) : une réservation couverte par
+// le quota consomme `quota_days` jours sur la période en cours.
+const consumeQuotaStmt = db.prepare(
+  `UPDATE users SET open_space_quota_used = open_space_quota_used + ? WHERE id = ?`
+);
+
+// ── Checkout MEMBRE « tout couvert » (total 0 €, sans Stripe) ─────────────────
+// Un abonné dont le panier est entièrement couvert (Confort/Premium, ou Essentiel
+// dans son quota) confirme en 1 clic, sans paiement. On crée les réservations en
+// conservant leur mode de couverture, et on DÉCRÉMENTE le quota pour les lignes
+// SUBSCRIPTION_QUOTA — le tout dans une transaction atomique.
+const checkoutCoveredTx = db.transaction((userId, holds) => {
+  const created = [];
+  for (const h of holds) {
+    if (!withinOpeningHours(h.start_at, h.end_at)) throw fail('HORS_HORAIRES');
+    if (availableSeats(h.space_id, h.start_at, h.end_at, { excludeHoldId: h.id }) < h.seats) throw fail('COMPLET');
+    const reservationId = insertReservation({
+      userId, spaceId: h.space_id, startIso: h.start_at, endIso: h.end_at, seats: h.seats,
+      priceCents: h.cost, tarifType: h.tarif_type, paymentStatus: 'free',
+      paymentMethod: h.payment_method, quotaDays: h.quota_days || 0,
+    });
+    if (h.payment_method === 'SUBSCRIPTION_QUOTA' && h.quota_days > 0) {
+      consumeQuotaStmt.run(h.quota_days, userId);
+    }
+    created.push({ reservationId, cost: h.cost });
+    delHold.run(h.id);
+  }
+  return { reservations: created, total: 0, count: created.length };
+});
+
+async function checkoutCovered(userId, holds) {
+  const result = checkoutCoveredTx(userId, holds);
+  await Promise.allSettled(
+    result.reservations.flatMap((r) => [
+      ensureVoucherForReservation(r.reservationId),
+      ensureAccessPinForReservation(r.reservationId),
+    ]),
+  );
+  result.reservations.forEach((r) => sendBookingConfirmation(r.reservationId).catch(() => {}));
+  return { free: true, ...result };
 }
 
 /**
@@ -237,8 +305,15 @@ export async function startBookingCheckout(userId, baseUrl, { promoCode = null }
   const items = holds.map((h) => ({
     space_id: h.space_id, start_at: h.start_at, end_at: h.end_at, seats: h.seats,
     tarif_type: h.tarif_type, price_cents: h.cost, label: lineLabel(h),
+    payment_method: h.payment_method, quota_days: h.quota_days || 0,
   }));
   const totalCents = items.reduce((s, it) => s + it.price_cents, 0);
+
+  // Panier ENTIÈREMENT couvert par l'abonnement (0 €) : aucune étape de paiement,
+  // confirmation immédiate + décompte du quota (cf. brief §2.B cas 1 / §2.C cas 3).
+  if (totalCents === 0) {
+    return checkoutCovered(userId, holds);
+  }
 
   // Code promo : validé côté serveur (formule, dates, limites globale et par
   // personne) AVANT d'engager le paiement, puis appliqué par Stripe via `discounts`.

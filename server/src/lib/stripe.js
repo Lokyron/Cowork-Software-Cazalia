@@ -130,7 +130,10 @@ export async function createBookingCheckoutSession({ userId, items, baseUrl, pro
   // (applies_to.products) ne s'appliquent qu'aux bonnes lignes. Repli sur un
   // libellé ad-hoc si le type de tarif est inconnu (ne devrait pas arriver).
   const formules = await ensureFormuleProducts(stripe);
-  const line_items = items.map((it) => {
+  // Les lignes couvertes par l'abonnement (0 €) ne sont PAS facturées : on les
+  // exclut de la session Stripe (Checkout refuse un montant nul). Elles restent
+  // dans le payload de la commande et deviennent des réservations au webhook.
+  const line_items = items.filter((it) => it.price_cents > 0).map((it) => {
     const productId = formules[it.tarif_type];
     return {
       quantity: 1,
@@ -161,6 +164,76 @@ export async function createBookingCheckoutSession({ userId, items, baseUrl, pro
     success_url: `${base}/mon-espace?reservation=success`,
     cancel_url: `${base}/mon-espace?reservation=cancel`,
   });
+}
+
+// ── Abonnements mensuels récurrents (Stripe Subscriptions) ───────────────────
+
+/**
+ * Crée un client Stripe (réutilisé pour les futures factures d'abonnement).
+ * @param {{email:string, name?:string, userId:number}} p
+ * @returns {Promise<import('stripe').Stripe.Customer>}
+ * @throws {Error} `STRIPE_NON_CONFIGURE`.
+ */
+export async function createCustomer({ email, name, userId }) {
+  const stripe = client();
+  if (!stripe) { const e = new Error('STRIPE_NON_CONFIGURE'); e.code = 'STRIPE_NON_CONFIGURE'; throw e; }
+  return stripe.customers.create({ email, name: name || undefined, metadata: { user_id: String(userId) } });
+}
+
+/**
+ * Crée une session Checkout d'ABONNEMENT (mode `subscription`). Le paiement
+ * récurrent mensuel est ensuite prélevé automatiquement par Stripe ; chaque
+ * renouvellement émet `invoice.paid` (→ réinitialisation du quota).
+ *
+ * @param {object} p
+ * @param {string} p.customerId Client Stripe (créé/réutilisé en amont).
+ * @param {string} p.priceId Price récurrent Stripe de la formule.
+ * @param {number} p.userId Membre abonné.
+ * @param {string} p.tier 'ESSENTIEL'|'CONFORT'|'PREMIUM'.
+ * @param {string} p.baseUrl Origine publique (URL de retour).
+ * @returns {Promise<import('stripe').Stripe.Checkout.Session>}
+ * @throws {Error} `STRIPE_NON_CONFIGURE`.
+ */
+export async function createSubscriptionCheckoutSession({ customerId, priceId, userId, tier, baseUrl }) {
+  const stripe = client();
+  if (!stripe) { const e = new Error('STRIPE_NON_CONFIGURE'); e.code = 'STRIPE_NON_CONFIGURE'; throw e; }
+  const base = String(baseUrl || '').replace(/\/$/, '');
+  return stripe.checkout.sessions.create({
+    mode: 'subscription',
+    customer: customerId,
+    client_reference_id: String(userId),
+    metadata: { kind: 'subscription', user_id: String(userId), tier },
+    // Reporte les métadonnées sur l'abonnement lui-même : utile au webhook
+    // (customer.subscription.updated/deleted ne portent pas le contexte Checkout).
+    subscription_data: { metadata: { user_id: String(userId), tier } },
+    line_items: [{ price: priceId, quantity: 1 }],
+    success_url: `${base}/mon-espace?abonnement=success`,
+    cancel_url: `${base}/tarifs?abonnement=cancel`,
+  });
+}
+
+/**
+ * Crée une session de Customer Portal (gestion CB, factures, résiliation).
+ * @param {{customerId:string, baseUrl:string}} p
+ * @returns {Promise<import('stripe').Stripe.BillingPortal.Session>}
+ * @throws {Error} `STRIPE_NON_CONFIGURE`.
+ */
+export async function createBillingPortalSession({ customerId, baseUrl }) {
+  const stripe = client();
+  if (!stripe) { const e = new Error('STRIPE_NON_CONFIGURE'); e.code = 'STRIPE_NON_CONFIGURE'; throw e; }
+  const base = String(baseUrl || '').replace(/\/$/, '');
+  return stripe.billingPortal.sessions.create({ customer: customerId, return_url: `${base}/mon-espace` });
+}
+
+/**
+ * Récupère un abonnement Stripe (lecture de l'état réel : statut, période, prix).
+ * @param {string} subscriptionId
+ * @returns {Promise<import('stripe').Stripe.Subscription|null>}
+ */
+export async function retrieveSubscription(subscriptionId) {
+  const stripe = client();
+  if (!stripe || !subscriptionId) return null;
+  try { return await stripe.subscriptions.retrieve(subscriptionId); } catch { return null; }
 }
 
 /**

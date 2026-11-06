@@ -12,5 +12,6 @@ export const paymentsRouter = Router();
  * @returns 200 `{enabled}` · 401 `NON_AUTHENTIFIE`
  */
 paymentsRouter.get('/payments/status', requireAuth, (_req, res) => {
-  res.json({ enabled: getStripe().enabled });
+  const s = getStripe();
+  res.json({ enabled: s.enabled, subscriptions_enabled: s.subscriptionsEnabled });
 });

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { api, msg } from '../api.js';
 import { prepareImage } from '../lib/image.js';
 
-const EMPTY = { name: '', kind: 'zone', capacity: 8, exclusive: false, privatizable: false, price_per_hour: 7, price_half_day: '', price_day: '', color: '#1C3155', description: '', amenities: '', photo: null, active: true };
+const EMPTY = { name: '', kind: 'zone', category: '', capacity: 8, exclusive: false, privatizable: false, price_per_hour: 7, price_half_day: '', price_day: '', color: '#1C3155', description: '', amenities: '', photo: null, active: true };
 // Centimes (API) → chaîne euros pour l'édition ('' si forfait non défini).
 const centsToEur = (c) => (c == null ? '' : String(c / 100));
 
@@ -25,7 +25,7 @@ export default function AdminSpaces() {
 
   const startEdit = (s) => {
     setEditingId(s.id);
-    setForm({ name: s.name, kind: s.kind, capacity: s.capacity, exclusive: !!s.exclusive, privatizable: !!s.privatizable, price_per_hour: centsToEur(s.price_per_hour_cents), price_half_day: centsToEur(s.price_half_day_cents), price_day: centsToEur(s.price_day_cents), color: s.color, description: s.description || '', amenities: s.amenities || '', photo: s.photo || null, active: !!s.active });
+    setForm({ name: s.name, kind: s.kind, category: s.category || '', capacity: s.capacity, exclusive: !!s.exclusive, privatizable: !!s.privatizable, price_per_hour: centsToEur(s.price_per_hour_cents), price_half_day: centsToEur(s.price_half_day_cents), price_day: centsToEur(s.price_day_cents), color: s.color, description: s.description || '', amenities: s.amenities || '', photo: s.photo || null, active: !!s.active });
   };
   const reset = () => { setEditingId(null); setForm(EMPTY); };
 
@@ -77,6 +77,16 @@ export default function AdminSpaces() {
                 <label>{form.exclusive ? 'Occupants max' : 'Capacité (places)'}</label>
                 <input type="number" min="1" value={form.capacity} onChange={set('capacity')} />
               </div>
+            </div>
+            <div className="field">
+              <label>Catégorie <span className="muted" style={{ fontWeight: 400 }}>(tarification & réservabilité)</span></label>
+              <select value={form.category} onChange={set('category')}>
+                <option value="">— Non catégorisé (non réservable en ligne) —</option>
+                <option value="OPEN_SPACE">Open Space (½-journée / journée)</option>
+                <option value="MEETING_ROOM">Salle de réunion (heure / forfaits)</option>
+                <option value="CONFIDENTIAL">Salle confidentielle (libre-service, non réservable)</option>
+                <option value="PRIVATE_OFFICE">Bureau privé (sur devis, non réservable)</option>
+              </select>
             </div>
             <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 14 }}>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

@@ -55,16 +55,20 @@ adminRouter.get('/dashboard', (_req, res) => {
 
 // ── Espaces : CRUD (zones et salles, une seule table) ────────────────────────
 const insertSpace = db.prepare(
-  `INSERT INTO spaces (name, kind, capacity, exclusive, privatizable, credits_per_hour,
+  `INSERT INTO spaces (name, kind, category, capacity, exclusive, privatizable, credits_per_hour,
                        price_per_hour_cents, price_half_day_cents, price_day_cents,
                        color, description, amenities, photo, active)
-   VALUES (@name, @kind, @capacity, @exclusive, @privatizable, @credits_per_hour,
+   VALUES (@name, @kind, @category, @capacity, @exclusive, @privatizable, @credits_per_hour,
            @price_per_hour_cents, @price_half_day_cents, @price_day_cents,
            @color, @description, @amenities, @photo, @active)`
 );
 
 // Euros (saisis dans l'admin) → centimes. '' ou absent → null (forfait non proposé).
 const eurToCents = (v) => (v == null || v === '' ? null : Math.max(0, Math.round(Number(v) * 100)));
+
+// Catégorie métier valide (ou null). Pilote la tarification et la réservabilité.
+const SPACE_CATEGORIES = ['OPEN_SPACE', 'MEETING_ROOM', 'CONFIDENTIAL', 'PRIVATE_OFFICE'];
+const normCategory = (v) => (SPACE_CATEGORIES.includes(v) ? v : null);
 
 adminRouter.get('/spaces', (_req, res) => {
   res.json({ spaces: db.prepare(`SELECT * FROM spaces ORDER BY kind, name`).all() });
@@ -81,6 +85,7 @@ adminRouter.post('/spaces', (req, res) => {
     const space = {
       name: String(b.name || '').trim(),
       kind,
+      category: normCategory(b.category),
       capacity,
       exclusive,
       privatizable: !exclusive && b.privatizable ? 1 : 0,
@@ -116,6 +121,7 @@ adminRouter.put('/spaces/:id', (req, res) => {
   const next = {
     name: b.name != null ? String(b.name).trim() : existing.name,
     kind,
+    category: b.category !== undefined ? normCategory(b.category) : (existing.category ?? null),
     capacity,
     exclusive,
     privatizable: exclusive ? 0 : (b.privatizable != null ? (b.privatizable ? 1 : 0) : existing.privatizable),
@@ -130,7 +136,7 @@ adminRouter.put('/spaces/:id', (req, res) => {
     active: b.active != null ? (b.active ? 1 : 0) : existing.active,
   };
   db.prepare(
-    `UPDATE spaces SET name=@name, kind=@kind, capacity=@capacity, exclusive=@exclusive, privatizable=@privatizable,
+    `UPDATE spaces SET name=@name, kind=@kind, category=@category, capacity=@capacity, exclusive=@exclusive, privatizable=@privatizable,
         credits_per_hour=@credits_per_hour,
         price_per_hour_cents=@price_per_hour_cents, price_half_day_cents=@price_half_day_cents, price_day_cents=@price_day_cents,
         color=@color,
@@ -264,6 +270,7 @@ adminRouter.post('/cart', (req, res) => {
     if (!userId || !spaceId || !b.start_at || !b.end_at) return res.status(400).json({ error: 'CHAMPS_INVALIDES' });
     if (!db.prepare(`SELECT id FROM users WHERE id = ?`).get(userId)) return res.status(404).json({ error: 'UTILISATEUR_INTROUVABLE' });
     const opts = {
+      adminMode: true,
       ignoreHours: !!b.ignore_hours,
       allowOverbooking: !!b.allow_overbooking,
       tarifType: b.tarif_type || 'heure',
