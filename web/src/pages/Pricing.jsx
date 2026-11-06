@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, msg } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import DevisModal from '../components/DevisModal.jsx';
+import PublicHeader from '../components/PublicHeader.jsx';
 
 // Formules d'abonnement (affichage). Les montants réels sont prélevés par Stripe
 // selon les Prices configurés ; ces valeurs doivent rester en phase avec
@@ -80,7 +81,10 @@ export default function Pricing() {
   const eur = (n) => `${n} €`;
 
   return (
-    <div className="pricing-page">
+    <>
+      <PublicHeader solid />
+      <main className="container">
+      <div className="pricing-page">
       <div className="section-head" style={{ marginTop: 8 }}>
         <span className="eyebrow dark">Nos formules</span>
         <h1 className="big">Un abonnement, ou à la carte.</h1>
@@ -174,6 +178,8 @@ export default function Pricing() {
       </p>
 
       {devis && <DevisModal onClose={() => setDevis(false)} />}
-    </div>
+      </div>
+      </main>
+    </>
   );
 }

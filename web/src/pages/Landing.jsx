@@ -4,47 +4,7 @@ import { useAuth } from '../auth.jsx';
 import { api } from '../api.js';
 import Photo from '../components/Photo.jsx';
 import SpaceModal from '../components/SpaceModal.jsx';
-
-// Liens d'ancrage de la barre publique.
-const SECTIONS = [
-  { id: 'presentation', label: 'Le lieu' },
-  { id: 'espaces', label: 'Les espaces' },
-  { id: 'galerie', label: 'Galerie' },
-  { id: 'infos', label: 'Infos pratiques' },
-];
-
-function PublicHeader({ user }) {
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  return (
-    <header className={`public-header ${scrolled ? 'scrolled' : ''}`}>
-      <div className="public-header-inner">
-        <div className="brand">
-          <img src="/images/logo-lockup-white.svg" className="brand-full" alt="Cazalia" />
-        </div>
-        <nav className="public-links">
-          {SECTIONS.map((s) => (
-            <a key={s.id} href={`#${s.id}`}>{s.label}</a>
-          ))}
-          <Link to="/tarifs">Tarifs</Link>
-        </nav>
-        <div className="public-cta">
-          {user ? (
-            <Link to="/reserver" className="btn-link">Mon espace →</Link>
-          ) : (
-            <Link to="/login" className="btn-link">Se connecter</Link>
-          )}
-        </div>
-      </div>
-    </header>
-  );
-}
+import PublicHeader from '../components/PublicHeader.jsx';
 
 export default function Landing() {
   const { user } = useAuth();

@@ -137,7 +137,7 @@ export default function App() {
   // La landing (/) et les pages publiques (/rejoindre, /cgu) ont leur propre
   // présentation ; on masque la nav applicative.
   const isLanding = location.pathname === '/';
-  const isPublic = isLanding || ['/rejoindre', '/cgu'].includes(location.pathname);
+  const isPublic = isLanding || ['/rejoindre', '/cgu', '/tarifs'].includes(location.pathname);
 
   // Compte créé par l'admin : changement de mot de passe forcé avant tout accès.
   if (user && user.must_change_password) {
@@ -157,7 +157,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/rejoindre" element={<Shell><Rejoindre /></Shell>} />
-        <Route path="/tarifs" element={<Shell><Pricing /></Shell>} />
+        <Route path="/tarifs" element={<Pricing />} />
         <Route path="/cgu" element={<Shell><Cgu /></Shell>} />
         <Route path="/cgv" element={<Shell><Cgv /></Shell>} />
         <Route path="/reclamation" element={<Shell><Reclamation /></Shell>} />
