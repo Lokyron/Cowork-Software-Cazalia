@@ -13,7 +13,7 @@ import { config } from '../config.js';
 import { fail } from './errors.js';
 import { createBookingCheckoutSession } from './stripe.js';
 import { createPendingOrder } from './orders.js';
-import { validatePromoForCheckout, computeDiscount } from './promos.js';
+import { validatePromoForCheckout, computeDiscount, ensurePromoMirrored } from './promos.js';
 import { ensureVoucherForReservation } from './unifi.js';
 import { ensureAccessPinForReservation } from './unifiAccess.js';
 import { sendBookingConfirmation } from './mailer.js';
@@ -260,12 +260,13 @@ export async function checkoutFree(userId) {
  *            discount_cents:number, total_cents:number, new_total_cents:number}}
  * @throws {Error} `PANIER_VIDE` et les codes `PROMO_*`.
  */
-export function previewPromo(userId, code) {
+export async function previewPromo(userId, code) {
   purgeExpired();
   const holds = listHolds.all(userId, new Date().toISOString());
   if (!holds.length) throw fail('PANIER_VIDE');
   const items = holds.map((h) => ({ tarif_type: h.tarif_type, price_cents: h.cost }));
   const total = items.reduce((s, it) => s + it.price_cents, 0);
+  await ensurePromoMirrored(code); // rafraîchit le miroir depuis Stripe pour ce code
   const promo = validatePromoForCheckout({ code, userId, items }); // lève si invalide
   const discount = computeDiscount(promo, items);
   return {
@@ -317,6 +318,8 @@ export async function startBookingCheckout(userId, baseUrl, { promoCode = null }
 
   // Code promo : validé côté serveur (formule, dates, limites globale et par
   // personne) AVANT d'engager le paiement, puis appliqué par Stripe via `discounts`.
+  // On rafraîchit d'abord le miroir depuis Stripe pour ce code précis.
+  if (promoCode) await ensurePromoMirrored(promoCode);
   const promo = promoCode ? validatePromoForCheckout({ code: promoCode, userId, items }) : null;
 
   const session = await createBookingCheckoutSession({

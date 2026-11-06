@@ -34,7 +34,7 @@ import {
   deleteProspect,
   exportCsv,
 } from '../lib/prospects.js';
-import { createPromo, listPromos, setPromoActive, deletePromo } from '../lib/promos.js';
+import { listPromos } from '../lib/promos.js';
 
 export const adminRouter = Router();
 
@@ -544,67 +544,20 @@ adminRouter.post('/orders/:id/reconcile', async (req, res) => {
   }
 });
 
-// ── Codes promotionnels (Coupons + Promotion Codes Stripe) ───────────────────
+// ── Codes promotionnels (PASSERELLE lecture seule vers Stripe) ───────────────
+// Les codes sont créés et gérés dans le dashboard Stripe (source de vérité).
+// Cette route synchronise le miroir local depuis Stripe puis le renvoie : aucune
+// création/modification/suppression côté application (cf. lib/promos.js).
 /**
- * GET /api/admin/promos - liste des codes promo (miroir local + utilisations Stripe).
- * @returns 200 `{promos}`
+ * GET /api/admin/promos - synchronise le miroir depuis Stripe et renvoie les codes.
+ * @returns 200 `{promos}` · 409 `STRIPE_NON_CONFIGURE`
  */
 adminRouter.get('/promos', async (_req, res) => {
   try {
     res.json({ promos: await listPromos() });
   } catch (err) {
-    sendBusinessError(res, err, 500);
-  }
-});
-
-/**
- * POST /api/admin/promos - crée un code promo.
- * Corps : `{ code?, reduction_type:'percent'|'amount', reduction_value,
- *            tarif_restriction?, max_redemptions?, expires_at? }`.
- * `code` omis ou vide → généré aléatoirement par Stripe.
- * @returns 201 `{promo}` · 400 codes `PROMO_*` · 409 `STRIPE_NON_CONFIGURE`
- */
-adminRouter.post('/promos', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const promo = await createPromo({
-      code: b.code || null,
-      reductionType: b.reduction_type,
-      reductionValue: b.reduction_value,
-      tarifRestriction: b.tarif_restriction || null,
-      maxRedemptions: b.max_redemptions ?? null,
-      maxPerUser: b.max_per_user ?? null,
-      expiresAt: b.expires_at || null,
-    });
-    res.status(201).json({ promo });
-  } catch (err) {
     if (err.code === 'STRIPE_NON_CONFIGURE') return res.status(409).json({ error: err.code });
-    sendBusinessError(res, err, 400);
-  }
-});
-
-/**
- * PATCH /api/admin/promos/:id - active/désactive un code. Corps `{active:boolean}`.
- * @returns 200 `{promo}` · 404 `PROMO_INTROUVABLE`
- */
-adminRouter.patch('/promos/:id', async (req, res) => {
-  try {
-    const promo = await setPromoActive(Number(req.params.id), req.body?.active === true);
-    res.json({ promo });
-  } catch (err) {
-    sendBusinessError(res, err, 400);
-  }
-});
-
-/**
- * DELETE /api/admin/promos/:id - supprime un code (et son coupon Stripe).
- * @returns 200 `{deleted:true}` · 404 `PROMO_INTROUVABLE`
- */
-adminRouter.delete('/promos/:id', async (req, res) => {
-  try {
-    res.json(await deletePromo(Number(req.params.id)));
-  } catch (err) {
-    sendBusinessError(res, err, 400);
+    sendBusinessError(res, err, 500);
   }
 });
 

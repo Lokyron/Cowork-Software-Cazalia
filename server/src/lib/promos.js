@@ -1,15 +1,22 @@
 // Codes promotionnels adossés à Stripe (Coupons + Promotion Codes).
 //
-// Modèle :
-//   - Un COUPON Stripe porte la règle de remise (percent_off / amount_off), sa
-//     restriction éventuelle à une formule (applies_to.products) et ses limites
-//     (max_redemptions, redeem_by).
-//   - Un PROMOTION CODE Stripe est le code public saisi au paiement, rattaché au
-//     coupon ; il porte aussi expires_at / max_redemptions côté code.
-//   - Une ligne miroir en base (`promo_codes`) permet de lister et gérer les
-//     codes côté admin sans dépendre d'un aller-retour Stripe à chaque affichage.
-//     Stripe reste la SOURCE DE VÉRITÉ pour l'application de la remise et le
-//     comptage réel des utilisations (times_redeemed).
+// Modèle « PASSERELLE » :
+//   - Les codes sont créés et gérés DANS STRIPE (dashboard). Stripe est la SOURCE
+//     DE VÉRITÉ : règle de remise (coupon percent_off / amount_off), restriction
+//     éventuelle à une formule (coupon applies_to.products), limite globale
+//     (max_redemptions), expiration (expires_at / redeem_by) et état (active).
+//   - L'application tient un MIROIR local (`promo_codes`) synchronisé depuis
+//     Stripe. Ce miroir n'est PAS une interface d'édition : il sert uniquement à
+//     (1) appliquer la remise au panier et (2) faire respecter la limite PAR
+//     PERSONNE, que Stripe ne sait pas gérer pour un code partagé.
+//   - La limite « N fois par personne » n'existe pas côté Stripe : on la lit dans
+//     la MÉTADONNÉE `max_per_user` du Promotion Code Stripe (absente = illimité).
+//
+// La synchro se fait :
+//   - en bloc, à l'ouverture de la page admin (`syncPromosFromStripe`) ;
+//   - à la volée pour un code précis saisi au panier (`ensurePromoMirrored`), afin
+//     qu'un code tout juste créé dans Stripe soit applicable sans attendre une
+//     visite de la page admin.
 
 import { db } from '../db.js';
 import { fail } from './errors.js';
@@ -17,18 +24,37 @@ import { getClient, ensureFormuleProducts } from './stripe.js';
 
 const VALID_TARIFS = new Set(['heure', 'demi_journee', 'journee']);
 
-const insertStmt = db.prepare(
+// Upsert idempotent du miroir, clé sur le `code` (identité publique stable). On
+// conserve l'`id` local et donc l'historique des utilisations (promo_redemptions)
+// d'une synchro à l'autre.
+const upsertStmt = db.prepare(
   `INSERT INTO promo_codes
      (code, stripe_coupon_id, stripe_promo_id, reduction_type, reduction_value,
       tarif_restriction, max_redemptions, max_per_user, expires_at, active)
    VALUES (@code, @stripe_coupon_id, @stripe_promo_id, @reduction_type, @reduction_value,
-           @tarif_restriction, @max_redemptions, @max_per_user, @expires_at, 1)`
+           @tarif_restriction, @max_redemptions, @max_per_user, @expires_at, @active)
+   ON CONFLICT(code) DO UPDATE SET
+     stripe_coupon_id  = excluded.stripe_coupon_id,
+     stripe_promo_id   = excluded.stripe_promo_id,
+     reduction_type    = excluded.reduction_type,
+     reduction_value   = excluded.reduction_value,
+     tarif_restriction = excluded.tarif_restriction,
+     max_redemptions   = excluded.max_redemptions,
+     max_per_user      = excluded.max_per_user,
+     expires_at        = excluded.expires_at,
+     active            = excluded.active`
 );
 const listStmt = db.prepare(`SELECT * FROM promo_codes ORDER BY created_at DESC`);
-const getStmt = db.prepare(`SELECT * FROM promo_codes WHERE id = ?`);
-const setActiveStmt = db.prepare(`UPDATE promo_codes SET active = @active WHERE id = @id`);
-const deleteStmt = db.prepare(`DELETE FROM promo_codes WHERE id = ?`);
-const byCodeStmt = db.prepare(`SELECT id FROM promo_codes WHERE code = ?`);
+const deleteByPromoIdsNotIn = (ids) => {
+  // Purge les codes du miroir qui n'existent plus dans Stripe. Clé sur
+  // stripe_promo_id (identité Stripe) ; placeholders générés dynamiquement.
+  if (!ids.length) {
+    db.prepare(`DELETE FROM promo_codes`).run();
+    return;
+  }
+  const ph = ids.map(() => '?').join(',');
+  db.prepare(`DELETE FROM promo_codes WHERE stripe_promo_id NOT IN (${ph})`).run(...ids);
+};
 // Recherche insensible à la casse (Stripe normalise les codes en majuscules, mais
 // le client peut saisir en minuscules).
 const fullByCodeCiStmt = db.prepare(`SELECT * FROM promo_codes WHERE UPPER(code) = UPPER(?)`);
@@ -40,95 +66,149 @@ const insertRedemptionStmt = db.prepare(
   `INSERT INTO promo_redemptions (promo_id, user_id, order_id) VALUES (@promo_id, @user_id, @order_id)`
 );
 
-const toEpoch = (iso) => Math.floor(new Date(iso).getTime() / 1000);
+const epochToIso = (epoch) => (epoch ? new Date(epoch * 1000).toISOString() : null);
 
-function requireClient() {
-  const stripe = getClient();
-  if (!stripe) throw fail('STRIPE_NON_CONFIGURE');
-  return stripe;
+/**
+ * Lit la limite « par personne » portée par la métadonnée `max_per_user`, sur le
+ * Promotion Code OU, à défaut, sur le Coupon (le dashboard Stripe expose plus
+ * facilement les métadonnées du coupon). Absente ou invalide → null (illimité).
+ * @param {object} promo Promotion Code Stripe (promo.coupon = objet Coupon).
+ * @returns {number|null}
+ */
+function maxPerUserFromMetadata(promo) {
+  const raw = promo?.metadata?.max_per_user ?? promo?.coupon?.metadata?.max_per_user;
+  if (raw == null || raw === '') return null;
+  const n = Math.round(Number(raw));
+  return Number.isFinite(n) && n >= 1 ? n : null;
 }
 
 /**
- * Crée un code promo : coupon + promotion code Stripe, puis miroir local.
- *
- * @param {object} p
- * @param {string} [p.code] Code personnalisé (ex. `BIENVENUE2026`). Omis → Stripe
- *        en génère un aléatoire.
- * @param {'percent'|'amount'} p.reductionType Type de remise.
- * @param {number} p.reductionValue Pourcentage (1-100) ou montant en centimes.
- * @param {string|null} [p.tarifRestriction] Formule imposée (`journee`…), ou null.
- * @param {number|null} [p.maxRedemptions] Nombre maximal d'utilisations (global).
- * @param {number|null} [p.maxPerUser] Nombre maximal d'utilisations par personne.
- * @param {string|null} [p.expiresAt] Date limite ISO 8601, ou null.
- * @returns {Promise<object>} Ligne miroir créée.
+ * Convertit un couple (Promotion Code + Coupon) Stripe en ligne miroir locale.
+ * @param {object} promo Promotion Code Stripe (promo.coupon = objet Coupon).
+ * @param {Map<string,string>} productToTarif Map productId → clé de formule.
+ * @returns {object|null} Paramètres d'upsert, ou null si inexploitable.
  */
-export async function createPromo({
-  code, reductionType, reductionValue, tarifRestriction = null,
-  maxRedemptions = null, maxPerUser = null, expiresAt = null,
-}) {
-  const stripe = requireClient();
+function toMirrorRow(promo, productToTarif) {
+  const coupon = promo?.coupon;
+  if (!promo?.code || !coupon?.id) return null;
 
-  // ── Validation des entrées (le serveur reste seul juge) ────────────────────
-  if (reductionType !== 'percent' && reductionType !== 'amount') throw fail('PROMO_TYPE_INVALIDE');
-  const value = Math.round(Number(reductionValue));
-  if (!Number.isFinite(value) || value <= 0) throw fail('PROMO_VALEUR_INVALIDE');
-  if (reductionType === 'percent' && value > 100) throw fail('PROMO_VALEUR_INVALIDE');
-  if (tarifRestriction && !VALID_TARIFS.has(tarifRestriction)) throw fail('PROMO_TARIF_INVALIDE');
-  const max = maxRedemptions != null && maxRedemptions !== '' ? Math.round(Number(maxRedemptions)) : null;
-  if (max != null && (!Number.isFinite(max) || max < 1)) throw fail('PROMO_LIMITE_INVALIDE');
-  const perUser = maxPerUser != null && maxPerUser !== '' ? Math.round(Number(maxPerUser)) : null;
-  if (perUser != null && (!Number.isFinite(perUser) || perUser < 1)) throw fail('PROMO_LIMITE_INVALIDE');
-  let expiresEpoch = null;
-  if (expiresAt) {
-    const t = new Date(expiresAt).getTime();
-    if (Number.isNaN(t)) throw fail('PROMO_DATE_INVALIDE');
-    if (t <= Date.now()) throw fail('PROMO_DATE_PASSEE');
-    expiresEpoch = Math.floor(t / 1000);
-  }
-  const customCode = code ? String(code).trim().toUpperCase() : null;
-  if (customCode) {
-    if (!/^[A-Z0-9_-]{3,40}$/.test(customCode)) throw fail('PROMO_CODE_INVALIDE');
-    if (byCodeStmt.get(customCode)) throw fail('PROMO_CODE_EXISTE');
+  let reductionType;
+  let reductionValue;
+  if (coupon.percent_off != null) {
+    reductionType = 'percent';
+    reductionValue = Math.round(coupon.percent_off);
+  } else if (coupon.amount_off != null) {
+    reductionType = 'amount';
+    reductionValue = Math.round(coupon.amount_off); // déjà en centimes
+  } else {
+    return null; // coupon sans remise exploitable
   }
 
-  // ── 1. Coupon (règle de remise) ─────────────────────────────────────────────
-  const couponParams = { duration: 'once' };
-  if (reductionType === 'percent') couponParams.percent_off = value;
-  else { couponParams.amount_off = value; couponParams.currency = 'eur'; }
-  if (max != null) couponParams.max_redemptions = max;
-  if (expiresEpoch) couponParams.redeem_by = expiresEpoch;
-  if (tarifRestriction) {
-    const formules = await ensureFormuleProducts(stripe);
-    couponParams.applies_to = { products: [formules[tarifRestriction]] };
+  // Restriction de formule : on mappe le 1er produit de applies_to vers sa clé.
+  let tarifRestriction = null;
+  const products = coupon.applies_to?.products || [];
+  for (const pid of products) {
+    const key = productToTarif.get(pid);
+    if (key) { tarifRestriction = key; break; }
   }
-  const coupon = await stripe.coupons.create(couponParams);
 
-  // ── 2. Promotion code (code public) ─────────────────────────────────────────
-  const promoParams = { coupon: coupon.id };
-  if (customCode) promoParams.code = customCode;
-  if (max != null) promoParams.max_redemptions = max;
-  if (expiresEpoch) promoParams.expires_at = expiresEpoch;
-  const promo = await stripe.promotionCodes.create(promoParams);
+  const expiresAt = epochToIso(promo.expires_at) || epochToIso(coupon.redeem_by);
+  // L'état « actif » exige un Promotion Code actif ET un coupon encore valide.
+  const active = promo.active && coupon.valid ? 1 : 0;
 
-  // ── 3. Miroir local ─────────────────────────────────────────────────────────
-  const info = insertStmt.run({
-    code: promo.code, // code effectif retourné par Stripe (normalisé)
+  return {
+    code: promo.code,
     stripe_coupon_id: coupon.id,
     stripe_promo_id: promo.id,
     reduction_type: reductionType,
-    reduction_value: value,
-    tarif_restriction: tarifRestriction || null,
-    max_redemptions: max,
-    max_per_user: perUser,
-    expires_at: expiresAt || null,
-  });
-  return getStmt.get(info.lastInsertRowid);
+    reduction_value: reductionValue,
+    tarif_restriction: tarifRestriction,
+    max_redemptions: promo.max_redemptions ?? coupon.max_redemptions ?? null,
+    max_per_user: maxPerUserFromMetadata(promo),
+    expires_at: expiresAt,
+    active,
+  };
 }
 
 /**
- * Valide un code saisi au panier, pour l'utilisateur et le contenu donnés.
- * Fait respecter : existence, activation, expiration, restriction de formule,
- * limite globale et limite PAR PERSONNE (via la table locale `promo_redemptions`).
+ * Construit la map productId Stripe → clé de formule (`journee`…), pour retrouver
+ * la restriction de formule d'un coupon à partir de son `applies_to.products`.
+ * @param {import('stripe').Stripe} stripe
+ * @returns {Promise<Map<string,string>>}
+ */
+async function productToTarifMap(stripe) {
+  const formules = await ensureFormuleProducts(stripe); // {heure, demi_journee, journee}
+  const m = new Map();
+  for (const [key, productId] of Object.entries(formules)) m.set(productId, key);
+  return m;
+}
+
+/**
+ * Synchronise le miroir local depuis Stripe : récupère TOUS les Promotion Codes,
+ * met à jour/insère les lignes correspondantes et purge celles qui n'existent
+ * plus côté Stripe. Idempotent.
+ *
+ * @returns {Promise<void>}
+ * @throws {Error} `STRIPE_NON_CONFIGURE` si Stripe n'est pas configuré.
+ */
+export async function syncPromosFromStripe() {
+  const stripe = getClient();
+  if (!stripe) throw fail('STRIPE_NON_CONFIGURE');
+  const productToTarif = await productToTarifMap(stripe);
+
+  // Pagination complète des Promotion Codes (coupon inclus par défaut).
+  const rows = [];
+  const seenPromoIds = [];
+  let startingAfter;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const resp = await stripe.promotionCodes.list({ limit: 100, ...(startingAfter ? { starting_after: startingAfter } : {}) });
+    for (const promo of resp.data) {
+      seenPromoIds.push(promo.id);
+      const row = toMirrorRow(promo, productToTarif);
+      if (row) rows.push(row);
+    }
+    if (!resp.has_more || !resp.data.length) break;
+    startingAfter = resp.data[resp.data.length - 1].id;
+  }
+
+  const apply = db.transaction(() => {
+    for (const row of rows) upsertStmt.run(row);
+    deleteByPromoIdsNotIn(seenPromoIds);
+  });
+  apply();
+}
+
+/**
+ * Garantit qu'un code précis (saisi au panier) est présent dans le miroir, par un
+ * aller-retour Stripe ciblé. Best-effort : en cas d'échec ou de Stripe non
+ * configuré, on n'altère pas le miroir et la validation se fera sur l'existant.
+ *
+ * @param {string} code Code saisi par le client.
+ * @returns {Promise<void>}
+ */
+export async function ensurePromoMirrored(code) {
+  const wanted = String(code || '').trim();
+  if (!wanted) return;
+  const stripe = getClient();
+  if (!stripe) return;
+  try {
+    const productToTarif = await productToTarifMap(stripe);
+    // Stripe stocke les codes en majuscules ; on filtre sur cette forme.
+    const resp = await stripe.promotionCodes.list({ code: wanted.toUpperCase(), limit: 1 });
+    const promo = resp.data[0];
+    if (!promo) return;
+    const row = toMirrorRow(promo, productToTarif);
+    if (row) upsertStmt.run(row);
+  } catch { /* best-effort : on laisse le miroir en l'état */ }
+}
+
+/**
+ * Valide un code saisi au panier, pour l'utilisateur et le contenu donnés
+ * (lecture du miroir local). Fait respecter : existence, activation, expiration,
+ * restriction de formule, limite globale et limite PAR PERSONNE (via la table
+ * locale `promo_redemptions`). Appeler `ensurePromoMirrored(code)` AVANT pour
+ * garantir la fraîcheur du miroir.
  *
  * @param {object} p
  * @param {string} p.code Code saisi par le client.
@@ -160,8 +240,10 @@ export function validatePromoForCheckout({ code, userId, items }) {
 /**
  * Calcule la remise (centimes) qu'un code applique à un panier, de la même façon
  * que Stripe : la réduction ne porte que sur les lignes éligibles (restriction de
- * formule). POUR AFFICHAGE UNIQUEMENT - Stripe reste la référence au paiement, et
- * ce calcul n'enregistre aucune utilisation.
+ * formule) et, pour un MONTANT FIXE, elle est bornée au sous-total éligible — ce
+ * qui limite de fait un « −20 € sur la Journée » à la valeur d'UNE journée même si
+ * le panier en contient plusieurs. POUR AFFICHAGE UNIQUEMENT — Stripe reste la
+ * référence au paiement, et ce calcul n'enregistre aucune utilisation.
  *
  * @param {object} promo Ligne `promo_codes`.
  * @param {Array<{tarif_type:string, price_cents:number}>} items Lignes du panier.
@@ -189,58 +271,18 @@ export function recordRedemption({ promoId, userId, orderId = null }) {
 }
 
 /**
- * Liste les codes promo (miroir local) enrichis du nombre d'utilisations : le
- * compteur local (`used`, qui fait foi pour nos limites) et, best-effort, celui
- * de Stripe (`times_redeemed`).
+ * Liste les codes promo pour l'admin : synchronise d'abord le miroir depuis
+ * Stripe (source de vérité), puis renvoie les lignes enrichies du compteur local
+ * d'utilisations (`used`, qui fait foi pour nos limites).
  * @returns {Promise<object[]>}
  */
 export async function listPromos() {
-  const rows = listStmt.all();
-  const stripe = getClient();
-  const withLocal = rows.map((r) => ({ ...r, active: !!r.active, used: countGlobalStmt.get(r.id).n }));
-  if (!stripe || !rows.length) {
-    return withLocal.map((r) => ({ ...r, times_redeemed: null }));
-  }
-  const live = new Map();
-  try {
-    const resp = await stripe.promotionCodes.list({ limit: 100 });
-    for (const pc of resp.data) live.set(pc.id, pc);
-  } catch { /* best-effort : on affiche sans le compteur Stripe en cas d'échec */ }
-  return withLocal.map((r) => {
-    const pc = live.get(r.stripe_promo_id);
-    return { ...r, times_redeemed: pc ? pc.times_redeemed : null, stripe_active: pc ? pc.active : null };
-  });
+  await syncPromosFromStripe();
+  return listStmt.all().map((r) => ({
+    ...r,
+    active: !!r.active,
+    used: countGlobalStmt.get(r.id).n,
+  }));
 }
 
-/**
- * Active ou désactive un code (bascule `active` du promotion code Stripe).
- * @param {number} id Id miroir.
- * @param {boolean} active Nouvel état.
- */
-export async function setPromoActive(id, active) {
-  const row = getStmt.get(id);
-  if (!row) throw fail('PROMO_INTROUVABLE');
-  const stripe = requireClient();
-  await stripe.promotionCodes.update(row.stripe_promo_id, { active: Boolean(active) });
-  setActiveStmt.run({ id, active: active ? 1 : 0 });
-  return getStmt.get(id);
-}
-
-/**
- * Supprime un code : supprime le coupon Stripe (ce qui révoque ses codes) puis
- * la ligne miroir. Les réservations déjà payées ne sont pas affectées.
- * @param {number} id Id miroir.
- */
-export async function deletePromo(id) {
-  const row = getStmt.get(id);
-  if (!row) throw fail('PROMO_INTROUVABLE');
-  const stripe = requireClient();
-  try {
-    await stripe.coupons.del(row.stripe_coupon_id);
-  } catch (err) {
-    // Coupon déjà absent côté Stripe : on nettoie quand même le miroir.
-    if (err?.code !== 'resource_missing') throw err;
-  }
-  deleteStmt.run(id);
-  return { deleted: true };
-}
+export { VALID_TARIFS };

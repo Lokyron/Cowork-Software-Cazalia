@@ -50,11 +50,11 @@ cartRouter.delete('/cart/:id', requireAuth, (req, res) => {
  * @returns 200 `{code, discount_cents, total_cents, new_total_cents, ...}`
  *          · 400 `PANIER_VIDE`/`PROMO_*`
  */
-cartRouter.post('/cart/promo/preview', requireAuth, (req, res) => {
+cartRouter.post('/cart/promo/preview', requireAuth, async (req, res) => {
   try {
     const code = String(req.body?.code || '').trim();
     if (!code) return res.status(400).json({ error: 'PROMO_INTROUVABLE' });
-    res.json(previewPromo(req.user.id, code));
+    res.json(await previewPromo(req.user.id, code));
   } catch (err) { sendBusinessError(res, err, 400); }
 });
 

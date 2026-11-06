@@ -1,176 +1,140 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Fragment } from 'react';
 import { api, msg } from '../api.js';
 
-const TARIFS = [
-  ['', 'Toutes les formules'],
-  ['journee', 'Formule Journée uniquement'],
-  ['demi_journee', 'Formule Demi-journée uniquement'],
-  ['heure', 'Formule Heure uniquement'],
-];
+// Page « passerelle » : les codes promo sont créés et gérés dans le dashboard
+// Stripe (source de vérité). Cette page ne fait que SYNCHRONISER et AFFICHER : elle
+// n'édite rien. Elle sert de raccourci pour visualiser les codes et comprendre
+// comment ils s'appliquent dans le tunnel de réservation.
+
 const TARIF_LABEL = {
-  journee: 'Journée', demi_journee: 'Demi-journée', heure: 'Heure', '': 'Toutes',
+  journee: 'Formule Journée', demi_journee: 'Formule Demi-journée', heure: 'Formule Heure', '': 'Toutes les formules',
 };
 
 const fmtDate = (iso) => {
-  if (!iso) return '-';
+  if (!iso) return 'Sans expiration';
   const d = new Date(String(iso).replace(' ', 'T'));
   return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' });
 };
-const fmtReduction = (p) =>
-  p.reduction_type === 'percent' ? `-${p.reduction_value} %` : `-${(p.reduction_value / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`;
+const eur = (cents) => (cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+const fmtReduction = (p) => (p.reduction_type === 'percent' ? `−${p.reduction_value} %` : `−${eur(p.reduction_value)}`);
 
-const EMPTY = { code: '', reduction_type: 'percent', reduction_value: '', tarif_restriction: 'journee', max_redemptions: '', max_per_user: '1', expires_at: '' };
+// Phrase lisible décrivant le fonctionnement d'un code.
+function explain(p) {
+  const bits = [];
+  bits.push(
+    p.reduction_type === 'percent'
+      ? `Réduction de ${p.reduction_value} %`
+      : `Réduction de ${eur(p.reduction_value)}`,
+  );
+  bits.push(p.tarif_restriction ? `sur la ${TARIF_LABEL[p.tarif_restriction].toLowerCase()}` : 'sur tout le panier éligible');
+  if (p.reduction_type === 'amount' && p.tarif_restriction) {
+    bits.push('(plafonnée au sous-total de cette formule — donc une seule formule offerte même si le panier en contient plusieurs)');
+  }
+  const limits = [];
+  limits.push(p.max_per_user != null ? `${p.max_per_user} fois par personne` : 'sans limite par personne');
+  if (p.max_redemptions != null) limits.push(`${p.max_redemptions} au total`);
+  return `${bits.join(' ')}. Utilisable ${limits.join(', ')}.`;
+}
 
 export default function AdminPromos() {
   const [promos, setPromos] = useState([]);
-  const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState(null);
-  const [notice, setNotice] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState(null);
 
   const load = useCallback(async () => {
+    setLoading(true); setError(null);
     try {
-      const r = await api.get('/admin/promos');
+      const r = await api.get('/admin/promos'); // déclenche la synchro Stripe côté serveur
       setPromos(r.promos || []);
-    } catch (err) { setError(msg(err.code)); }
+    } catch (err) {
+      setError(err.code === 'STRIPE_NON_CONFIGURE'
+        ? 'Stripe n’est pas configuré : impossible de synchroniser les codes promo.'
+        : msg(err.code));
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
-
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  const create = async (e) => {
-    e.preventDefault();
-    setError(null); setNotice(null);
-    const value = Number(form.reduction_value);
-    if (!Number.isFinite(value) || value <= 0) { setError('Indiquez une valeur de réduction valide.'); return; }
-    if (form.reduction_type === 'percent' && value > 100) { setError('Un pourcentage ne peut pas dépasser 100.'); return; }
-    setBusy(true);
-    try {
-      const payload = {
-        code: form.code.trim() || null,
-        reduction_type: form.reduction_type,
-        // Montant fixe saisi en euros → centimes ; pourcentage tel quel.
-        reduction_value: form.reduction_type === 'amount' ? Math.round(value * 100) : Math.round(value),
-        tarif_restriction: form.tarif_restriction || null,
-        max_redemptions: form.max_redemptions ? Number(form.max_redemptions) : null,
-        max_per_user: form.max_per_user ? Number(form.max_per_user) : null,
-        expires_at: form.expires_at ? `${form.expires_at}T23:59:59` : null,
-      };
-      const r = await api.post('/admin/promos', payload);
-      setNotice(`Code « ${r.promo.code} » créé.`);
-      setForm(EMPTY);
-      load();
-    } catch (err) {
-      setError(msg(err.code));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const toggle = async (p) => {
-    setError(null);
-    try { await api.patch(`/admin/promos/${p.id}`, { active: !p.active }); load(); }
-    catch (err) { setError(msg(err.code)); }
-  };
-
-  const remove = async (p) => {
-    setError(null);
-    if (!window.confirm(`Supprimer définitivement le code « ${p.code} » ? Il ne sera plus utilisable.`)) return;
-    try { await api.del(`/admin/promos/${p.id}`); load(); }
-    catch (err) { setError(msg(err.code)); }
-  };
 
   return (
     <div>
       <div className="flex-between">
         <h1>Codes promo</h1>
+        <button type="button" className="outline" onClick={load} disabled={loading}>
+          {loading ? 'Synchronisation…' : '↻ Rafraîchir depuis Stripe'}
+        </button>
       </div>
       <p className="subtitle">
-        Codes de réduction saisis par le client dans le tunnel de réservation. La remise est appliquée
-        par Stripe (coupon), et Cazalia fait respecter les limites&nbsp;: total et nombre d'utilisations
-        par personne.
+        Les codes promo sont <strong>créés et gérés dans Stripe</strong> (dashboard &rsaquo; Produits &rsaquo;
+        Codes promotionnels). Cette page est une <strong>passerelle en lecture seule</strong>&nbsp;: elle
+        reflète ce qui existe dans Stripe et explique comment chaque code s’applique. Toute création ou
+        modification se fait dans Stripe.
       </p>
 
+      {error && <div className="alert error" style={{ marginBottom: 16 }}>{error}</div>}
+
       <div className="card" style={{ marginBottom: 16 }}>
-        <h2 style={{ marginTop: 0 }}>Créer un code</h2>
-        <form onSubmit={create}>
-          <div className="row">
-            <div className="field" style={{ flex: 2 }}>
-              <label>Code <span className="muted" style={{ fontWeight: 400 }}>(vide = aléatoire)</span></label>
-              <input value={form.code} onChange={set('code')} placeholder="BIENVENUE2026" maxLength={40} />
-            </div>
-            <div className="field">
-              <label>Type</label>
-              <select value={form.reduction_type} onChange={set('reduction_type')}>
-                <option value="percent">Pourcentage (%)</option>
-                <option value="amount">Montant fixe (€)</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>{form.reduction_type === 'percent' ? 'Réduction (%)' : 'Réduction (€)'}</label>
-              <input
-                type="number" min="1" step={form.reduction_type === 'percent' ? '1' : '0.01'}
-                value={form.reduction_value} onChange={set('reduction_value')}
-                placeholder={form.reduction_type === 'percent' ? '100' : '15'} required
-              />
-            </div>
-          </div>
-          <div className="row">
-            <div className="field" style={{ flex: 2 }}>
-              <label>Restriction de formule</label>
-              <select value={form.tarif_restriction} onChange={set('tarif_restriction')}>
-                {TARIFS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Total max <span className="muted" style={{ fontWeight: 400 }}>(vide = illimité)</span></label>
-              <input type="number" min="1" value={form.max_redemptions} onChange={set('max_redemptions')} placeholder="ex. 20" />
-            </div>
-            <div className="field">
-              <label>Max par personne <span className="muted" style={{ fontWeight: 400 }}>(vide = illimité)</span></label>
-              <input type="number" min="1" value={form.max_per_user} onChange={set('max_per_user')} placeholder="ex. 1" />
-            </div>
-            <div className="field">
-              <label>Expire le <span className="muted" style={{ fontWeight: 400 }}>(facultatif)</span></label>
-              <input type="date" value={form.expires_at} onChange={set('expires_at')} />
-            </div>
-          </div>
-          {error && <div className="alert error">{error}</div>}
-          {notice && <div className="alert ok">{notice}</div>}
-          <button type="submit" disabled={busy}>{busy ? '…' : 'Créer le code'}</button>
-        </form>
+        <h2 style={{ marginTop: 0 }}>Comment fonctionnent les codes</h2>
+        <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
+          <li>Le client saisit le code <strong>dans le panier de réservation</strong>, pas sur la page de
+            paiement Stripe (la saisie libre y est désactivée).</li>
+          <li><strong>Restriction de formule</strong> : si le coupon Stripe est limité à un produit
+            (« Cazalia – Formule Journée »…), la remise ne s’applique qu’aux lignes de cette formule.</li>
+          <li><strong>Montant fixe (ex. −20 €)</strong> : la remise est plafonnée au sous-total éligible.
+            Sur la formule Journée (20 €), cela revient à offrir <strong>une seule journée</strong>, même si
+            le panier en contient plusieurs.</li>
+          <li><strong>Limite par personne</strong> : Stripe ne la gère pas nativement. Pour l’activer,
+            ajoutez une métadonnée <code>max_per_user</code> (ex. <code>1</code>) sur le <strong>coupon</strong>
+            ou sur le code promo dans Stripe. Absente = illimité par personne. C’est l’application qui la
+            fait respecter (par compte membre).</li>
+          <li><strong>Limite globale et expiration</strong> sont lues directement depuis le coupon / code
+            Stripe.</li>
+        </ul>
       </div>
 
       <div className="card">
-        <h2 style={{ marginTop: 0 }}>Codes existants</h2>
-        {!promos.length ? (
-          <p className="muted">Aucun code pour le moment.</p>
+        <h2 style={{ marginTop: 0 }}>Codes dans Stripe</h2>
+        {loading && !promos.length ? (
+          <p className="muted">Synchronisation avec Stripe…</p>
+        ) : !promos.length ? (
+          <p className="muted">Aucun code promo dans Stripe pour le moment. Créez-en un depuis le dashboard Stripe.</p>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>Code</th><th>Réduction</th><th>Formule</th><th>Utilisations</th><th>Par pers.</th><th>Expire</th><th>État</th><th></th>
+                <th>Code</th><th>Réduction</th><th>Formule</th><th>Usages</th><th>Par pers.</th><th>Expire</th><th>État</th><th></th>
               </tr>
             </thead>
             <tbody>
               {promos.map((p) => (
-                <tr key={p.id}>
-                  <td><code className="voucher-code" style={{ fontSize: 14, padding: '2px 8px' }}>{p.code}</code></td>
-                  <td>{fmtReduction(p)}</td>
-                  <td>{TARIF_LABEL[p.tarif_restriction || '']}</td>
-                  <td>{p.used != null ? p.used : (p.times_redeemed ?? '-')}{p.max_redemptions ? ` / ${p.max_redemptions}` : ''}</td>
-                  <td>{p.max_per_user ? p.max_per_user : '∞'}</td>
-                  <td>{fmtDate(p.expires_at)}</td>
-                  <td><span className={`badge ${p.active ? 'green' : 'grey'}`}>{p.active ? 'Actif' : 'Inactif'}</span></td>
-                  <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    <button type="button" className="ghost small" onClick={() => toggle(p)}>
-                      {p.active ? 'Désactiver' : 'Activer'}
-                    </button>
-                    <button type="button" className="ghost small" style={{ color: 'var(--red)' }} onClick={() => remove(p)}>
-                      Supprimer
-                    </button>
-                  </td>
-                </tr>
+                <Fragment key={p.id}>
+                  <tr>
+                    <td><code className="voucher-code" style={{ fontSize: 14, padding: '2px 8px' }}>{p.code}</code></td>
+                    <td>{fmtReduction(p)}</td>
+                    <td>{TARIF_LABEL[p.tarif_restriction || '']}</td>
+                    <td>{p.used != null ? p.used : '-'}{p.max_redemptions ? ` / ${p.max_redemptions}` : ''}</td>
+                    <td>{p.max_per_user ? p.max_per_user : '∞'}</td>
+                    <td>{fmtDate(p.expires_at)}</td>
+                    <td><span className={`badge ${p.active ? 'green' : 'grey'}`}>{p.active ? 'Actif' : 'Inactif'}</span></td>
+                    <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      <button type="button" className="ghost small" onClick={() => setOpenId(openId === p.id ? null : p.id)}>
+                        {openId === p.id ? 'Masquer' : 'Détails'}
+                      </button>
+                    </td>
+                  </tr>
+                  {openId === p.id && (
+                    <tr>
+                      <td colSpan={8} style={{ background: 'var(--surface-2, #f7f7f8)', fontSize: 14 }}>
+                        <p style={{ margin: '4px 0' }}>{explain(p)}</p>
+                        <p className="muted" style={{ margin: '4px 0', fontSize: 13 }}>
+                          Usages déjà enregistrés (côté application) : <strong>{p.used ?? 0}</strong>.
+                          {p.max_per_user != null && ' La limite « par personne » est comptée par compte membre.'}
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
