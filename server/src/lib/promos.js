@@ -144,9 +144,14 @@ async function productToTarifMap(stripe) {
 }
 
 /**
- * Synchronise le miroir local depuis Stripe : récupère TOUS les Promotion Codes,
- * met à jour/insère les lignes correspondantes et purge celles qui n'existent
- * plus côté Stripe. Idempotent.
+ * Synchronise le miroir local depuis Stripe : récupère les Promotion Codes ACTIFS,
+ * met à jour/insère les lignes correspondantes et purge toutes les autres
+ * (codes supprimés OU désactivés côté Stripe). Idempotent.
+ *
+ * On ne mire que les codes actifs : un Promotion Code Stripe ne se supprime pas,
+ * il se désactive, et Stripe continue de le renvoyer (code orphelin). Les ignorer
+ * évite d'afficher des codes « morts » et toute collision de `code` entre un
+ * ancien code désactivé et un nouveau code actif portant le même libellé.
  *
  * @returns {Promise<void>}
  * @throws {Error} `STRIPE_NON_CONFIGURE` si Stripe n'est pas configuré.
@@ -156,13 +161,13 @@ export async function syncPromosFromStripe() {
   if (!stripe) throw fail('STRIPE_NON_CONFIGURE');
   const productToTarif = await productToTarifMap(stripe);
 
-  // Pagination complète des Promotion Codes (coupon inclus par défaut).
+  // Pagination complète des Promotion Codes ACTIFS (coupon inclus par défaut).
   const rows = [];
   const seenPromoIds = [];
   let startingAfter;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const resp = await stripe.promotionCodes.list({ limit: 100, ...(startingAfter ? { starting_after: startingAfter } : {}) });
+    const resp = await stripe.promotionCodes.list({ active: true, limit: 100, ...(startingAfter ? { starting_after: startingAfter } : {}) });
     for (const promo of resp.data) {
       seenPromoIds.push(promo.id);
       const row = toMirrorRow(promo, productToTarif);
@@ -194,8 +199,9 @@ export async function ensurePromoMirrored(code) {
   if (!stripe) return;
   try {
     const productToTarif = await productToTarifMap(stripe);
-    // Stripe stocke les codes en majuscules ; on filtre sur cette forme.
-    const resp = await stripe.promotionCodes.list({ code: wanted.toUpperCase(), limit: 1 });
+    // Stripe stocke les codes en majuscules ; on filtre sur cette forme. On ne
+    // retient que les codes ACTIFS (un code désactivé ne doit pas être applicable).
+    const resp = await stripe.promotionCodes.list({ code: wanted.toUpperCase(), active: true, limit: 1 });
     const promo = resp.data[0];
     if (!promo) return;
     const row = toMirrorRow(promo, productToTarif);
