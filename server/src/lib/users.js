@@ -101,21 +101,37 @@ export function publicUser(u) {
   };
 }
 
-// Suppression définitive d'un compte et de toutes ses données liées.
-// Les crédits non utilisés sont perdus (pas de remboursement). Irréversible.
+// Suppression définitive d'un compte et de TOUTES ses données liées. Irréversible.
+//
+// Les clés étrangères sont activées (foreign_keys = ON) sans ON DELETE CASCADE :
+// il faut donc nettoyer, dans l'ordre des dépendances, chaque table qui référence
+// users(id), sinon le DELETE final échoue (ce qui se traduisait par « Une erreur
+// est survenue » dès qu'un membre avait réservé, payé ou utilisé un code promo).
+// Les colonnes de traçabilité portées par CET utilisateur sur des lignes d'AUTRES
+// (created_by, to_user_id) sont détachées (SET NULL) plutôt que supprimées.
 const deleteTx = db.transaction((userId) => {
-  // Détache les références "created_by" portées par cet utilisateur sur des
-  // lignes appartenant à d'autres (sinon violation de clé étrangère).
+  // 1. Détacher les références de traçabilité posées par cet utilisateur ailleurs.
+  db.prepare(`UPDATE reservation_holds SET created_by = NULL WHERE created_by = ?`).run(userId);
   db.prepare(`UPDATE password_resets SET created_by = NULL WHERE created_by = ?`).run(userId);
+  db.prepare(`UPDATE email_log SET to_user_id = NULL WHERE to_user_id = ?`).run(userId);
+
+  // 2. Supprimer les données rattachées, dans l'ordre des dépendances
+  //    (promo_redemptions.order_id -> reservation_orders avant les orders).
+  db.prepare(`DELETE FROM promo_redemptions WHERE user_id = ?`).run(userId);
+  db.prepare(`DELETE FROM reservation_orders WHERE user_id = ?`).run(userId);
+  db.prepare(`DELETE FROM reservation_holds WHERE user_id = ?`).run(userId);
+  db.prepare(`DELETE FROM claims WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM password_resets WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM reservations WHERE user_id = ?`).run(userId);
+
+  // 3. Le compte lui-même (plus aucune ligne ne le référence).
   db.prepare(`DELETE FROM users WHERE id = ?`).run(userId);
 });
 
 /**
- * Supprime définitivement un compte et toutes ses données liées.
- * Irréversible ; les crédits non consommés sont perdus.
+ * Supprime définitivement un compte et toutes ses données liées
+ * (réservations, commandes, verrous, réclamations, sessions…). Irréversible.
  *
  * @param {number} userId Compte à supprimer.
  * @returns {void}
