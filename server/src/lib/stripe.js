@@ -1,4 +1,4 @@
-// Intégration Stripe - recharge de crédits par Checkout hébergé.
+// Intégration Stripe - paiement des réservations et abonnements par Checkout hébergé.
 //
 // Choix d'architecture :
 //   - Checkout HÉBERGÉ : la page de paiement est servie par Stripe, aucune donnée
@@ -60,49 +60,6 @@ export async function ensureFormuleProducts(stripe) {
   }
   setSetting('stripe_formules', ids);
   return ids;
-}
-
-/**
- * Formule d'achat correspondant à un identifiant, ou `null`.
- * @param {string} packId
- * @returns {{id:string,credits:number,eur_cents:number,label:string}|null}
- */
-export function findPack(packId) {
-  const { packs } = getStripe();
-  return packs.find((p) => p.id === packId) || null;
-}
-
-/**
- * Crée une session Checkout pour l'achat d'une formule de crédits.
- *
- * @param {object} params
- * @param {number} params.userId Membre bénéficiaire (crédité au paiement).
- * @param {{id:string,credits:number,eur_cents:number,label:string}} params.pack Formule.
- * @param {string} params.baseUrl Origine publique (pour les URL de retour).
- * @returns {Promise<import('stripe').Stripe.Checkout.Session>}
- * @throws {Error} `STRIPE_NON_CONFIGURE`.
- */
-export async function createCheckoutSession({ userId, pack, baseUrl }) {
-  const stripe = client();
-  if (!stripe) { const e = new Error('STRIPE_NON_CONFIGURE'); e.code = 'STRIPE_NON_CONFIGURE'; throw e; }
-  const base = String(baseUrl || '').replace(/\/$/, '');
-  return stripe.checkout.sessions.create({
-    mode: 'payment',
-    // Restreint aux cartes : simple et universel. (Ajouter d'autres moyens plus tard si besoin.)
-    payment_method_types: ['card'],
-    client_reference_id: String(userId),
-    metadata: { user_id: String(userId), credits: String(pack.credits), pack_id: pack.id },
-    line_items: [{
-      quantity: 1,
-      price_data: {
-        currency: 'eur',
-        unit_amount: pack.eur_cents,
-        product_data: { name: `CAZALIA - ${pack.label}`, description: `${pack.credits} crédits de réservation` },
-      },
-    }],
-    success_url: `${base}/mon-espace?recharge=success`,
-    cancel_url: `${base}/mon-espace?recharge=cancel`,
-  });
 }
 
 /**

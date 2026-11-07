@@ -84,11 +84,11 @@ export default function Reclamation() {
 
       <h2>Rappel de la politique d'annulation</h2>
       <ul>
-        <li><strong>Plus de 48&nbsp;h avant</strong> le créneau&nbsp;: recréditation intégrale des crédits.</li>
-        <li><strong>Entre 48&nbsp;h et 24&nbsp;h avant</strong>&nbsp;: recréditation des crédits (sauf salle
+        <li><strong>Plus de 48&nbsp;h avant</strong> le créneau&nbsp;: remboursement intégral.</li>
+        <li><strong>Entre 48&nbsp;h et 24&nbsp;h avant</strong>&nbsp;: remboursement (sauf salle
           privatisée).</li>
-        <li><strong>Moins de 24&nbsp;h avant ou absence (no-show)</strong>&nbsp;: crédits dus.</li>
-        <li><strong>Annulation par CAZALIA</strong>&nbsp;: recréditation intégrale.</li>
+        <li><strong>Moins de 24&nbsp;h avant ou absence (no-show)</strong>&nbsp;: montant dû.</li>
+        <li><strong>Annulation par CAZALIA</strong>&nbsp;: remboursement intégral.</li>
       </ul>
       <p className="muted" style={{ fontSize: 14 }}>
         Remboursement en numéraire (paiement en ligne) traité via Stripe sous 5 à 10 jours ouvrés.

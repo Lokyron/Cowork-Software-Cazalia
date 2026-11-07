@@ -102,7 +102,7 @@ export default function AccountSettings() {
       <div style={{ marginTop: 24 }}>
         <DangerDelete
           title="Supprimer mon compte"
-          warning="Cette action est définitive et irréversible. Tous vos crédits non utilisés seront perdus, ainsi que vos réservations et votre historique."
+          warning="Cette action est définitive et irréversible. Votre compte, vos réservations et votre historique seront supprimés."
           buttonLabel="Supprimer définitivement mon compte"
           onConfirm={async () => { await api.del('/auth/me', { confirm: 'SUPPRIMER' }); await refresh(); navigate('/'); }}
         />

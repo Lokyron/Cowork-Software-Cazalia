@@ -29,7 +29,7 @@ export default function Cgu() {
           <li><a href="#compte">Accès au Service et compte utilisateur</a></li>
           <li><a href="#securite-compte">Sécurité du compte</a></li>
           <li><a href="#reservations">Réservations</a></li>
-          <li><a href="#credits">Crédits, tarifs et paiement</a></li>
+          <li><a href="#credits">Tarifs et paiement</a></li>
           <li><a href="#annulation">Annulation, modification et remboursement</a></li>
           <li><a href="#retractation">Droit de rétractation</a></li>
           <li><a href="#preinscription">Pré-inscription (liste d'attente)</a></li>
@@ -53,14 +53,14 @@ export default function Cgu() {
       <h2 id="definitions">1. Définitions</h2>
       <ul>
         <li><strong>Service</strong> : la plateforme en ligne accessible à l'adresse cazalia.fr,
-          permettant de découvrir l'espace, créer un compte, réserver des espaces et gérer un solde de crédits.</li>
+          permettant de découvrir l'espace, créer un compte, réserver et payer des espaces.</li>
         <li><strong>Éditeur</strong> / <strong>Exploitant</strong> : la structure identifiée à l'article
           « Mentions légales », qui édite le Service et exploite l'espace de coworking.</li>
         <li><strong>Utilisateur</strong> : toute personne qui accède au Service, qu'elle dispose ou non d'un compte.</li>
         <li><strong>Membre</strong> : utilisateur titulaire d'un compte.</li>
         <li><strong>Espace</strong> : poste en open-space, bureau ou salle réservable au sein du lieu.</li>
-        <li><strong>Crédit</strong> : unité interne de réservation, créditée au compte du Membre et débitée
-          lors d'une réservation.</li>
+        <li><strong>Abonnement</strong> : formule mensuelle souscrite par le Membre, ouvrant droit, selon la
+          formule, à un quota ou à un accès illimité à certains espaces dans les conditions affichées.</li>
         <li><strong>Lieu</strong> : l'espace physique de coworking exploité à Boutonnet (Montpellier).</li>
       </ul>
 
@@ -105,8 +105,8 @@ export default function Cgu() {
         <li>de consulter la présentation du Lieu, des espaces et de la galerie photos ;</li>
         <li>de créer et gérer un compte membre et son profil ;</li>
         <li>de consulter les disponibilités en temps réel et de réserver un ou plusieurs espaces ;</li>
-        <li>de gérer un solde de crédits et de consulter l'historique des réservations et mouvements ;</li>
-        <li>d'éditer un relevé de compte au format PDF ;</li>
+        <li>de payer ses réservations en ligne et de consulter l'historique de ses réservations ;</li>
+        <li>de souscrire et gérer un abonnement mensuel ;</li>
         <li>de recevoir des notifications et confirmations par courrier électronique ;</li>
         <li>le cas échéant, d'obtenir un accès Wi-Fi associé à une réservation.</li>
       </ul>
@@ -117,8 +117,8 @@ export default function Cgu() {
 
       <h2 id="compte">5. Accès au Service et compte utilisateur</h2>
       <p>
-        La consultation des pages publiques est libre. Certaines fonctionnalités (réservation, solde de
-        crédits) nécessitent la création d'un compte. La création d'un compte est réservée aux personnes
+        La consultation des pages publiques est libre. Certaines fonctionnalités (réservation, paiement)
+        nécessitent la création d'un compte. La création d'un compte est réservée aux personnes
         majeures disposant de la capacité juridique de contracter.
       </p>
       <p>
@@ -145,8 +145,9 @@ export default function Cgu() {
       <h2 id="reservations">7. Réservations</h2>
       <p>
         Les réservations d'espaces s'effectuent en ligne. Les disponibilités sont affichées en temps réel.
-        Une réservation n'est <strong>confirmée qu'une fois les crédits correspondants débités</strong> du
-        solde du Membre. Plusieurs espaces peuvent être réservés en une seule opération (panier).
+        Une réservation n'est <strong>confirmée qu'une fois le paiement correspondant encaissé</strong>, ou
+        la réservation couverte par l'abonnement du Membre. Plusieurs espaces peuvent être réservés en une
+        seule opération (panier).
       </p>
       <p>
         Le Membre s'engage à utiliser l'espace réservé conformément à sa destination et au règlement
@@ -154,43 +155,37 @@ export default function Cgu() {
         (durée minimale, plages horaires, nombre de places) affichées lors de la réservation.
       </p>
 
-      <h2 id="credits">8. Crédits, tarifs et paiement</h2>
+      <h2 id="credits">8. Tarifs et paiement</h2>
       <p>
-        Les réservations sont décomptées d'un solde de <strong>crédits</strong>. Les crédits sont
-        rechargeables. Ils <strong>n'ont pas de valeur monétaire</strong>, ne sont ni remboursables en
-        numéraire ni cessibles ou transférables à un tiers, et sont utilisables exclusivement au sein de
-        CAZALIA - Coworking Boutonnet.
+        Les réservations sont payées <strong>à l'acte, en euros</strong>, au tarif affiché sur le Service au
+        moment de la réservation, ou sont <strong>couvertes par l'abonnement</strong> du Membre selon la
+        formule souscrite (quota ou accès illimité, dans les conditions affichées). Les prix sont indiqués
+        en euros&nbsp;; TVA non applicable, article 293&nbsp;B du Code général des impôts. L'Éditeur peut
+        modifier ses tarifs à tout moment ; les modifications sont sans effet sur les réservations déjà
+        validées.
       </p>
       <p>
-        Les tarifs applicables (grille d'achat de crédits et coût en crédits des espaces) sont ceux
-        affichés sur le Service au moment de l'opération. Les prix sont indiqués en euros&nbsp;; TVA non
-        applicable, article 293&nbsp;B du Code général des impôts. L'Éditeur peut modifier ses tarifs à tout
-        moment ; les modifications sont sans effet sur les opérations déjà validées. Une facture ou un
-        relevé est mis à disposition du Membre.
-      </p>
-      <p>
-        Le rechargement des crédits peut être réglé en ligne ou sur place. Les paiements en ligne sont
-        assurés par <strong>Stripe</strong> (Stripe Payments Europe, Ltd), prestataire de paiement
-        sécurisé. Les données de carte bancaire sont saisies directement sur l'infrastructure de Stripe et
-        ne transitent ni ne sont stockées sur les serveurs de l'Éditeur. Les paiements font l'objet d'une
-        authentification forte conforme à la directive DSP2 (3-D&nbsp;Secure). Un justificatif (facture ou
-        relevé) est mis à disposition du Membre après chaque opération. L'Éditeur peut aussi créditer un
-        compte à réception d'un règlement effectué sur place.
+        Le paiement en ligne est assuré par <strong>Stripe</strong> (Stripe Payments Europe, Ltd),
+        prestataire de paiement sécurisé. Les données de carte bancaire sont saisies directement sur
+        l'infrastructure de Stripe et ne transitent ni ne sont stockées sur les serveurs de l'Éditeur. Les
+        paiements font l'objet d'une authentification forte conforme à la directive DSP2 (3-D&nbsp;Secure).
+        Un reçu est mis à disposition du Membre après chaque paiement. Les abonnements sont prélevés
+        périodiquement selon la formule souscrite, jusqu'à leur résiliation.
       </p>
 
       <h2 id="annulation">9. Annulation, modification et remboursement</h2>
       <p>
         Sauf conditions particulières affichées lors de la réservation, l'annulation par le Membre donne
-        lieu au <strong>recréditation des crédits</strong> si elle intervient <strong>plus de
-        24&nbsp;heures</strong> avant le début du créneau. Passé ce délai, les crédits restent dus. Une
-        annulation à l'initiative de l'Éditeur (fermeture, indisponibilité, force majeure) donne lieu à un
-        recréditation intégral des crédits concernés.
+        lieu au <strong>remboursement du paiement</strong> correspondant si elle intervient <strong>plus de
+        24&nbsp;heures</strong> avant le début du créneau. Passé ce délai, le montant reste dû. Une
+        annulation à l'initiative de l'Éditeur (fermeture, indisponibilité, force majeure) donne lieu au
+        remboursement intégral des sommes versées pour les créneaux concernés.
       </p>
 
       <h2 id="retractation">10. Droit de rétractation</h2>
       <p>
         Lorsque l'utilisateur agit en qualité de <strong>consommateur</strong> au sens du Code de la
-        consommation et que l'achat de crédits est conclu à distance, il dispose en principe d'un délai de
+        consommation et qu'une prestation est conclue à distance, il dispose en principe d'un délai de
         <strong> quatorze (14) jours</strong> pour se rétracter, sans avoir à motiver sa décision.
       </p>
       <p>
@@ -287,7 +282,7 @@ export default function Cgu() {
       <p><strong>Données collectées :</strong></p>
       <ul>
         <li><strong>Compte membre</strong> : prénom, nom, adresse e-mail, numéro de téléphone, mot de
-          passe (stocké chiffré), historique des réservations et des mouvements de crédits.</li>
+          passe (stocké chiffré), historique des réservations et des paiements.</li>
         <li><strong>Pré-inscription</strong> : prénom, nom, adresse e-mail, numéro de téléphone,
           activité (facultative) et consentement au recontact.</li>
         <li><strong>Données techniques</strong> : cookie de session strictement nécessaire au

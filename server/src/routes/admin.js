@@ -1,7 +1,5 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { topUp, getBalance, getLedger, getLedgerBetween } from '../lib/wallet.js';
-import { streamInvoicePdf } from '../lib/invoice.js';
 import {
   listPlanning,
   getReservationDetail,
@@ -11,7 +9,7 @@ import {
   reserve,
   reserveBatch,
 } from '../lib/booking.js';
-import { toUtcIso, parsePeriod } from '../lib/time.js';
+import { toUtcIso } from '../lib/time.js';
 import { ensureVoucherForReservation, revokeVoucherForReservation } from '../lib/unifi.js';
 import { ensureAccessPinForReservation, revokeAccessForReservation } from '../lib/unifiAccess.js';
 import { addHold, listCart, removeHold, checkoutFree } from '../lib/cart.js';
@@ -145,28 +143,6 @@ adminRouter.put('/spaces/:id', (req, res) => {
   res.json({ space: db.prepare(`SELECT * FROM spaces WHERE id = ?`).get(id) });
 });
 
-// ── Recharge manuelle des crédits d'un membre (brief §5.3) ───────────────────
-adminRouter.post('/wallet/topup', (req, res) => {
-  try {
-    const userId = Number(req.body?.user_id);
-    const amount = Number(req.body?.amount);
-    const note = req.body?.note ? String(req.body.note) : null;
-    // Montant payé en euros (optionnel) → centimes.
-    const euros = Number(req.body?.euros);
-    const amountEurCents = Number.isFinite(euros) && euros > 0 ? Math.round(euros * 100) : null;
-    if (!userId) return res.status(400).json({ error: 'USER_ID_REQUIS' });
-    const member = db.prepare(`SELECT id FROM users WHERE id = ?`).get(userId);
-    if (!member) return res.status(404).json({ error: 'MEMBRE_INTROUVABLE' });
-    const result = topUp({ userId, amount, createdBy: req.user.id, note, amountEurCents });
-    securityEvent('admin_recharge_credits', {
-      adminId: req.user.id, cibleId: userId, credits: amount, eurCents: amountEurCents, ip: req.ip,
-    });
-    res.status(201).json(result);
-  } catch (err) {
-    sendBusinessError(res, err);
-  }
-});
-
 // ── Planning global ───────────────────────────────────────────────────────────
 adminRouter.get('/planning', (req, res) => {
   try {
@@ -181,7 +157,7 @@ adminRouter.get('/planning', (req, res) => {
   }
 });
 
-// ── Membres (avec solde calculé depuis le grand-livre) ───────────────────────
+// ── Membres ──────────────────────────────────────────────────────────────────
 adminRouter.get('/members', (_req, res) => {
   const users = db
     .prepare(
@@ -189,10 +165,10 @@ adminRouter.get('/members', (_req, res) => {
          FROM users ORDER BY display_name`
     )
     .all();
-  res.json({ members: users.map((u) => ({ ...u, balance: getBalance(u.id) })) });
+  res.json({ members: users });
 });
 
-// Réserver un ou plusieurs créneaux POUR un membre (walk-in). Débite son solde.
+// Réserver un ou plusieurs créneaux POUR un membre (walk-in).
 adminRouter.post('/members/:id/reservations', async (req, res) => {
   try {
     const userId = Number(req.params.id);
@@ -296,7 +272,7 @@ adminRouter.post('/cart/checkout', async (req, res) => {
   } catch (err) { sendBusinessError(res, err); }
 });
 
-// Fiche d'un membre : infos + solde + historique enrichi des transactions.
+// Fiche d'un membre : informations du compte.
 adminRouter.get('/members/:id', (req, res) => {
   const id = Number(req.params.id);
   const member = db
@@ -306,10 +282,7 @@ adminRouter.get('/members/:id', (req, res) => {
     )
     .get(id);
   if (!member) return res.status(404).json({ error: 'UTILISATEUR_INTROUVABLE' });
-  res.json({
-    member: { ...member, balance: getBalance(id) },
-    transactions: getLedger(id),
-  });
+  res.json({ member });
 });
 
 // Création d'un compte par l'admin (mot de passe par défaut + changement forcé).
@@ -323,33 +296,6 @@ adminRouter.post('/users', (req, res) => {
   } catch (err) {
     sendBusinessError(res, err);
   }
-});
-
-/**
- * GET /api/admin/members/:id/invoice?from&to - relevé PDF d'un membre.
- * La période est validée avant l'émission des en-têtes ; le nom de fichier ne
- * reprend que l'identifiant numérique (aucune donnée utilisateur dans l'en-tête
- * `Content-Disposition`).
- *
- * @returns 200 `application/pdf` · 400 `PERIODE_INVALIDE` · 404 `UTILISATEUR_INTROUVABLE`
- */
-adminRouter.get('/members/:id/invoice', (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'CHAMPS_INVALIDES' });
-  const member = db
-    .prepare(`SELECT id, email, display_name, first_name, last_name, phone FROM users WHERE id = ?`)
-    .get(id);
-  if (!member) return res.status(404).json({ error: 'UTILISATEUR_INTROUVABLE' });
-  let period;
-  try {
-    period = parsePeriod(req.query.from, req.query.to);
-  } catch (err) {
-    return sendBusinessError(res, err);
-  }
-  const transactions = getLedgerBetween(id, period.fromIso, period.toIso);
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="releve-${id}.pdf"`);
-  streamInvoicePdf(res, { member, transactions, fromIso: period.fromIso, toIso: period.toIso });
 });
 
 // Édition des informations d'un compte (prénom, nom, email, téléphone, rôle).

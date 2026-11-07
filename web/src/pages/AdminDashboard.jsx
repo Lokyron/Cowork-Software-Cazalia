@@ -40,7 +40,6 @@ export default function AdminDashboard() {
       {/* Actions rapides (passerelles) */}
       <div className="qa-row">
         <Link className="qa primary" to="/admin/membres?new=1">＋ Nouveau membre</Link>
-        <Link className="qa" to="/admin/membres">Recharger des crédits</Link>
         <Link className="qa" to="/admin/planning">Voir le planning</Link>
         <Link className="qa" to="/admin/espaces">Gérer les espaces</Link>
         <Link className="qa" to="/admin/prospects">Prospects</Link>
@@ -73,11 +72,6 @@ export default function AdminDashboard() {
         <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
           ⚠️ <strong>{k.pending_orders}</strong> paiement{k.pending_orders > 1 ? 's' : ''} en attente depuis &gt; 15 min
           (webhook non abouti ?) - à réconcilier.
-        </p>
-      )}
-      {k.credits_outstanding !== 0 && (
-        <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
-          Crédits en circulation : <strong>{k.credits_outstanding}</strong> (ajustements manuels).
         </p>
       )}
 
@@ -128,19 +122,14 @@ export default function AdminDashboard() {
         </div>
 
         <div className="card">
-          <h2>Nouveaux membres &amp; à surveiller</h2>
+          <h2>Nouveaux membres</h2>
           {d.recent_members.map((m) => (
             <Link key={m.id} className="mem" to={`/admin/membres?open=${m.id}`}>
               <span>{m.display_name}</span>
               <span className="muted" style={{ fontSize: 12 }}>{daysAgo(m.created_at)}</span>
-              <span className={`chip ${m.balance < 5 ? 'warn' : ''}`}>{m.balance} crédit{m.balance > 1 ? 's' : ''}</span>
             </Link>
           ))}
-          {d.low_credit_members.length > 0 && (
-            <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>
-              À relancer (crédits bas) : {d.low_credit_members.map((m) => m.display_name).join(', ')}.
-            </p>
-          )}
+          {d.recent_members.length === 0 && <p className="muted">Aucun membre pour le moment.</p>}
         </div>
       </div>
     </div>

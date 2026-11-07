@@ -125,10 +125,9 @@ export function getDashboardStats() {
   // Membres + soldes.
   const members = db
     .prepare(
-      `SELECT u.id, u.display_name, u.created_at, COALESCE(SUM(ct.amount), 0) AS balance
-         FROM users u LEFT JOIN credit_transactions ct ON ct.user_id = u.id
-        WHERE u.role = 'member'
-        GROUP BY u.id, u.display_name, u.created_at`
+      `SELECT u.id, u.display_name, u.created_at
+         FROM users u
+        WHERE u.role = 'member'`
     )
     .all();
   const monthStartDate = new Date(monthStart);
@@ -136,12 +135,7 @@ export function getDashboardStats() {
   const recentMembers = [...members]
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, 5)
-    .map((m) => ({ id: m.id, display_name: m.display_name, created_at: m.created_at, balance: m.balance }));
-  const lowCreditMembers = members
-    .filter((m) => m.balance < 5)
-    .sort((a, b) => a.balance - b.balance)
-    .slice(0, 5)
-    .map((m) => ({ id: m.id, display_name: m.display_name, balance: m.balance }));
+    .map((m) => ({ id: m.id, display_name: m.display_name, created_at: m.created_at }));
 
   const activeMembers = db
     .prepare(`SELECT COUNT(DISTINCT user_id) AS n FROM reservations WHERE status = 'confirmed' AND start_at >= ?`)
@@ -162,10 +156,6 @@ export function getDashboardStats() {
   const pendingOrders = db
     .prepare(`SELECT COUNT(*) AS n FROM reservation_orders WHERE status = 'pending' AND datetime(created_at) <= datetime('now', '-15 minutes')`)
     .get().n;
-  // Crédits en circulation : reste pertinent tant que l'admin fait des ajustements
-  // manuels sur le grand-livre (sinon 0).
-  const creditsOutstanding = db.prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM credit_transactions`).get().n;
-
   return {
     today,
     kpis: {
@@ -179,12 +169,10 @@ export function getDashboardStats() {
       revenue_month_eur: (month.cents - month.refunded) / 100,
       orders_month: month.orders,
       pending_orders: pendingOrders,
-      credits_outstanding: creditsOutstanding,
     },
     bookings14,
     occupancy_by_space: occ7.per,
     upcoming_today: upcoming,
     recent_members: recentMembers,
-    low_credit_members: lowCreditMembers,
   };
 }

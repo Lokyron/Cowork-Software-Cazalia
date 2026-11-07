@@ -42,7 +42,7 @@ export default function AdminCartModal({ onClose, onCreated }) {
             <label>Client</label>
             {client ? (
               <div className="flex-between" style={{ gap: 8 }}>
-                <span><span className="dot" style={{ background: 'var(--accent)' }} />{client.display_name} · <span className="muted">{client.balance} cr.</span></span>
+                <span><span className="dot" style={{ background: 'var(--accent)' }} />{client.display_name}</span>
                 {!done && <button className="outline small" onClick={() => { setClient(null); setQ(''); }}>Changer</button>}
               </div>
             ) : (
@@ -53,7 +53,7 @@ export default function AdminCartModal({ onClose, onCreated }) {
                     <div className="ac-menu">
                       {filtered.map((m) => (
                         <button key={m.id} type="button" className="ac-item" onClick={() => { setClient(m); setQ(''); }}>
-                          {m.display_name} <span className="muted">· {m.email} · {m.balance} cr.</span>
+                          {m.display_name} <span className="muted">· {m.email}</span>
                         </button>
                       ))}
                     </div>
@@ -74,7 +74,7 @@ export default function AdminCartModal({ onClose, onCreated }) {
 
           {done && (
             <div className="alert ok" style={{ marginTop: 12 }}>
-              {done.count} réservation{done.count > 1 ? 's' : ''} créée{done.count > 1 ? 's' : ''} pour {client.display_name} - {done.total} crédits débités.
+              {done.count} réservation{done.count > 1 ? 's' : ''} créée{done.count > 1 ? 's' : ''} pour {client.display_name}.
               <div style={{ marginTop: 10 }}>
                 <button onClick={() => { onCreated?.(); onClose?.(); }}>Terminer</button>
               </div>

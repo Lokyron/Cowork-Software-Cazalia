@@ -86,7 +86,6 @@ const MESSAGES = {
   CHAMPS_INVALIDES: 'Champs manquants ou invalides.',
   CGU_NON_ACCEPTEES: 'Vous devez accepter les CGU pour créer un compte.',
   STRIPE_NON_CONFIGURE: 'Le paiement en ligne n’est pas disponible pour le moment.',
-  PACK_INVALIDE: 'Formule de recharge invalide.',
   PROMO_TYPE_INVALIDE: 'Type de réduction invalide.',
   PROMO_VALEUR_INVALIDE: 'Valeur de réduction invalide.',
   PROMO_TARIF_INVALIDE: 'Formule de restriction invalide.',

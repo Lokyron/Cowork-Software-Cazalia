@@ -106,12 +106,9 @@ export function publicUser(u) {
 const deleteTx = db.transaction((userId) => {
   // Détache les références "created_by" portées par cet utilisateur sur des
   // lignes appartenant à d'autres (sinon violation de clé étrangère).
-  db.prepare(`UPDATE credit_transactions SET created_by = NULL WHERE created_by = ?`).run(userId);
   db.prepare(`UPDATE password_resets SET created_by = NULL WHERE created_by = ?`).run(userId);
   db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM password_resets WHERE user_id = ?`).run(userId);
-  // Transactions avant réservations (credit_transactions.reservation_id -> reservations).
-  db.prepare(`DELETE FROM credit_transactions WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM reservations WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM users WHERE id = ?`).run(userId);
 });

@@ -65,7 +65,7 @@ export default function AdminMembers() {
        <div className="table-wrap">
         <table>
           <thead>
-            <tr><th>Nom</th><th>Email</th><th>Téléphone</th><th>Rôle</th><th style={{ textAlign: 'right' }}>Solde</th></tr>
+            <tr><th>Nom</th><th>Email</th><th>Téléphone</th><th>Rôle</th></tr>
           </thead>
           <tbody>
             {filtered.map((m) => (
@@ -74,11 +74,10 @@ export default function AdminMembers() {
                 <td className="muted">{m.email}</td>
                 <td className="muted">{m.phone || '-'}</td>
                 <td>{m.role === 'admin' ? <span className="badge grey">admin</span> : 'membre'}</td>
-                <td style={{ textAlign: 'right' }}><strong>{m.balance}</strong></td>
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={5} className="muted">Aucun membre ne correspond à « {query} ».</td></tr>
+              <tr><td colSpan={4} className="muted">Aucun membre ne correspond à « {query} ».</td></tr>
             )}
           </tbody>
         </table>

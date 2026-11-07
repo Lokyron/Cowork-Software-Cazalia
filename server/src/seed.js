@@ -2,7 +2,6 @@
 //   node src/seed.js
 import { db } from './db.js';
 import { hashPassword } from './auth.js';
-import { topUp } from './lib/wallet.js';
 import { defaultSpaceContent } from './lib/spaceContent.js';
 
 const upsertUser = db.prepare(
@@ -43,16 +42,7 @@ if (spaceCount === 0) {
   mk('Salle Réunion', 'room', 8, 8, '#6A1B9A', { exclusive: true });  // exclusive, 8 occupants, forfait
 }
 
-// Crédits de départ pour les membres (si solde nul).
-const balance = (id) =>
-  db.prepare(`SELECT COALESCE(SUM(amount),0) AS b FROM credit_transactions WHERE user_id = ?`).get(id).b;
-for (const m of [alice, bob]) {
-  if (balance(m.id) === 0) {
-    topUp({ userId: m.id, amount: 50, createdBy: admin.id, note: 'Crédits de démonstration' });
-  }
-}
-
 console.log('Seed terminé.');
 console.log('  admin@cowork.test / admin1234  (admin)');
-console.log('  alice@cowork.test / alice1234  (membre, 50 crédits)');
-console.log('  bob@cowork.test   / bob1234    (membre, 50 crédits)');
+console.log('  alice@cowork.test / alice1234  (membre)');
+console.log('  bob@cowork.test   / bob1234    (membre)');

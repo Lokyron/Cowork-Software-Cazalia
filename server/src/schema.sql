@@ -89,21 +89,6 @@ CREATE TABLE IF NOT EXISTS reservations (
 CREATE INDEX IF NOT EXISTS idx_res_space_time ON reservations(space_id, start_at, end_at) WHERE status = 'confirmed';
 CREATE INDEX IF NOT EXISTS idx_res_user ON reservations(user_id);
 
--- Portefeuille = GRAND-LIVRE. Le solde = SUM(amount). PAS de colonne "solde".
---   amount > 0 : recharge / remboursement
---   amount < 0 : paiement d'une réservation
-CREATE TABLE IF NOT EXISTS credit_transactions (
-  id             INTEGER PRIMARY KEY,
-  user_id        INTEGER NOT NULL REFERENCES users(id),
-  amount         INTEGER NOT NULL,
-  reason         TEXT    NOT NULL CHECK (reason IN ('topup','booking','refund','adjust')),
-  reservation_id INTEGER REFERENCES reservations(id),
-  note           TEXT,
-  amount_eur_cents INTEGER,                            -- recharge : montant payé en euros (centimes)
-  created_by     INTEGER REFERENCES users(id),         -- admin qui crédite, ou le membre
-  created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_credit_user ON credit_transactions(user_id);
 
 -- Jetons de réinitialisation de mot de passe (lien envoyé par email - SMTP à venir).
 CREATE TABLE IF NOT EXISTS password_resets (
@@ -231,23 +216,6 @@ CREATE TABLE IF NOT EXISTS claims (
 );
 CREATE INDEX IF NOT EXISTS idx_claims_status ON claims(status);
 
--- Achats de crédits via Stripe (recharge en ligne). Sert de garde d'IDEMPOTENCE :
--- une session Checkout ne peut créditer qu'une seule fois (contrainte UNIQUE +
--- passage à 'paid' sous transaction). `credited_tx_id` relie à l'écriture du
--- grand-livre effectivement passée.
-CREATE TABLE IF NOT EXISTS credit_purchases (
-  id               INTEGER PRIMARY KEY,
-  user_id          INTEGER NOT NULL REFERENCES users(id),
-  session_id       TEXT    NOT NULL UNIQUE,              -- id de la session Checkout Stripe
-  payment_intent   TEXT,
-  credits          INTEGER NOT NULL,
-  amount_eur_cents INTEGER NOT NULL,
-  status           TEXT    NOT NULL DEFAULT 'pending',   -- 'pending' | 'paid'
-  credited_tx_id   INTEGER REFERENCES credit_transactions(id),
-  created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
-  updated_at       TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_credit_purchases_user ON credit_purchases(user_id);
 
 -- Commandes de réservation payées en ligne (euros). Une session Checkout Stripe
 -- porte un « panier » de créneaux ; à la confirmation du paiement (webhook), les

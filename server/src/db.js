@@ -90,10 +90,13 @@ if (totpToSeal.length) {
   console.log(`[migration] ${totpToSeal.length} secret(s) TOTP chiffre(s) au repos.`);
 }
 
-const txCols = db.prepare(`PRAGMA table_info(credit_transactions)`).all().map((c) => c.name);
-if (!txCols.includes('amount_eur_cents')) {
-  db.exec(`ALTER TABLE credit_transactions ADD COLUMN amount_eur_cents INTEGER`);
-}
+// ── Retrait complet du système de crédits ────────────────────────────────────
+// Le portefeuille de crédits n'existe plus (paiement en euros à la réservation).
+// On supprime les tables dédiées si elles subsistent (bases antérieures). Les
+// colonnes héritées `spaces.credits_per_hour` / `reservations.credits_cost`
+// restent inertes (valeur par défaut 0) pour ne pas réécrire ces tables.
+db.exec(`DROP TABLE IF EXISTS credit_purchases`);
+db.exec(`DROP TABLE IF EXISTS credit_transactions`);
 
 // ── Passage aux EUROS + paiement à la réservation (abandon des crédits) ───────
 // Prix en centimes sur les espaces ; champs de paiement sur les réservations et
@@ -137,15 +140,6 @@ const accessCols = db.prepare(`PRAGMA table_info(reservations)`).all().map((c) =
 if (!accessCols.includes('access_pin')) db.exec(`ALTER TABLE reservations ADD COLUMN access_pin TEXT`);
 if (!accessCols.includes('access_visitor_id')) db.exec(`ALTER TABLE reservations ADD COLUMN access_visitor_id TEXT`);
 if (!accessCols.includes('access_expires_at')) db.exec(`ALTER TABLE reservations ADD COLUMN access_expires_at TEXT`);
-
-// Abandon du système de crédits : remise à zéro des portefeuilles (une seule fois).
-// Les réservations ne sont PAS touchées ; seul le grand-livre de crédits est purgé.
-const eurosReset = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_euros_reset_v1');
-if (!eurosReset) {
-  db.exec(`DELETE FROM credit_transactions`);
-  db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_euros_reset_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
-  console.log('[migration] passage aux euros : portefeuilles de credits remis a zero.');
-}
 
 // Gabarit e-mail de confirmation : « Crédits » → « Montant » + variable euros.
 const eurosTmpl = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_euros_tmpl_v1');

@@ -2,8 +2,8 @@ import { Link } from 'react-router-dom';
 import BackLink from '../components/BackLink.jsx';
 
 // Conditions Générales de Vente (CGV) - distinctes des CGU (usage du Service).
-// Elles encadrent l'ACHAT de crédits et la RÉSERVATION d'espaces, pour les
-// consommateurs (B2C) comme pour les professionnels (B2B).
+// Elles encadrent la RÉSERVATION et le paiement d'espaces, ainsi que les
+// abonnements, pour les consommateurs (B2C) comme pour les professionnels (B2B).
 // À compléter : coordonnées du médiateur de la consommation (art. 11) une fois
 // l'adhésion souscrite - cf. docs/juridique/AUDIT-JURIDIQUE.md §5.6.
 export default function Cgv() {
@@ -15,8 +15,8 @@ export default function Cgv() {
       <p className="muted">Dernière mise à jour : novembre 2026.</p>
 
       <p>
-        Les présentes conditions générales de vente (les « <strong>CGV</strong> ») régissent la vente de
-        crédits et la réservation d'espaces de coworking proposées par CAZALIA. Elles complètent les{' '}
+        Les présentes conditions générales de vente (les « <strong>CGV</strong> ») régissent la réservation
+        et le paiement d'espaces de coworking, ainsi que les abonnements, proposés par CAZALIA. Elles complètent les{' '}
         <Link to="/cgu">conditions générales d'utilisation</Link> (qui encadrent l'usage du service et
         contiennent les mentions légales et la politique de confidentialité). En cas de contradiction sur
         un point de vente, les présentes CGV prévalent.
@@ -69,17 +69,16 @@ export default function Cgv() {
 
       <h2 id="offres">3. Offres et prix</h2>
       <p>
-        Le service fonctionne par <strong>crédits</strong> prépayés, débités lors des réservations
-        (postes en open-space, bureaux, salles). L'Éditeur peut proposer différentes formules d'achat de
-        crédits ainsi que des options annexes. Les caractéristiques essentielles de chaque offre et son
-        coût en crédits sont présentés avant la validation de la commande.
+        Les réservations d'espaces (postes en open-space, bureaux, salles) sont <strong>payées à l'acte, en
+        euros</strong>, au tarif affiché. L'Éditeur propose également des <strong>abonnements mensuels</strong>
+        ouvrant droit, selon la formule, à un quota ou à un accès illimité à certains espaces. Les
+        caractéristiques essentielles de chaque offre et son prix sont présentés avant la validation de la
+        commande.
       </p>
       <p>
         Les prix sont indiqués en euros, <strong>toutes taxes comprises</strong> (TVA non applicable, art.
-        293&nbsp;B du CGI). Les crédits <strong>n'ont pas de valeur monétaire</strong>, ne sont ni cessibles
-        ni transférables à un tiers, et sont utilisables exclusivement chez CAZALIA. L'Éditeur peut modifier
-        ses prix à tout moment&nbsp;; le prix applicable est celui affiché au moment de la commande, sans
-        effet sur les commandes déjà validées.
+        293&nbsp;B du CGI). L'Éditeur peut modifier ses prix à tout moment&nbsp;; le prix applicable est
+        celui affiché au moment de la commande, sans effet sur les commandes déjà validées.
       </p>
 
       <h2 id="commande">4. Commande et formation du contrat</h2>
@@ -87,7 +86,7 @@ export default function Cgv() {
         L'acheteur sélectionne son offre ou compose son panier de réservations, vérifie le détail et le
         montant, puis valide. Avant le paiement, il doit accepter les présentes CGV (case à cocher). La
         vente est <strong>définitivement conclue</strong> à la confirmation du paiement (ou, pour une
-        réservation réglée en crédits, au débit effectif des crédits). Un récapitulatif lui est adressé.
+        réservation couverte par l'abonnement, à la validation de la réservation). Un récapitulatif lui est adressé.
       </p>
       <p>
         <strong>Réservation préalable obligatoire.</strong> L'accès à tout espace (poste en open space,
@@ -105,24 +104,24 @@ export default function Cgv() {
         Le paiement en ligne est assuré par <strong>Stripe</strong> (Stripe Payments Europe, Ltd),
         prestataire de paiement sécurisé. Les données de carte bancaire sont saisies sur l'environnement
         sécurisé de Stripe et ne sont jamais stockées par l'Éditeur. Les paiements font l'objet d'une
-        authentification forte (DSP2 / 3-D&nbsp;Secure). Le rechargement peut également être réglé sur
-        place&nbsp;; les crédits sont alors portés au compte à réception du règlement.
+        authentification forte (DSP2 / 3-D&nbsp;Secure). Les abonnements mensuels sont prélevés
+        automatiquement à chaque échéance jusqu'à leur résiliation.
       </p>
 
       <h2 id="facturation">6. Facturation et TVA</h2>
       <p>
-        Une facture ou un relevé est mis à disposition de l'acheteur pour chaque opération, depuis son
-        espace. En application de l'article 293&nbsp;B du CGI, la <strong>TVA n'est pas applicable</strong>
+        Un reçu est mis à disposition de l'acheteur pour chaque paiement. En application de l'article
+        293&nbsp;B du CGI, la <strong>TVA n'est pas applicable</strong>
         et n'est donc pas facturée.
       </p>
 
       <h2 id="retractation">7. Droit de rétractation (consommateurs)</h2>
       <p>
         Le consommateur dispose en principe d'un délai de <strong>quatorze (14) jours</strong> à compter de
-        la conclusion du contrat pour exercer son droit de rétractation sur un achat de crédits non
-        utilisés, sans motif (art. L221-18 s. du Code de la consommation), au moyen du{' '}
+        la conclusion du contrat pour exercer son droit de rétractation, sans motif (art. L221-18 s. du Code
+        de la consommation), au moyen du{' '}
         <Link to="/reclamation">formulaire de réclamation</Link> ou de toute déclaration dénuée
-        d'ambiguïté. Les crédits non consommés sont alors remboursés.
+        d'ambiguïté. Les sommes versées pour des prestations non encore exécutées sont alors remboursées.
       </p>
       <p>
         Toutefois, conformément à l'article L221-28, 12° du Code de la consommation, le droit de
@@ -137,14 +136,14 @@ export default function Cgv() {
       <h2 id="annulation">8. Annulation, report et remboursement</h2>
       <p>Sauf conditions particulières affichées lors de la réservation&nbsp;:</p>
       <ul>
-        <li><strong>Annulation plus de 48&nbsp;heures avant</strong> le créneau&nbsp;: recréditation
-          intégrale des crédits.</li>
-        <li><strong>Annulation entre 48&nbsp;heures et 24&nbsp;heures avant</strong>&nbsp;: recréditation
-          des crédits (sauf mention contraire pour les salles privatisées).</li>
-        <li><strong>Annulation moins de 24&nbsp;heures avant, ou absence (no-show)</strong>&nbsp;: les
-          crédits restent dus.</li>
+        <li><strong>Annulation plus de 48&nbsp;heures avant</strong> le créneau&nbsp;: remboursement
+          intégral.</li>
+        <li><strong>Annulation entre 48&nbsp;heures et 24&nbsp;heures avant</strong>&nbsp;: remboursement
+          (sauf mention contraire pour les salles privatisées).</li>
+        <li><strong>Annulation moins de 24&nbsp;heures avant, ou absence (no-show)</strong>&nbsp;: le
+          montant reste dû.</li>
         <li><strong>Annulation par l'Éditeur</strong> (fermeture, indisponibilité, force majeure)&nbsp;:
-          recréditation intégrale des crédits concernés.</li>
+          remboursement intégral des sommes versées pour les créneaux concernés.</li>
       </ul>
       <p>
         Un report peut être proposé selon les disponibilités. En cas de remboursement en numéraire d'une
