@@ -15,7 +15,7 @@ const PLANS = [
     features: [
       ['Open Space', '12 jours / mois inclus'],
       ['Salle de réunion', 'Tarif standard'],
-      ['Salle confidentielle', 'Libre-service inclus'],
+      ['Salle confidentielle', 'Libre accès pendant votre venue en open space'],
     ],
   },
   {
@@ -23,7 +23,7 @@ const PLANS = [
     features: [
       ['Open Space', 'Illimité'],
       ['Salle de réunion', '−50 % sur chaque réservation'],
-      ['Salle confidentielle', 'Libre-service inclus'],
+      ['Salle confidentielle', 'Libre accès pendant votre venue en open space'],
     ],
   },
   {
@@ -31,7 +31,7 @@ const PLANS = [
     features: [
       ['Open Space', 'Illimité'],
       ['Salle de réunion', 'Illimitée incluse'],
-      ['Salle confidentielle', 'Libre-service inclus'],
+      ['Salle confidentielle', 'Libre accès pendant votre venue en open space'],
     ],
   },
 ];
@@ -40,7 +40,7 @@ const PLANS = [
 const COMPARE = [
   ['Open Space', '12 € ½j · 20 € j', '12 j/mois inclus', 'Illimité', 'Illimité'],
   ['Salle de réunion', '20 €/h · 35 € ½j · 50 € j', 'Tarif standard', '−50 %', 'Illimitée incluse'],
-  ['Salle confidentielle', 'Libre-service', 'Libre-service', 'Libre-service', 'Libre-service'],
+  ['Salle confidentielle', 'Libre accès avec l\'open space', 'Libre accès avec l\'open space', 'Libre accès avec l\'open space', 'Libre accès avec l\'open space'],
   ['Abonnement mensuel', '-', '160 €', '220 €', '300 €'],
 ];
 
@@ -166,7 +166,7 @@ export default function Pricing() {
           <div className="ponctuel-grid">
             <div><strong>Open Space</strong><div className="muted">12 € la demi-journée · 20 € la journée</div></div>
             <div><strong>Salle de réunion</strong><div className="muted">20 €/h · 35 € ½ journée · 50 € journée</div></div>
-            <div><strong>Salle confidentielle</strong><div className="muted">Libre-service sur place, sans réservation</div></div>
+            <div><strong>Salle confidentielle</strong><div className="muted">En libre accès, sans réservation à part, pendant votre réservation d'open space</div></div>
           </div>
         </div>
         <button className="outline" onClick={() => navigate(user ? '/reserver' : '/login')}>Réserver une session ponctuelle →</button>
