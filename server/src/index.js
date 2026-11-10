@@ -18,6 +18,7 @@ import { cartRouter } from './routes/cart.js';
 import { paymentsRouter } from './routes/payments.js';
 import { stripeWebhookHandler } from './routes/stripeWebhook.js';
 import { leadsRouter } from './routes/leads.js';
+import { newsletterRouter } from './routes/newsletter.js';
 import { claimsRouter } from './routes/claims.js';
 import { mediaRouter, adminMediaRouter } from './routes/media.js';
 import { adminRouter } from './routes/admin.js';
@@ -73,6 +74,7 @@ app.use('/api', subscriptionsRouter);
 app.use('/api', cartRouter);
 app.use('/api', paymentsRouter);
 app.use('/api', leadsRouter);
+app.use('/api', newsletterRouter);
 app.use('/api', claimsRouter);
 app.use('/api', mediaRouter);
 // Webhooks entrants (fournisseur d'e-mail). Authentifiés par un jeton d'URL -

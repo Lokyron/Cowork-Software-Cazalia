@@ -23,6 +23,7 @@ import {
   createResetToken,
 } from '../lib/passwords.js';
 import { deleteUserAccount, getProfile, updateOwnProfile } from '../lib/users.js';
+import { syncUser } from '../lib/newsletter.js';
 import { sendPasswordResetEmail } from '../lib/mailer.js';
 import { generateSecret, sealSecret, otpauthUri, qrDataUrl, verifyToken } from '../lib/twofactor.js';
 
@@ -252,8 +253,12 @@ authRouter.get('/profile', requireAuth, (req, res) => {
 });
 
 authRouter.patch('/me', requireAuth, (req, res) => {
-  try { return res.json({ profile: updateOwnProfile(req.user.id, req.body || {}) }); }
-  catch (err) { return sendBusinessError(res, err); }
+  try {
+    const profile = updateOwnProfile(req.user.id, req.body || {});
+    // Reflète l'opt-in/opt-out newsletter dans Brevo (best-effort, hors réponse).
+    syncUser(req.user.id).catch(() => {});
+    return res.json({ profile });
+  } catch (err) { return sendBusinessError(res, err); }
 });
 
 // Demande publique de réinitialisation (« mot de passe oublié »). Réponse toujours

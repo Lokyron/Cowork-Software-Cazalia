@@ -179,7 +179,8 @@ export function getBrevo() {
   const s = getSetting('brevo', {}) || {};
   const apiKey = s.api_key_enc ? decryptSecret(s.api_key_enc) : (config.brevo.apiKey ?? '');
   const webhookToken = s.webhook_token_enc ? decryptSecret(s.webhook_token_enc) : (config.brevo.webhookToken ?? '');
-  return { apiKey, webhookToken, configured: Boolean(apiKey) };
+  const newsletterListId = Number.isInteger(s.newsletter_list_id) ? s.newsletter_list_id : null;
+  return { apiKey, webhookToken, newsletterListId, configured: Boolean(apiKey) };
 }
 
 /**
@@ -194,6 +195,7 @@ export function getBrevoPublic() {
   return {
     has_api_key: Boolean(c.apiKey),
     has_webhook_token: Boolean(c.webhookToken),
+    newsletter_list_id: c.newsletterListId,
     configured: c.configured,
   };
 }
@@ -208,9 +210,17 @@ export function getBrevoPublic() {
  */
 export function setBrevo(b) {
   const cur = getSetting('brevo', {}) || {};
-  const next = { api_key_enc: cur.api_key_enc || null, webhook_token_enc: cur.webhook_token_enc || null };
+  const next = {
+    api_key_enc: cur.api_key_enc || null,
+    webhook_token_enc: cur.webhook_token_enc || null,
+    newsletter_list_id: cur.newsletter_list_id ?? null,
+  };
   if (b.api_key != null && b.api_key !== '') next.api_key_enc = encryptSecret(String(b.api_key).trim());
   if (b.clear_api_key) next.api_key_enc = null;
+  if (b.newsletter_list_id !== undefined) {
+    const n = Math.trunc(Number(b.newsletter_list_id));
+    next.newsletter_list_id = Number.isInteger(n) && n > 0 ? n : null;
+  }
   setSetting('brevo', next);
   return getBrevoPublic();
 }

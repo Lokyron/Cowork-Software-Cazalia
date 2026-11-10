@@ -51,6 +51,7 @@ function ProviderSection({ settings, setSettings, flash }) {
   const [f, setF] = useState({ ...smtp, pass: '' });
   const [m, setM] = useState({ ...mail });
   const [apiKey, setApiKey] = useState('');
+  const [listId, setListId] = useState(brevo.newsletter_list_id ?? ''); // liste newsletter Brevo
   const [webhook, setWebhook] = useState(null); // URL affichée une seule fois
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((c) => ({ ...c, [k]: e.target.value }));
@@ -68,7 +69,10 @@ function ProviderSection({ settings, setSettings, flash }) {
     try {
       const body = { smtp: f, mail: m };
       // Une clé vide CONSERVE celle déjà enregistrée : on ne l'envoie pas.
-      if (apiKey.trim()) body.brevo = { api_key: apiKey.trim() };
+      const brevoBody = {};
+      if (apiKey.trim()) brevoBody.api_key = apiKey.trim();
+      brevoBody.newsletter_list_id = listId === '' ? null : Number(listId);
+      body.brevo = brevoBody;
       apply(await api.put('/admin/email/settings', body));
       flash('ok', 'Configuration enregistrée.');
     } catch (err) { flash('error', msg(err.code)); } finally { setBusy(false); }
@@ -80,6 +84,14 @@ function ProviderSection({ settings, setSettings, flash }) {
       const r = await api.post('/admin/email/test', {});
       if (r.ok) flash('ok', `E-mail de test envoyé à ${r.to}${r.account ? ` (compte Brevo : ${r.account})` : ''}.`);
       else flash('error', `Échec : ${r.error || msg(r.reason)}`);
+    } catch (err) { flash('error', msg(err.code)); } finally { setBusy(false); }
+  };
+
+  const syncNewsletter = async () => {
+    setBusy(true);
+    try {
+      const r = await api.post('/admin/email/newsletter/sync', {});
+      flash('ok', `Newsletter synchronisée : ${r.synced}/${r.total} membres traités (${r.subscribed} abonnés)${r.failed ? `, ${r.failed} en échec` : ''}.`);
     } catch (err) { flash('error', msg(err.code)); } finally { setBusy(false); }
   };
 
@@ -141,6 +153,23 @@ function ProviderSection({ settings, setSettings, flash }) {
               <code style={{ wordBreak: 'break-all', fontSize: 12 }}>{webhook.url}</code>
             </div>
           )}
+          <div className="row" style={{ marginTop: 12 }}>
+            <div className="field">
+              <label>ID de la liste newsletter Brevo{' '}
+                {brevo.newsletter_list_id && <span className="muted">(actuelle : {brevo.newsletter_list_id})</span>}
+              </label>
+              <input type="number" min="1" value={listId} onChange={(e) => setListId(e.target.value)} placeholder="ex. 3" />
+            </div>
+          </div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+            Liste Brevo où sont ajoutés les inscrits à la newsletter (opt-in « Mon compte » et page publique).
+            Son identifiant se trouve dans Brevo → Contacts → Listes.
+          </p>
+          <div style={{ marginTop: 8 }}>
+            <button className="outline" onClick={syncNewsletter} disabled={busy || !brevo.has_api_key || !brevo.newsletter_list_id}>
+              Synchroniser les abonnés
+            </button>
+          </div>
         </>
       ) : (
         <>

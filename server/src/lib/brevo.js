@@ -200,3 +200,44 @@ export async function declareWebhook({ apiKey, url, marker = 'cazalia-delivrabil
   });
   return { id: created.id ?? null, removed };
 }
+
+// ── Contacts / listes (synchronisation newsletter) ───────────────────────────
+
+/**
+ * Crée ou met à jour un contact et l'ajoute à une (ou des) liste(s) Brevo.
+ * `updateEnabled: true` rend l'appel idempotent : un contact déjà présent est
+ * mis à jour (attributs + appartenance aux listes) plutôt que de provoquer une
+ * erreur « contact already exists ».
+ *
+ * @param {object} p
+ * @param {string} p.apiKey Clé d'API Brevo.
+ * @param {string} p.email Adresse du contact.
+ * @param {Record<string, unknown>} [p.attributes] Attributs Brevo (ex. PRENOM, NOM).
+ * @param {number[]} [p.listIds] Identifiants des listes auxquelles ajouter le contact.
+ * @returns {Promise<object>}
+ * @throws {Error} Si Brevo refuse l'opération.
+ */
+export async function upsertContact({ apiKey, email, attributes = {}, listIds = [] }) {
+  return call(apiKey, '/contacts', {
+    method: 'POST',
+    body: { email, attributes, listIds, updateEnabled: true },
+  });
+}
+
+/**
+ * Retire un contact d'une liste Brevo (désinscription newsletter). Le contact
+ * lui-même n'est pas supprimé : il peut rester pour l'historique ou d'autres listes.
+ *
+ * @param {object} p
+ * @param {string} p.apiKey Clé d'API Brevo.
+ * @param {string} p.email Adresse du contact.
+ * @param {number} p.listId Identifiant de la liste.
+ * @returns {Promise<object>}
+ * @throws {Error} Si Brevo refuse l'opération.
+ */
+export async function removeContactFromList({ apiKey, email, listId }) {
+  return call(apiKey, `/contacts/lists/${listId}/contacts/remove`, {
+    method: 'POST',
+    body: { emails: [email] },
+  });
+}

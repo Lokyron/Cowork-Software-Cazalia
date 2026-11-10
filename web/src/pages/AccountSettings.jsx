@@ -86,7 +86,7 @@ export default function AccountSettings() {
         </label>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
           <input type="checkbox" style={{ width: 'auto' }} checked={!!p.notify_marketing} onChange={setBool('notify_marketing')} />
-          Recevoir les actualités et offres de Cazalia
+          Recevoir la newsletter de Cazalia (actualités et offres). Décochez pour vous désinscrire.
         </label>
       </div>
 

@@ -11,6 +11,7 @@ import AdminPromos from './pages/AdminPromos.jsx';
 import Cgu from './pages/Cgu.jsx';
 import Cgv from './pages/Cgv.jsx';
 import Reclamation from './pages/Reclamation.jsx';
+import Newsletter from './pages/Newsletter.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import ForcePasswordChange from './pages/ForcePasswordChange.jsx';
 import Booking from './pages/Booking.jsx';
@@ -125,6 +126,7 @@ function SiteFooter() {
         <Link to="/cgv">CGV</Link>
         <Link to="/cgu#confidentialite">Confidentialité</Link>
         <Link to="/reclamation">Réclamation</Link>
+        <Link to="/newsletter">Newsletter</Link>
       </nav>
       <span className="muted">© {new Date().getFullYear()} CAZALIA - Coworking Boutonnet</span>
     </footer>
@@ -164,6 +166,7 @@ export default function App() {
         <Route path="/cgu" element={<Shell><Cgu /></Shell>} />
         <Route path="/cgv" element={<Shell><Cgv /></Shell>} />
         <Route path="/reclamation" element={<Shell><Reclamation /></Shell>} />
+        <Route path="/newsletter" element={<Shell><Newsletter /></Shell>} />
         <Route path="/login" element={user ? <Navigate to="/mon-espace" replace /> : <Shell><Login /></Shell>} />
         <Route path="/reset-password" element={<Shell><ResetPassword /></Shell>} />
         <Route path="/mot-de-passe-oublie" element={<Shell><ForgotPassword /></Shell>} />

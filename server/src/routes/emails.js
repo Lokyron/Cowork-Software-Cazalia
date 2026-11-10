@@ -13,6 +13,7 @@ import {
 import { TEMPLATE_VARIABLES } from '../lib/emailTemplates.js';
 import { renderTemplate, renderRaw, sendTest, sendToUser, sendMail, getQuota } from '../lib/mailer.js';
 import { declareWebhook } from '../lib/brevo.js';
+import { syncAllMembers } from '../lib/newsletter.js';
 
 export const emailsRouter = Router();
 
@@ -144,6 +145,20 @@ emailsRouter.post('/brevo/webhook', async (req, res) => {
     } catch (err) {
       return res.json({ ok: true, url, declared: false, warning: 'DECLARATION_ECHOUEE', error: err.message });
     }
+  } catch (err) { sendBusinessError(res, err); }
+});
+
+/**
+ * POST /api/admin/email/newsletter/sync - resynchronise tous les membres vers la
+ * liste newsletter Brevo (opt-in ajoutés, opt-out retirés).
+ *
+ * @returns 200 `{ok, total, subscribed, synced, failed}` · 400 `NEWSLETTER_NON_CONFIGUREE`
+ */
+emailsRouter.post('/newsletter/sync', async (_req, res) => {
+  try {
+    const r = await syncAllMembers();
+    if (r.reason === 'NEWSLETTER_NON_CONFIGUREE') return res.status(400).json({ error: r.reason });
+    res.json({ ok: true, total: r.total, subscribed: r.subscribed, synced: r.ok, failed: r.failed });
   } catch (err) { sendBusinessError(res, err); }
 });
 
