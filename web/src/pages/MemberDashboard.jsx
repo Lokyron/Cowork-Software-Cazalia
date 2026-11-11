@@ -67,7 +67,7 @@ function SubscriptionCard({ sub, onManage, busy }) {
         <div style={{ marginTop: 14 }}>
           <div className="flex-between seats" style={{ marginBottom: 6 }}>
             <span>Jours Open Space utilisés ce mois-ci</span>
-            <strong>{sub.quota_used} / {sub.quota_total}</strong>
+            <strong>{Number(sub.quota_used).toLocaleString('fr-FR')} / {sub.quota_total}</strong>
           </div>
           <div className="quota-bar"><div className="quota-fill" style={{ width: `${pct}%` }} /></div>
           <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>
