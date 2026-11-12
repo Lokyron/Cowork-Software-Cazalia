@@ -39,7 +39,7 @@ export default function PublicHeader({ solid = false }) {
         </nav>
         <div className="public-cta">
           {user ? (
-            <Link to="/reserver" className="btn-link">Mon espace →</Link>
+            <Link to="/mon-espace" className="btn-link">Mon espace →</Link>
           ) : (
             <Link to="/login" className="btn-link">Se connecter</Link>
           )}

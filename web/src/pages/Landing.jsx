@@ -28,6 +28,9 @@ export default function Landing() {
   }, []);
 
   const goReserve = () => navigate(user ? '/reserver' : '/login');
+  // Connecté, « mon espace » mène au tableau de bord du membre (et non au
+  // tunnel de réservation) ; non connecté, à la page de connexion.
+  const goMyspace = () => navigate(user ? '/mon-espace' : '/login');
 
   return (
     <div className="landing">
@@ -46,7 +49,7 @@ export default function Landing() {
           </p>
           <div className="hero-actions">
             <button onClick={goReserve}>Réserver une place</button>
-            <Link to="/tarifs" className="btn-secondary">Voir les abonnements</Link>
+            <Link to="/tarifs" className="btn-secondary">Voir les tarifs</Link>
           </div>
         </div>
       </section>
@@ -80,10 +83,10 @@ export default function Landing() {
         </div>
         <div className="space-cards">
           {spaces.length === 0 && <p className="muted">Les espaces seront bientôt présentés ici.</p>}
-          {spaces.map((s, i) => {
+          {spaces.map((s) => {
             const photoSrc = s.photo
               ? `/api/media/${encodeURIComponent(s.photo)}`
-              : `/images/espace-${i + 1}.jpg`;
+              : `/images/espace-${((s.id - 1) % 4) + 1}.jpg`;
             return (
               <article
                 key={s.id}
@@ -97,9 +100,10 @@ export default function Landing() {
                     <span className="badge grey">{s.kind === 'room' ? 'Salle privative' : 'Open-space'}</span>
                   </div>
                   <p className="muted" style={{ margin: '8px 0 14px' }}>
-                    {s.kind === 'room'
-                      ? 'Réservation exclusive, idéale pour un appel ou une réunion.'
-                      : `Jusqu'à ${s.capacity} places sur ce créneau.`}
+                    {s.tagline
+                      || (s.kind === 'room'
+                        ? 'Réservation exclusive, idéale pour un appel ou une réunion.'
+                        : `Jusqu'à ${s.capacity} places sur ce créneau.`)}
                   </p>
                   <div className="flex-between">
                     <span className="price">
@@ -174,7 +178,7 @@ export default function Landing() {
         <h2>Prêt à réserver votre place ?</h2>
         <p>Créez votre compte en une minute et réservez votre premier créneau.</p>
         <div className="hero-actions">
-          <button onClick={goReserve}>{user ? 'Accéder à mon espace' : 'Créer un compte'}</button>
+          <button onClick={user ? goMyspace : goReserve}>{user ? 'Accéder à mon espace' : 'Créer un compte'}</button>
           {!user && <Link to="/login" className="btn-secondary">J'ai déjà un compte</Link>}
         </div>
       </section>
