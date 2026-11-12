@@ -6,43 +6,94 @@ import DevisModal from '../components/DevisModal.jsx';
 import PublicHeader from '../components/PublicHeader.jsx';
 import ReservationNotice from '../components/ReservationNotice.jsx';
 
-// Formules d'abonnement (affichage). Les montants réels sont prélevés par Stripe
-// selon les Prices configurés ; ces valeurs doivent rester en phase avec
-// config.pricing.SUBSCRIPTIONS côté serveur.
-const PLANS = [
+// Les montants viennent de GET /api/pricing, c'est-à-dire de la source de vérité
+// du moteur de facturation (config.pricing). Ces valeurs ne servent que de repli
+// si l'appel échoue : la page affiche alors la grille connue plutôt que du vide.
+const DEFAULTS = {
+  open_space: { demi_journee: 1200, journee: 2000 },
+  meeting_room: { heure: 2000, demi_journee: 3500, journee: 5000 },
+  subscriptions: { ESSENTIEL: 16000, CONFORT: 22000, PREMIUM: 30000 },
+  confort_meeting_discount: 0.5,
+  essentiel_quota_days: 12,
+  samedi: { demi_journee: true, journee: false },
+};
+
+// Les tarifs de la vitrine sont des montants ronds : on évite « 20,00 € » et on
+// ne montre les centimes que s'il y en a réellement.
+const eurc = (cents) => {
+  const v = (Number(cents) || 0) / 100;
+  return Number.isInteger(v) ? `${v} €` : v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+};
+
+const CONFIDENTIELLE = 'En libre accès pour toute réservation dans l\'open space';
+
+// Formules d'abonnement. Le montant réellement prélevé vient des Prices Stripe
+// configurés dans l'administration ; celui affiché ici est indicatif.
+const plansFrom = (t) => [
   {
-    tier: 'ESSENTIEL', name: 'Essentiel', price: 160,
+    tier: 'ESSENTIEL', name: 'Essentiel', price: t.subscriptions.ESSENTIEL,
     features: [
-      ['Open Space', '12 jours / mois inclus'],
+      ['Open Space', `${t.essentiel_quota_days} jours / mois inclus`],
       ['Salle de réunion', 'Tarif standard'],
-      ['Salle confidentielle', 'En libre accès pour toute réservation dans l\'open space'],
+      ['Salle confidentielle', CONFIDENTIELLE],
     ],
   },
   {
-    tier: 'CONFORT', name: 'Confort', price: 220, popular: true,
+    tier: 'CONFORT', name: 'Confort', price: t.subscriptions.CONFORT, popular: true,
     features: [
       ['Open Space', 'Illimité'],
-      ['Salle de réunion', '−50 % sur chaque réservation'],
-      ['Salle confidentielle', 'En libre accès pour toute réservation dans l\'open space'],
+      ['Salle de réunion', `−${Math.round((1 - t.confort_meeting_discount) * 100)} % sur chaque réservation`],
+      ['Salle confidentielle', CONFIDENTIELLE],
     ],
   },
   {
-    tier: 'PREMIUM', name: 'Premium', price: 300,
+    tier: 'PREMIUM', name: 'Premium', price: t.subscriptions.PREMIUM,
     features: [
       ['Open Space', 'Illimité'],
       ['Salle de réunion', 'Illimitée incluse'],
-      ['Salle confidentielle', 'En libre accès pour toute réservation dans l\'open space'],
+      ['Salle confidentielle', CONFIDENTIELLE],
     ],
   },
 ];
 
-// Tableau comparatif (lignes). Colonnes : Sans abo / Essentiel / Confort / Premium.
-const COMPARE = [
-  ['Open Space', '12 € ½j · 20 € j', '12 j/mois inclus', 'Illimité', 'Illimité'],
-  ['Salle de réunion', '20 €/h · 35 € ½j · 50 € j', 'Tarif standard', '−50 %', 'Illimitée incluse'],
-  ['Salle confidentielle', 'En libre accès pour toute réservation dans l\'open space', 'En libre accès pour toute réservation dans l\'open space', 'En libre accès pour toute réservation dans l\'open space', 'En libre accès pour toute réservation dans l\'open space'],
-  ['Abonnement mensuel', '-', '160 €', '220 €', '300 €'],
+// Accès ponctuel : une carte par espace, au même format que les formules.
+const ponctuelFrom = (t) => [
+  {
+    name: 'Open Space',
+    price: eurc(t.open_space.journee), unit: '/ journée',
+    lines: [`${eurc(t.open_space.demi_journee)} la demi-journée`, 'Poste de travail en espace partagé'],
+  },
+  {
+    name: 'Salle de réunion',
+    price: eurc(t.meeting_room.heure), unit: "/ heure",
+    lines: [
+      `${eurc(t.meeting_room.demi_journee)} la demi-journée · ${eurc(t.meeting_room.journee)} la journée`,
+      'Salle privative, réservée pour vous seul',
+    ],
+  },
+  {
+    name: 'Salle confidentielle',
+    price: 'Incluse', unit: null,
+    lines: [CONFIDENTIELLE, 'Aucune réservation à faire'],
+  },
 ];
+
+// Tableau comparatif. Colonnes : Sans abonnement / Essentiel / Confort / Premium.
+const compareFrom = (t) => [
+  ['Open Space',
+    `${eurc(t.open_space.demi_journee)} ½j · ${eurc(t.open_space.journee)} j`,
+    `${t.essentiel_quota_days} j/mois inclus`, 'Illimité', 'Illimité'],
+  ['Salle de réunion',
+    `${eurc(t.meeting_room.heure)}/h · ${eurc(t.meeting_room.demi_journee)} ½j · ${eurc(t.meeting_room.journee)} j`,
+    'Tarif standard', `−${Math.round((1 - t.confort_meeting_discount) * 100)} %`, 'Illimitée incluse'],
+  // La même longue phrase répétée quatre fois ne se lisait plus : la mention
+  // part en note sous le tableau, les cases disent simplement l'essentiel.
+  ['Salle confidentielle *', 'Incluse', 'Incluse', 'Incluse', 'Incluse'],
+  ['Abonnement mensuel', '—',
+    eurc(t.subscriptions.ESSENTIEL), eurc(t.subscriptions.CONFORT), eurc(t.subscriptions.PREMIUM)],
+];
+
+const COLS = ['Sans abonnement', 'Essentiel', 'Confort', 'Premium'];
 
 // Univers du sélecteur segmenté. L'ordre fixe l'ordre d'affichage et la position
 // du surligné glissant. « Abonnement » est au centre et affiché par défaut.
@@ -59,9 +110,15 @@ export default function Pricing() {
   const [devis, setDevis] = useState(false);
   const [busyTier, setBusyTier] = useState(null);
   const [feedback, setFeedback] = useState(null);
+  const [tarifs, setTarifs] = useState(DEFAULTS);
   // Univers affiché via le sélecteur segmenté. Vue par défaut : l'abonnement.
   const [tab, setTab] = useState('abonnement');
   const tabIndex = SEGMENTS.findIndex((s) => s.id === tab);
+
+  // Grille tarifaire servie par l'API. En cas d'échec, on garde DEFAULTS.
+  useEffect(() => {
+    api.get('/pricing').then((r) => setTarifs({ ...DEFAULTS, ...r })).catch(() => {});
+  }, []);
 
   // Retour d'un Checkout d'abonnement annulé.
   useEffect(() => {
@@ -90,7 +147,10 @@ export default function Pricing() {
     }
   };
 
-  const eur = (n) => `${n} €`;
+  const plans = plansFrom(tarifs);
+  const ponctuel = ponctuelFrom(tarifs);
+  const compare = compareFrom(tarifs);
+  const goReserver = () => navigate(user ? '/reserver' : '/login');
 
   return (
     <>
@@ -128,11 +188,11 @@ export default function Pricing() {
       {tab === 'abonnement' && (
       <>
       <div className="plan-grid">
-        {PLANS.map((p) => (
+        {plans.map((p) => (
           <div key={p.tier} className={`card plan-card ${p.popular ? 'popular' : ''}`}>
             {p.popular && <div className="plan-badge">Le plus populaire</div>}
             <h2 className="plan-name">{p.name}</h2>
-            <div className="plan-price"><strong>{eur(p.price)}</strong><span className="muted"> / mois</span></div>
+            <div className="plan-price"><strong>{eurc(p.price)}</strong><span className="muted"> / mois</span></div>
             <ul className="plan-features">
               {p.features.map(([k, v]) => (
                 <li key={k}><span className="plan-check">✓</span> <span><strong>{k} :</strong> {v}</span></li>
@@ -157,20 +217,37 @@ export default function Pricing() {
       </>
       )}
 
-      {/* ── Ponctuel : la grille à la carte ───────────────────────────────── */}
+      {/* ── Ponctuel : une carte par espace, au format des formules ───────── */}
       {tab === 'ponctuel' && (
-      <div className="card ponctuel-card">
-        <div>
-          <h3 style={{ marginTop: 0 }}>Accès ponctuel - sans abonnement</h3>
-          <p className="muted" style={{ margin: '4px 0 10px' }}>Réservez à la séance, payez en ligne au moment de réserver.</p>
-          <div className="ponctuel-grid">
-            <div><strong>Open Space</strong><div className="muted">12 € la demi-journée · 20 € la journée</div></div>
-            <div><strong>Salle de réunion</strong><div className="muted">20 €/h · 35 € ½ journée · 50 € journée</div></div>
-            <div><strong>Salle confidentielle</strong><div className="muted">En libre accès pour toute réservation dans l'open space</div></div>
+      <>
+      <div className="plan-grid">
+        {ponctuel.map((o) => (
+          <div key={o.name} className="card plan-card">
+            <h2 className="plan-name">{o.name}</h2>
+            <div className="plan-price">
+              <strong>{o.price}</strong>
+              {o.unit && <span className="muted"> {o.unit}</span>}
+            </div>
+            <ul className="plan-features">
+              {o.lines.map((l) => (
+                <li key={l}><span className="plan-check">✓</span> <span>{l}</span></li>
+              ))}
+            </ul>
           </div>
-        </div>
-        <button className="outline" onClick={() => navigate(user ? '/reserver' : '/login')}>Réserver une session ponctuelle →</button>
+        ))}
       </div>
+      <div className="card ponctuel-foot">
+        <div>
+          <strong>Accès ponctuel - sans abonnement</strong>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: 14 }}>
+            Réservez à la séance, payez en ligne au moment de réserver.
+            {!tarifs.samedi.journee && tarifs.samedi.demi_journee
+              && ' Le samedi, seule la demi-journée du matin est ouverte.'}
+          </p>
+        </div>
+        <button className="outline" onClick={goReserver}>Réserver une session ponctuelle →</button>
+      </div>
+      </>
       )}
 
       {/* ── Privatisation : Bureau Privé sur devis ────────────────────────── */}
@@ -200,19 +277,49 @@ export default function Pricing() {
           <table className="compare-table">
             <thead>
               <tr>
-                <th></th><th>Sans abonnement</th><th>Essentiel</th><th className="col-pop">Confort</th><th>Premium</th>
+                <th></th>
+                {COLS.map((c) => (
+                  <th key={c} className={c === 'Confort' ? 'col-pop' : undefined}>
+                    {c}
+                    {c === 'Confort' && <span className="compare-pop"> Le plus populaire</span>}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {COMPARE.map((row) => (
+              {compare.map((row) => (
                 <tr key={row[0]}>
                   <th scope="row">{row[0]}</th>
-                  <td>{row[1]}</td><td>{row[2]}</td><td className="col-pop">{row[3]}</td><td>{row[4]}</td>
+                  {COLS.map((c, i) => (
+                    <td key={c} data-col={c} className={c === 'Confort' ? 'col-pop' : undefined}>{row[i + 1]}</td>
+                  ))}
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="compare-cta">
+                <th scope="row"></th>
+                <td data-col="Sans abonnement">
+                  <button className="outline small" onClick={goReserver}>Réserver</button>
+                </td>
+                {plans.map((p) => (
+                  <td key={p.tier} data-col={p.name} className={p.popular ? 'col-pop' : undefined}>
+                    <button
+                      className={p.popular ? 'small' : 'outline small'}
+                      disabled={busyTier === p.tier}
+                      onClick={() => subscribe(p.tier)}
+                    >
+                      {busyTier === p.tier ? '…' : "S'abonner"}
+                    </button>
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
           </table>
         </div>
+        <p className="muted" style={{ fontSize: 13, margin: '12px 0 0' }}>
+          * {CONFIDENTIELLE}, quelle que soit la formule.
+        </p>
       </div>
 
       <p className="muted" style={{ textAlign: 'center', marginTop: 18 }}>

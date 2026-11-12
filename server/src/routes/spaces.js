@@ -39,6 +39,36 @@ spacesRouter.get('/spaces', (_req, res) => {
 });
 
 /**
+ * GET /api/pricing - grille tarifaire publique (vitrine).
+ *
+ * La page Tarifs recopiait ces montants à la main, au risque d'afficher autre
+ * chose que ce qui est réellement facturé. Ils sortent désormais de la source de
+ * vérité du moteur (`config.pricing`). Montants en CENTIMES d'euro.
+ *
+ * Note : `subscriptions` est indicatif — le montant réellement prélevé vient des
+ * Prices Stripe configurés dans l'administration.
+ *
+ * @returns 200 `{open_space, meeting_room, subscriptions, confort_meeting_discount,
+ *                essentiel_quota_days, samedi}`
+ */
+spacesRouter.get('/pricing', (_req, res) => {
+  const samedi = config.forfaitSlots?.[6] || { demi_journee: [], journee: [] };
+  res.json({
+    open_space: config.pricing.OPEN_SPACE,
+    meeting_room: config.pricing.MEETING_ROOM,
+    subscriptions: config.pricing.SUBSCRIPTIONS,
+    confort_meeting_discount: config.pricing.CONFORT_MEETING_DISCOUNT,
+    essentiel_quota_days: config.pricing.ESSENTIEL_QUOTA_DAYS,
+    // Le samedi n'ouvre qu'une demi-journée : la vitrine doit le dire, sans quoi
+    // le client ne découvre la contrainte qu'au moment de réserver.
+    samedi: {
+      demi_journee: (samedi.demi_journee || []).length > 0,
+      journee: (samedi.journee || []).length > 0,
+    },
+  });
+});
+
+/**
  * GET /api/availability?space_id&from&to&seats - places restantes et coût estimé.
  * Route publique : elle ne renvoie que des agrégats (nombre de places libres),
  * jamais l'identité des occupants.
