@@ -235,7 +235,7 @@ CREATE TABLE IF NOT EXISTS reservation_orders (
   receipt_url    TEXT,                                 -- lien reçu Stripe (hosted) capté au webhook
   refunded_cents INTEGER NOT NULL DEFAULT 0,           -- montant remboursé confirmé par Stripe (charge.refunded)
   payload        TEXT    NOT NULL,                     -- JSON: [{space_id,start_at,end_at,seats,tarif_type,price_cents}]
-  status         TEXT    NOT NULL DEFAULT 'pending',   -- 'pending' | 'paid'
+  status         TEXT    NOT NULL DEFAULT 'pending',   -- 'pending' | 'paid' | 'abandoned' (tentative caduque)
   created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
   updated_at     TEXT
 );

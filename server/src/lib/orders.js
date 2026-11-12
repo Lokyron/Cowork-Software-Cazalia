@@ -14,6 +14,7 @@
 import { db } from '../db.js';
 import { insertReservation, availableSeats } from './booking.js';
 import { recordRedemption } from './promos.js';
+import { retrieveCheckoutSession } from './stripe.js';
 
 const insertOrder = db.prepare(
   `INSERT INTO reservation_orders (user_id, session_id, total_cents, payload, status, promo_id)
@@ -187,6 +188,35 @@ export function listMyTransactions(userId) {
   });
 }
 
+// ── Clôture d'une tentative de paiement caduque ───────────────────────────────
+const listUserPendingStmt = db.prepare(
+  `SELECT session_id FROM reservation_orders WHERE user_id = ? AND status = 'pending'`
+);
+const abandonUserPendingStmt = db.prepare(
+  `UPDATE reservation_orders SET status = 'abandoned', updated_at = datetime('now')
+    WHERE user_id = ? AND status = 'pending'`
+);
+const abandonOneStmt = db.prepare(
+  `UPDATE reservation_orders SET status = 'abandoned', updated_at = datetime('now')
+    WHERE id = ? AND status = 'pending'`
+);
+
+/**
+ * Marque comme abandonnées les commandes encore en attente d'un membre, et
+ * renvoie leurs sessions Checkout pour que l'appelant les clôture chez Stripe.
+ *
+ * Appelé quand le membre relance un paiement : la tentative précédente ne peut
+ * plus aboutir et ne doit plus être présentée comme « en cours ».
+ *
+ * @param {number} userId
+ * @returns {string[]} Sessions Checkout des commandes abandonnées.
+ */
+export function abandonPendingOrders(userId) {
+  const sessions = listUserPendingStmt.all(userId).map((o) => o.session_id);
+  abandonUserPendingStmt.run(userId);
+  return sessions;
+}
+
 // ── Lecture : commandes en attente (filet post-paiement) ──────────────────────
 // Une commande reste 'pending' entre le paiement et l'arrivée du webhook. On
 // l'expose au membre (bandeau « paiement en cours de traitement ») et à
@@ -199,8 +229,48 @@ const myPendingStmt = db.prepare(
       AND datetime(created_at) >= datetime('now', '-1 hour')
     ORDER BY created_at DESC`
 );
-export function listMyPendingOrders(userId) {
-  return myPendingStmt.all(userId);
+
+// Délai pendant lequel une commande en attente est présumée « en cours » sans
+// rien demander à Stripe : c'est la fenêtre de latence normale du webhook, qui
+// se compte en secondes. Au-delà, on va vérifier.
+const PENDING_GRACE_MS = 60 * 1000;
+
+// `datetime('now')` écrit un horodatage UTC sans fuseau : sans le 'Z', le
+// navigateur comme Node le liraient en heure locale.
+const parsedAt = (sqlDate) => new Date(`${String(sqlDate).replace(' ', 'T')}Z`).getTime();
+
+/**
+ * Commandes réellement en attente d'être transformées en réservations.
+ *
+ * Une commande en attente ne prouve pas qu'un paiement a eu lieu : elle est
+ * créée AVANT la redirection vers Stripe. Un client qui renonce sur la page de
+ * paiement en laissait donc une derrière lui, et le bandeau « paiement en cours
+ * de traitement » s'affichait une heure durant alors que rien n'avait été payé.
+ * Passé le délai de latence normal du webhook, on demande son état à Stripe et
+ * on n'annonce un paiement en cours que s'il a bien été réglé.
+ *
+ * @param {number} userId
+ * @returns {Promise<object[]>}
+ */
+export async function listMyPendingOrders(userId) {
+  const rows = myPendingStmt.all(userId);
+  const out = [];
+  for (const order of rows) {
+    if (Date.now() - parsedAt(order.created_at) < PENDING_GRACE_MS) { out.push(order); continue; }
+    const session = await retrieveCheckoutSession(order.session_id);
+    // Stripe injoignable ou session inconnue : dans le doute, on continue de
+    // l'annoncer plutôt que de laisser croire à une réservation perdue.
+    if (!session) { out.push(order); continue; }
+    if (session.payment_status === 'paid' || session.payment_status === 'no_payment_required') {
+      out.push(order);
+      continue;
+    }
+    // Session expirée : la tentative est close pour de bon.
+    if (session.status === 'expired') abandonOneStmt.run(order.id);
+    // Session encore ouverte et impayée : le client n'a rien réglé, donc aucun
+    // paiement n'est « en cours ». On la laisse en attente, il peut revenir.
+  }
+  return out;
 }
 
 // Commandes 'pending' anciennes, tous membres : candidates à la réconciliation admin.

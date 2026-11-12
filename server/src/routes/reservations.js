@@ -76,17 +76,20 @@ reservationsRouter.post('/reservations/batch', requireAuth, async (req, res) => 
 
 /**
  * GET /api/reservations/me - réservations de l'utilisateur connecté.
- * `processing` = paiements en cours de traitement (commande payée côté Stripe
- * dont le webhook n'a pas encore créé la réservation). Permet au front d'afficher
- * un bandeau « paiement en cours » et de ne pas laisser croire à une résa perdue.
+ * `processing` = paiements RÉELLEMENT réglés chez Stripe dont le webhook n'a pas
+ * encore créé la réservation. Permet au front d'afficher un bandeau « paiement en
+ * cours » et de ne pas laisser croire à une résa perdue. Une tentative de paiement
+ * abandonnée n'en fait pas partie : rien n'a été réglé (cf. listMyPendingOrders).
  *
  * @returns 200 `{reservations, processing}` · 401 `NON_AUTHENTIFIE`
  */
-reservationsRouter.get('/reservations/me', requireAuth, (req, res) => {
-  res.json({
-    reservations: listMyReservations(req.user.id),
-    processing: listMyPendingOrders(req.user.id),
-  });
+reservationsRouter.get('/reservations/me', requireAuth, async (req, res) => {
+  try {
+    res.json({
+      reservations: listMyReservations(req.user.id),
+      processing: await listMyPendingOrders(req.user.id),
+    });
+  } catch (err) { sendBusinessError(res, err); }
 });
 
 /**
