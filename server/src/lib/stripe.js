@@ -47,18 +47,38 @@ const FORMULE_NAMES = {
  * @param {Stripe} stripe Client Stripe.
  * @returns {Promise<{heure:string, demi_journee:string, journee:string}>}
  */
+// Les ids mémorisés sont vérifiés UNE FOIS par démarrage : un produit supprimé
+// ou archivé dans le tableau de bord Stripe ne se voit pas autrement, et c'est
+// la création de la session Checkout qui échouerait, avec un code Stripe brut.
+let formulesVerifiees = false;
+
 export async function ensureFormuleProducts(stripe) {
-  const cached = getSetting('stripe_formules', null);
-  if (cached && cached.heure && cached.demi_journee && cached.journee) return cached;
+  const cached = getSetting('stripe_formules', null) || {};
+  if (formulesVerifiees && cached.heure && cached.demi_journee && cached.journee) return cached;
+
   const ids = {};
   for (const [key, name] of Object.entries(FORMULE_NAMES)) {
+    const id = cached[key];
+    if (id) {
+      try {
+        const existing = await stripe.products.retrieve(id);
+        // Un produit archivé n'accepte plus de nouveau prix : il faut le recréer.
+        if (existing && !existing.deleted && existing.active !== false) { ids[key] = id; continue; }
+      } catch {
+        /* supprimé, ou appartenant à un autre compte : on le recrée ci-dessous. */
+      }
+    }
     const product = await stripe.products.create({
       name: `Cazalia - ${name}`,
       metadata: { formule: key },
     });
     ids[key] = product.id;
   }
-  setSetting('stripe_formules', ids);
+
+  if (ids.heure !== cached.heure || ids.demi_journee !== cached.demi_journee || ids.journee !== cached.journee) {
+    setSetting('stripe_formules', ids);
+  }
+  formulesVerifiees = true;
   return ids;
 }
 
