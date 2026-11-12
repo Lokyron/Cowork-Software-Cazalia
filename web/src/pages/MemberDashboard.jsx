@@ -44,7 +44,7 @@ function SubscriptionCard({ sub, tarifs, onManage, onCancel, onResume, busy }) {
             <h2 style={{ margin: '0 0 4px' }}>Aucun abonnement actif</h2>
             <p className="muted" style={{ margin: 0 }}>Économisez avec une formule mensuelle, ou continuez à la carte.</p>
           </div>
-          <Link to="/tarifs"><button>Voir les abonnements</button></Link>
+          <Link to="/tarifs"><button>Voir les tarifs</button></Link>
         </div>
       </div>
     );
