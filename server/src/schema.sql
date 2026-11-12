@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS users (
   -- Jours Open Space consommés sur la période en cours (Essentiel). Réel : une
   -- demi-journée vaut 0,5 j, une journée 1 j. Réinitialisé à chaque renouvellement.
   open_space_quota_used  REAL NOT NULL DEFAULT 0,
+  -- 1 = résiliation demandée, effective au terme de la période déjà payée.
+  subscription_cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 

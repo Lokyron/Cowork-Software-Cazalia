@@ -107,6 +107,14 @@ export default function Cgv() {
         authentification forte (DSP2 / 3-D&nbsp;Secure). Les abonnements mensuels sont prélevés
         automatiquement à chaque échéance jusqu'à leur résiliation.
       </p>
+      <p>
+        L'abonné peut <strong>résilier son abonnement à tout moment</strong>, directement depuis son
+        espace client. La résiliation prend effet <strong>au terme de la période mensuelle déjà
+        réglée</strong> : l'accès et les droits associés à la formule restent ouverts jusqu'à cette
+        date, et aucun prélèvement n'est effectué ensuite. La période en cours, déjà payée,
+        <strong>n'est pas remboursée, même partiellement</strong>. Tant que ce terme n'est pas atteint,
+        l'abonné peut revenir sur sa résiliation depuis le même écran.
+      </p>
 
       <h2 id="facturation">6. Facturation et TVA</h2>
       <p>

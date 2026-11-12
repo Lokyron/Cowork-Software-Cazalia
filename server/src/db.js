@@ -256,6 +256,9 @@ if (!subUserCols.includes('subscription_status')) db.exec(`ALTER TABLE users ADD
 if (!subUserCols.includes('current_period_start')) db.exec(`ALTER TABLE users ADD COLUMN current_period_start TEXT`);
 if (!subUserCols.includes('current_period_end')) db.exec(`ALTER TABLE users ADD COLUMN current_period_end TEXT`);
 if (!subUserCols.includes('open_space_quota_used')) db.exec(`ALTER TABLE users ADD COLUMN open_space_quota_used REAL NOT NULL DEFAULT 0`);
+// Résiliation programmée en fin de période (miroir de `cancel_at_period_end`
+// chez Stripe, tenu à jour par le webhook customer.subscription.updated).
+if (!subUserCols.includes('subscription_cancel_at_period_end')) db.exec(`ALTER TABLE users ADD COLUMN subscription_cancel_at_period_end INTEGER NOT NULL DEFAULT 0`);
 
 // Mode de couverture + jours de quota sur réservations et verrous de panier.
 const covResCols = db.prepare(`PRAGMA table_info(reservations)`).all().map((c) => c.name);

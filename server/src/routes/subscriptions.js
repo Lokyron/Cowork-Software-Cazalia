@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { config } from '../config.js';
 import {
-  startSubscriptionCheckout, startBillingPortal, getSubscriptionSummary,
+  startSubscriptionCheckout, startBillingPortal, getSubscriptionSummary, setCancellation,
 } from '../lib/subscriptions.js';
 import { requireAuth, sendBusinessError } from '../middleware.js';
 
@@ -39,8 +39,38 @@ subscriptionsRouter.post('/subscriptions/portal', requireAuth, async (req, res) 
 });
 
 /**
+ * POST /api/subscriptions/cancel - résilie l'abonnement de l'appelant.
+ *
+ * Effet AU TERME de la période déjà payée (`cancel_at_period_end`) : l'accès
+ * court jusque-là et aucun remboursement au prorata n'est effectué.
+ *
+ * @returns 200 `{cancel_at_period_end, current_period_end}` · 409 `AUCUN_ABONNEMENT`/`ABONNEMENT_INDISPONIBLE`
+ */
+subscriptionsRouter.post('/subscriptions/cancel', requireAuth, async (req, res) => {
+  try {
+    res.json(await setCancellation(req.user.id, true));
+  } catch (err) {
+    if (err.code === 'STRIPE_NON_CONFIGURE') return res.status(409).json({ error: 'ABONNEMENT_INDISPONIBLE' });
+    sendBusinessError(res, err);
+  }
+});
+
+/**
+ * POST /api/subscriptions/resume - revient sur une résiliation programmée.
+ * @returns 200 `{cancel_at_period_end, current_period_end}` · 409 `AUCUN_ABONNEMENT`/`ABONNEMENT_INDISPONIBLE`
+ */
+subscriptionsRouter.post('/subscriptions/resume', requireAuth, async (req, res) => {
+  try {
+    res.json(await setCancellation(req.user.id, false));
+  } catch (err) {
+    if (err.code === 'STRIPE_NON_CONFIGURE') return res.status(409).json({ error: 'ABONNEMENT_INDISPONIBLE' });
+    sendBusinessError(res, err);
+  }
+});
+
+/**
  * GET /api/subscriptions/me - résumé de l'abonnement de l'appelant (jauge quota).
- * @returns 200 `{tier, status, current_period_end, quota_used, quota_total}`
+ * @returns 200 `{tier, status, current_period_end, cancel_at_period_end, quota_used, quota_total}`
  */
 subscriptionsRouter.get('/subscriptions/me', requireAuth, (req, res) => {
   try { res.json(getSubscriptionSummary(req.user.id)); } catch (err) { sendBusinessError(res, err); }

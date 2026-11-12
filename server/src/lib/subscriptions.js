@@ -11,6 +11,7 @@ import { fail } from './errors.js';
 import { getStripe } from './settings.js';
 import {
   createCustomer, createSubscriptionCheckoutSession, createBillingPortalSession, retrieveSubscription,
+  setSubscriptionCancelAtPeriodEnd,
 } from './stripe.js';
 
 export const SUB_TIERS = ['ESSENTIEL', 'CONFORT', 'PREMIUM'];
@@ -24,7 +25,8 @@ const applyStmt = db.prepare(
   `UPDATE users SET
       stripe_customer_id = @customer, stripe_subscription_id = @subscription,
       subscription_tier = @tier, subscription_status = @status,
-      current_period_start = @start, current_period_end = @end
+      current_period_start = @start, current_period_end = @end,
+      subscription_cancel_at_period_end = @cancelAtEnd
     WHERE id = @id`
 );
 const resetQuotaStmt = db.prepare(
@@ -33,7 +35,10 @@ const resetQuotaStmt = db.prepare(
 );
 const clearSubStmt = db.prepare(
   `UPDATE users SET stripe_subscription_id = NULL, subscription_tier = 'NONE',
-      subscription_status = 'canceled' WHERE id = @id`
+      subscription_status = 'canceled', subscription_cancel_at_period_end = 0 WHERE id = @id`
+);
+const setCancelFlagStmt = db.prepare(
+  `UPDATE users SET subscription_cancel_at_period_end = ? WHERE id = ?`
 );
 
 // ── Utilitaires de mapping Stripe ─────────────────────────────────────────────
@@ -64,6 +69,9 @@ function periodFromSubscription(sub) {
   };
 }
 function priceIdOf(sub) { return sub?.items?.data?.[0]?.price?.id || null; }
+// Résiliation programmée : vraie aussi quand Stripe pose une date `cancel_at`
+// (résiliation planifiée depuis le portail de facturation).
+function cancelAtEndOf(sub) { return (sub?.cancel_at_period_end || sub?.cancel_at) ? 1 : 0; }
 function tierOfSubscription(sub) {
   // Priorité aux métadonnées posées à la souscription, repli sur le mapping prix.
   const metaTier = sub?.metadata?.tier;
@@ -134,9 +142,39 @@ export function getSubscriptionSummary(userId) {
     tier: u.subscription_tier || 'NONE',
     status: u.subscription_status || 'none',
     current_period_end: u.current_period_end || null,
+    cancel_at_period_end: !!u.subscription_cancel_at_period_end,
     quota_used: Number(u.open_space_quota_used) || 0,
     quota_total: config.pricing.ESSENTIEL_QUOTA_DAYS,
   };
+}
+
+/**
+ * Résilie l'abonnement du membre, ou revient sur une résiliation demandée.
+ *
+ * La résiliation prend effet AU TERME de la période déjà payée : l'accès et le
+ * quota courent jusque-là, et aucun remboursement au prorata n'est effectué.
+ * Stripe émettra `customer.subscription.deleted` le jour venu, ce qui repassera
+ * le membre en NONE (cf. applySubscriptionDeleted).
+ *
+ * @param {number} userId
+ * @param {boolean} cancel true = résilier au terme, false = reprendre.
+ * @returns {Promise<{cancel_at_period_end:boolean, current_period_end:string|null}>}
+ * @throws {Error} `AUCUN_ABONNEMENT`, `ABONNEMENT_INDISPONIBLE`, `UTILISATEUR_INTROUVABLE`.
+ */
+export async function setCancellation(userId, cancel) {
+  const user = getUser.get(userId);
+  if (!user) throw fail('UTILISATEUR_INTROUVABLE');
+  if (!getStripe().enabled) throw fail('ABONNEMENT_INDISPONIBLE');
+  // Un abonnement déjà résilié (statut canceled) n'a plus rien à programmer.
+  if (!user.stripe_subscription_id || user.subscription_status === 'canceled') throw fail('AUCUN_ABONNEMENT');
+
+  const sub = await setSubscriptionCancelAtPeriodEnd(user.stripe_subscription_id, cancel);
+  // On n'attend pas le webhook pour rendre la main : l'espace client doit
+  // refléter la demande immédiatement. Le webhook confirmera ensuite.
+  const flag = cancelAtEndOf(sub);
+  setCancelFlagStmt.run(flag, user.id);
+  const { end } = periodFromSubscription(sub);
+  return { cancel_at_period_end: !!flag, current_period_end: end || user.current_period_end || null };
 }
 
 // ── Écritures déclenchées par le webhook ─────────────────────────────────────
@@ -160,7 +198,7 @@ export function applySubscriptionActive(sub) {
   const tx = db.transaction(() => {
     applyStmt.run({
       id: user.id, customer: String(sub.customer) || user.stripe_customer_id,
-      subscription: sub.id, tier, status, start, end,
+      subscription: sub.id, tier, status, start, end, cancelAtEnd: cancelAtEndOf(sub),
     });
     // Nouvelle période / nouvelle souscription : quota remis à zéro.
     db.prepare(`UPDATE users SET open_space_quota_used = 0 WHERE id = ?`).run(user.id);
@@ -178,7 +216,7 @@ export function applySubscriptionUpdate(sub) {
   const status = mapStatus(sub.status);
   applyStmt.run({
     id: user.id, customer: String(sub.customer) || user.stripe_customer_id,
-    subscription: sub.id, tier, status, start, end,
+    subscription: sub.id, tier, status, start, end, cancelAtEnd: cancelAtEndOf(sub),
   });
   return { matched: true, userId: user.id, tier, status };
 }

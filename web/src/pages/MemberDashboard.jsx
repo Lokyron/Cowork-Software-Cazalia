@@ -30,7 +30,10 @@ const periodFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', d
 
 // Encart abonnement : formule active, période, jauge de quota (Essentiel), accès
 // au portail Stripe. Invite à s'abonner si aucun abonnement actif.
-function SubscriptionCard({ sub, onManage, busy }) {
+function SubscriptionCard({ sub, onManage, onCancel, onResume, busy }) {
+  // Confirmation en deux temps : résilier ne doit pas tenir en un seul clic,
+  // mais sans imposer une fenêtre modale pour autant.
+  const [confirming, setConfirming] = useState(false);
   if (!sub) return null;
   const active = sub.status === 'active' || sub.status === 'past_due';
   if (!active || sub.tier === 'NONE') {
@@ -81,6 +84,36 @@ function SubscriptionCard({ sub, onManage, busy }) {
         </p>
       )}
       <ReservationNotice variant="abonnement" compact style={{ marginTop: 14 }} />
+
+      {/* ── Résiliation : effet au terme de la période déjà payée ─────────── */}
+      {sub.cancel_at_period_end ? (
+        <div className="sub-cancel-notice">
+          <div>
+            <strong>Résiliation programmée.</strong>{' '}
+            Votre accès reste actif jusqu'au {sub.current_period_end ? periodFmt.format(new Date(sub.current_period_end)) : 'terme de la période en cours'}.
+            Aucun prélèvement ne sera effectué ensuite.
+          </div>
+          <button className="outline small" onClick={onResume} disabled={busy}>Reprendre mon abonnement</button>
+        </div>
+      ) : confirming ? (
+        <div className="alert error" style={{ marginTop: 14 }}>
+          <strong>Résilier la formule {TIER_LABEL[sub.tier] || sub.tier} ?</strong>
+          <p style={{ margin: '6px 0 10px' }}>
+            Votre accès et votre quota restent actifs jusqu'au{' '}
+            {sub.current_period_end ? periodFmt.format(new Date(sub.current_period_end)) : 'terme de la période en cours'}.
+            La période déjà réglée n'est pas remboursée, même partiellement. Vous pourrez revenir
+            sur cette décision jusqu'à cette date.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="danger small" onClick={onCancel} disabled={busy}>Confirmer la résiliation</button>
+            <button className="outline small" onClick={() => setConfirming(false)} disabled={busy}>Garder mon abonnement</button>
+          </div>
+        </div>
+      ) : (
+        <button className="ghost small" style={{ marginTop: 12, padding: 0 }} onClick={() => setConfirming(true)}>
+          Résilier mon abonnement
+        </button>
+      )}
     </div>
   );
 }
@@ -120,6 +153,23 @@ export default function MemberDashboard() {
       .then((r) => { if (r?.url) window.location.assign(r.url); })
       .catch(() => { /* déjà abonné / indisponible : on ignore silencieusement */ });
   }, []);
+
+  // Résiliation en fin de période payée (sans remboursement au prorata), et
+  // retour en arrière tant que le terme n'est pas atteint.
+  const setSubCancellation = async (cancel) => {
+    setSubBusy(true);
+    try {
+      await api.post(cancel ? '/subscriptions/cancel' : '/subscriptions/resume');
+      await loadSub();
+      setFeedback({
+        type: 'ok',
+        text: cancel
+          ? 'Résiliation enregistrée. Votre accès reste actif jusqu\u2019au terme de la période en cours.'
+          : 'Abonnement repris : il se renouvellera normalement.',
+      });
+    } catch (err) { setFeedback({ type: 'error', text: msg(err.code) }); }
+    setSubBusy(false);
+  };
 
   // Ouvre le portail Stripe (gestion CB, factures, résiliation).
   const managePortal = async () => {
@@ -233,7 +283,13 @@ export default function MemberDashboard() {
       )}
 
       {/* ABONNEMENT */}
-      <SubscriptionCard sub={sub} onManage={managePortal} busy={subBusy} />
+      <SubscriptionCard
+            sub={sub}
+            onManage={managePortal}
+            onCancel={() => setSubCancellation(true)}
+            onResume={() => setSubCancellation(false)}
+            busy={subBusy}
+          />
 
       {/* EN COURS */}
       {current.map((r) => (

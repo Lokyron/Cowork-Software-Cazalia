@@ -187,9 +187,30 @@ export async function createSubscriptionCheckoutSession({ customerId, priceId, u
     // (customer.subscription.updated/deleted ne portent pas le contexte Checkout).
     subscription_data: { metadata: { user_id: String(userId), tier } },
     line_items: [{ price: priceId, quantity: 1 }],
+    // Champ « Ajouter un code promotionnel » sur la page Stripe. Contrairement au
+    // tunnel de réservation, le code n'est pas pré-validé par Cazalia : la limite
+    // « par personne » (métadonnée max_per_user) ne s'applique donc PAS ici, Stripe
+    // ne sachant pas la gérer. Réserver les codes d'abonnement à des Promotion
+    // Codes dédiés, restreints au produit de la formule.
+    allow_promotion_codes: true,
     success_url: `${base}/mon-espace?abonnement=success`,
     cancel_url: `${base}/tarifs?abonnement=cancel`,
   });
+}
+
+/**
+ * Programme (ou annule) la résiliation d'un abonnement en FIN DE PÉRIODE payée.
+ * Aucun remboursement au prorata : l'accès court jusqu'au terme déjà réglé.
+ *
+ * @param {string} subscriptionId Abonnement Stripe.
+ * @param {boolean} cancel true = résilier au terme, false = reprendre.
+ * @returns {Promise<import('stripe').Stripe.Subscription>}
+ * @throws {Error} `STRIPE_NON_CONFIGURE`.
+ */
+export async function setSubscriptionCancelAtPeriodEnd(subscriptionId, cancel) {
+  const stripe = client();
+  if (!stripe) { const e = new Error('STRIPE_NON_CONFIGURE'); e.code = 'STRIPE_NON_CONFIGURE'; throw e; }
+  return stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: !!cancel });
 }
 
 /**
