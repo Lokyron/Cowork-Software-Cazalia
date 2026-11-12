@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, msg } from '../api.js';
 import { fmtTime, toDate } from '../time.js';
 
 const eur = (n) => `${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
@@ -21,8 +21,35 @@ function Delta({ value, unit = '', invert = false }) {
 
 export default function AdminDashboard() {
   const [d, setD] = useState(null);
+  // Commandes restées en attente : le webhook Stripe n'a jamais abouti, ou le
+  // paiement n'a pas été mené à son terme. Elles sont annoncées au membre comme
+  // « paiement en cours de traitement », d'où la nécessité de pouvoir trancher.
+  const [pending, setPending] = useState([]);
+  const [busyOrder, setBusyOrder] = useState(null);
+  const [orderFeedback, setOrderFeedback] = useState(null);
 
-  useEffect(() => { api.get('/admin/dashboard').then(setD).catch(() => {}); }, []);
+  const loadPending = useCallback(
+    () => api.get('/admin/orders/pending').then((r) => setPending(r.orders || [])).catch(() => {}),
+    [],
+  );
+  useEffect(() => { api.get('/admin/dashboard').then(setD).catch(() => {}); loadPending(); }, [loadPending]);
+
+  // `reconcile` interroge Stripe et crée les réservations si le paiement a bien
+  // abouti ; `abandon` clôt la commande sans rien créer.
+  const resolveOrder = async (id, action) => {
+    setBusyOrder(id); setOrderFeedback(null);
+    try {
+      const r = await api.post(`/admin/orders/${id}/${action}`);
+      setOrderFeedback({
+        type: 'ok',
+        text: action === 'reconcile'
+          ? `Paiement confirmé : ${r.created} réservation${r.created > 1 ? 's' : ''} créée${r.created > 1 ? 's' : ''}.`
+          : 'Commande close. Le membre ne voit plus de paiement en cours.',
+      });
+      await loadPending();
+    } catch (err) { setOrderFeedback({ type: 'error', text: msg(err.code) }); }
+    setBusyOrder(null);
+  };
 
   if (!d) return <p className="muted">Chargement du tableau de bord…</p>;
   const k = d.kpis;
@@ -68,11 +95,40 @@ export default function AdminDashboard() {
           <span className="kpi-d mut">{k.orders_month} paiement{k.orders_month > 1 ? 's' : ''} · net des remboursements</span>
         </div>
       </div>
-      {k.pending_orders > 0 && (
-        <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
-          ⚠️ <strong>{k.pending_orders}</strong> paiement{k.pending_orders > 1 ? 's' : ''} en attente depuis &gt; 15 min
-          (webhook non abouti ?) - à réconcilier.
-        </p>
+      {pending.length > 0 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <h2 style={{ marginTop: 0 }}>
+            ⚠️ {pending.length} paiement{pending.length > 1 ? 's' : ''} en attente depuis plus de 15 minutes
+          </h2>
+          <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+            Le membre voit « paiement en cours de traitement » tant que la commande reste ouverte.
+            <strong> Réconcilier</strong> interroge Stripe et crée les réservations si le paiement a bien abouti.
+            <strong> Clore</strong> ferme la commande sans rien créer.
+          </p>
+          {orderFeedback && <div className={`alert ${orderFeedback.type === 'ok' ? 'ok' : 'error'}`}>{orderFeedback.text}</div>}
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Membre</th><th>Depuis</th><th>Montant</th><th></th></tr></thead>
+              <tbody>
+                {pending.map((o) => (
+                  <tr key={o.id}>
+                    <td>{o.member_name}<div className="muted seats">{o.member_email}</div></td>
+                    <td className="muted">{daysAgo(o.created_at)} · {fmtTime(o.created_at)}</td>
+                    <td>{eur((o.total_cents || 0) / 100)}</td>
+                    <td style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button className="small" disabled={busyOrder === o.id} onClick={() => resolveOrder(o.id, 'reconcile')}>
+                        Réconcilier
+                      </button>
+                      <button className="outline small" disabled={busyOrder === o.id} onClick={() => resolveOrder(o.id, 'abandon')}>
+                        Clore
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* Réservations 14 j + occupation par espace */}

@@ -292,3 +292,15 @@ export function getPendingOrder(id) {
   const o = getOrderById.get(id);
   return o && o.status === 'pending' ? o : null;
 }
+
+/**
+ * Clôt une commande restée en attente, sans créer de réservation : le paiement
+ * n'a pas abouti, ou les créneaux ont été repris autrement. Elle cesse d'être
+ * annoncée au membre et de figurer dans la file de réconciliation.
+ *
+ * @param {number} id Commande.
+ * @returns {boolean} true si une commande en attente a bien été close.
+ */
+export function abandonOrder(id) {
+  return abandonOneStmt.run(id).changes > 0;
+}

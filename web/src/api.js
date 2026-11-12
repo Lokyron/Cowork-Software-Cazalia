@@ -77,6 +77,8 @@ const MESSAGES = {
   DEJA_ABONNE: 'Vous avez déjà un abonnement actif. Gérez-le depuis votre espace client.',
   AUCUN_ABONNEMENT: 'Aucun abonnement à gérer.',
   PANIER_VIDE: 'Votre panier est vide.',
+  COMMANDE_INTROUVABLE: 'Cette commande n’est plus en attente.',
+  PAIEMENT_NON_ABOUTI: 'Stripe indique que ce paiement n’a pas abouti : la commande peut être close.',
   TARIF_INDISPONIBLE: 'Cette formule n’est pas proposée pour cet espace.',
   CRENEAU_FORFAIT_INVALIDE: 'Ce créneau ne correspond pas au forfait choisi (demi-journée / journée).',
   CRENEAU_INVALIDE: 'Créneau invalide (fin avant début).',

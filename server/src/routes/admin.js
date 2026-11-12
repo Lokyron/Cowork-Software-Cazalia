@@ -13,7 +13,7 @@ import { toUtcIso } from '../lib/time.js';
 import { ensureVoucherForReservation, revokeVoucherForReservation } from '../lib/unifi.js';
 import { ensureAccessPinForReservation, revokeAccessForReservation } from '../lib/unifiAccess.js';
 import { addHold, listCart, removeHold, checkoutFree } from '../lib/cart.js';
-import { listStalePendingOrders, getPendingOrder, fulfillOrder, attachReceipt } from '../lib/orders.js';
+import { listStalePendingOrders, getPendingOrder, fulfillOrder, attachReceipt, abandonOrder } from '../lib/orders.js';
 import { retrieveCheckoutSession, getReceiptUrl } from '../lib/stripe.js';
 import { requireAdmin, sendBusinessError } from '../middleware.js';
 import { config } from '../config.js';
@@ -502,6 +502,22 @@ adminRouter.post('/orders/:id/reconcile', async (req, res) => {
     }
     if (r.created?.length) getReceiptUrl(paymentIntent).then((url) => attachReceipt(order.session_id, url)).catch(() => {});
     res.json({ reconciled: true, created: r.created?.length || 0, status: session.payment_status });
+  } catch (err) {
+    sendBusinessError(res, err);
+  }
+});
+
+/**
+ * POST /api/admin/orders/:id/abandon - clôt une commande en attente SANS créer
+ * de réservation. Pour un paiement qui n'a pas abouti, ou des créneaux repris
+ * autrement : le membre cesse de voir « paiement en cours de traitement ».
+ * @returns 200 `{abandoned:true}` · 404 `COMMANDE_INTROUVABLE`
+ */
+adminRouter.post('/orders/:id/abandon', (req, res) => {
+  try {
+    if (!abandonOrder(Number(req.params.id))) return res.status(404).json({ error: 'COMMANDE_INTROUVABLE' });
+    securityEvent('commande_close', { commande: Number(req.params.id), par: req.user.id });
+    res.json({ abandoned: true });
   } catch (err) {
     sendBusinessError(res, err);
   }
