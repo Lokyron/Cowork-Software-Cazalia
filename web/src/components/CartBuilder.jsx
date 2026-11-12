@@ -64,7 +64,6 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [cgvAccepted, setCgvAccepted] = useState(false);
-  const [retractationAck, setRetractationAck] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(null); // aperçu validé {code, discount_cents, ...}
   const [promoError, setPromoError] = useState(null);
@@ -292,7 +291,7 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
                     style={{ textTransform: 'uppercase', flex: 1 }}
                   />
                   {promoApplied ? (
-                    <button type="button" className="ghost" onClick={clearPromo}>Retirer</button>
+                    <button type="button" className="outline" onClick={clearPromo}>✕ Retirer le code</button>
                   ) : (
                     <button type="button" className="outline" onClick={applyPromo} disabled={promoBusy || !promoCode.trim()}>
                       {promoBusy ? '…' : 'Valider'}
@@ -333,24 +332,17 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
                   <input type="checkbox" checked={cgvAccepted} onChange={(e) => setCgvAccepted(e.target.checked)} />
                   <span>J'accepte les <Link to="/cgv" target="_blank">conditions générales de vente</Link>.</span>
                 </label>
-                <label className="consent">
-                  <input type="checkbox" checked={retractationAck} onChange={(e) => setRetractationAck(e.target.checked)} />
-                  <span>
-                    Je demande l'exécution immédiate de la prestation et reconnais perdre mon droit de
-                    rétractation pour les prestations pleinement exécutées (art. L221-25 C. conso.).
-                  </span>
-                </label>
               </div>
             )}
             <button
               style={{ marginTop: 12, width: '100%' }}
-              disabled={busy || (!admin && (!cgvAccepted || !retractationAck))}
+              disabled={busy || (!admin && !cgvAccepted)}
               onClick={doCheckout}
             >
               {admin
                 ? `Valider (${eur(total)})`
                 : (promoApplied ? promoApplied.new_total_cents : total) === 0
-                  ? 'Confirmer ma réservation (incluse)'
+                  ? 'Confirmer ma réservation'
                   : `Payer ${eur(promoApplied ? promoApplied.new_total_cents : total)}`}
             </button>
           </>
