@@ -114,6 +114,9 @@ const resPayCols = db.prepare(`PRAGMA table_info(reservations)`).all().map((c) =
 if (!resPayCols.includes('price_cents')) db.exec(`ALTER TABLE reservations ADD COLUMN price_cents INTEGER NOT NULL DEFAULT 0`);
 if (!resPayCols.includes('tarif_type')) db.exec(`ALTER TABLE reservations ADD COLUMN tarif_type TEXT`);
 if (!resPayCols.includes('payment_status')) db.exec(`ALTER TABLE reservations ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'paid'`);
+// Montant réellement encaissé : un code promo partiel fait que le prix affiché
+// n'est pas ce que Stripe a prélevé. NULL sur l'existant (repli sur price_cents).
+if (!resPayCols.includes('paid_cents')) db.exec(`ALTER TABLE reservations ADD COLUMN paid_cents INTEGER`);
 if (!resPayCols.includes('stripe_session_id')) db.exec(`ALTER TABLE reservations ADD COLUMN stripe_session_id TEXT`);
 if (!resPayCols.includes('payment_intent')) db.exec(`ALTER TABLE reservations ADD COLUMN payment_intent TEXT`);
 

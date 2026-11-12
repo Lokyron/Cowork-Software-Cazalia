@@ -164,10 +164,10 @@ export function quoteCost(spaceId, startIso, endIso, seatsRaw = 1, tarifType = '
 const insertResStmt = db.prepare(
   `INSERT INTO reservations
      (user_id, space_id, start_at, end_at, credits_cost, seats,
-      price_cents, tarif_type, payment_status, payment_method, quota_days,
+      price_cents, paid_cents, tarif_type, payment_status, payment_method, quota_days,
       stripe_session_id, payment_intent)
    VALUES (@user_id, @space_id, @start_at, @end_at, 0, @seats,
-           @price_cents, @tarif_type, @payment_status, @payment_method, @quota_days,
+           @price_cents, @paid_cents, @tarif_type, @payment_status, @payment_method, @quota_days,
            @stripe_session_id, @payment_intent)`
 );
 
@@ -188,6 +188,7 @@ function insertReservation(p) {
     end_at: p.endIso,
     seats: p.seats,
     price_cents: p.priceCents ?? 0,
+    paid_cents: p.paidCents ?? null,
     tarif_type: p.tarifType ?? null,
     payment_status: p.paymentStatus ?? 'free',
     payment_method: p.paymentMethod ?? null,
@@ -242,6 +243,7 @@ const reserveTx = db.transaction((userId, spaceId, startIso, endIso, seatsRaw, o
     userId, spaceId, startIso, endIso, seats,
     priceCents: price, tarifType,
     paymentStatus: o.paymentStatus || 'free',
+    paidCents: o.paidCents ?? null,
     paymentMethod: o.paymentMethod || 'FREE_ADMIN',
     stripeSessionId: o.stripeSessionId, paymentIntent: o.paymentIntent,
   });
@@ -316,6 +318,7 @@ export function reserveBatch(userId, spaceId, rawSlots, opts = {}) {
         userId, spaceId, startIso: sl.startIso, endIso: sl.endIso, seats: sl.seats,
         priceCents: sl.cost, tarifType: sl.tarifType,
         paymentStatus: o.paymentStatus || 'free',
+        paidCents: o.paidCents ?? null,
         paymentMethod: o.paymentMethod || 'FREE_ADMIN',
         stripeSessionId: o.stripeSessionId, paymentIntent: o.paymentIntent,
       });
@@ -362,8 +365,9 @@ const cancelTx = db.transaction((reservationId, actor) => {
   // Remboursement DÛ (à effectuer manuellement dans Stripe par l'admin) si
   // l'annulation intervient avant la fenêtre ET que la résa a été payée en ligne.
   const inWindow = isBeforeRefundWindow(res.start_at, config.refundWindowHours);
-  const refundDue = inWindow && res.payment_status === 'paid' && res.price_cents > 0;
-  return { cancelled: true, refunded: refundDue, amount: refundDue ? res.price_cents : 0, inWindow };
+  const encaisse = res.paid_cents ?? res.price_cents;
+  const refundDue = inWindow && res.payment_status === 'paid' && encaisse > 0;
+  return { cancelled: true, refunded: refundDue, amount: refundDue ? encaisse : 0, inWindow };
 });
 
 /**
@@ -477,8 +481,9 @@ const adminCancelTx = db.transaction((id, _actorId) => {
   cancelResStmt.run(id);
   recreditQuotaIfDue(res);
   // Remboursement dû si la résa avait été payée en ligne (à faire dans Stripe).
-  const refundDue = res.payment_status === 'paid' && res.price_cents > 0;
-  return { cancelled: true, refunded: refundDue, amount: refundDue ? res.price_cents : 0 };
+  const encaisse = res.paid_cents ?? res.price_cents;
+  const refundDue = res.payment_status === 'paid' && encaisse > 0;
+  return { cancelled: true, refunded: refundDue, amount: refundDue ? encaisse : 0 };
 });
 export function adminCancelReservation(id, actorId) {
   return adminCancelTx(id, actorId);

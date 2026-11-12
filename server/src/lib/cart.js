@@ -169,7 +169,7 @@ export function checkout(userId) {
       if (!h.allow_overbooking && availableSeats(h.space_id, h.start_at, h.end_at, { excludeHoldId: h.id }) < h.seats) throw fail('COMPLET');
       const reservationId = insertReservation({
         userId, spaceId: h.space_id, startIso: h.start_at, endIso: h.end_at, seats: h.seats,
-        priceCents: h.cost, tarifType: h.tarif_type, paymentStatus: 'free',
+        priceCents: h.cost, tarifType: h.tarif_type, paymentStatus: 'free', paidCents: 0,
         paymentMethod: h.payment_method || 'FREE_ADMIN', quotaDays: h.quota_days || 0,
       });
       created.push({ reservationId, cost: h.cost });
@@ -198,7 +198,7 @@ const checkoutCoveredTx = db.transaction((userId, holds, promo = null) => {
     if (availableSeats(h.space_id, h.start_at, h.end_at, { excludeHoldId: h.id }) < h.seats) throw fail('COMPLET');
     const reservationId = insertReservation({
       userId, spaceId: h.space_id, startIso: h.start_at, endIso: h.end_at, seats: h.seats,
-      priceCents: h.cost, tarifType: h.tarif_type, paymentStatus: 'free',
+      priceCents: h.cost, tarifType: h.tarif_type, paymentStatus: 'free', paidCents: 0,
       paymentMethod: h.payment_method, quotaDays: h.quota_days || 0,
     });
     if (h.payment_method === 'SUBSCRIPTION_QUOTA' && h.quota_days > 0) {

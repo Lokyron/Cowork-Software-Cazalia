@@ -71,6 +71,10 @@ CREATE TABLE IF NOT EXISTS reservations (
   --   'refunded' (remboursement total confirmé par Stripe via charge.refunded),
   --   'partially_refunded' (remboursement partiel confirmé par Stripe).
   price_cents       INTEGER NOT NULL DEFAULT 0,
+  -- Montant RÉELLEMENT encaissé pour cette réservation (quote-part du total
+  -- Stripe après remise). NULL = non renseigné (réservations antérieures) :
+  -- les lecteurs retombent alors sur price_cents.
+  paid_cents        INTEGER,
   tarif_type        TEXT,
   payment_status    TEXT    NOT NULL DEFAULT 'paid',
   -- Mode de couverture de la réservation (refonte modèle éco.) :

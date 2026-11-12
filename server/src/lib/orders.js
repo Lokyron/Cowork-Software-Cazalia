@@ -69,6 +69,26 @@ export const fulfillOrder = db.transaction((sessionId, paymentIntent = null, amo
   const items = JSON.parse(order.payload);
   const created = [];
   const conflicts = [];
+
+  // Ventilation du montant RÉELLEMENT encaissé sur les lignes facturées.
+  // `price_cents` est le prix AVANT remise : avec un code promo partiel, Stripe
+  // a prélevé moins. Sans cette quote-part, une annulation annoncerait un
+  // remboursement supérieur à l'encaissement. La répartition est
+  // proportionnelle, le reliquat d'arrondi allant à la dernière ligne facturée.
+  const billed = items.filter((it) => (it.payment_method || 'STRIPE_ONE_OFF') === 'STRIPE_ONE_OFF');
+  const billedTotal = billed.reduce((sum, it) => sum + (it.price_cents || 0), 0);
+  const ventile = new Map();
+  if (amountPaidCents != null && billedTotal > 0) {
+    let reste = amountPaidCents;
+    billed.forEach((it, i) => {
+      const part = i === billed.length - 1
+        ? reste
+        : Math.round(((it.price_cents || 0) * amountPaidCents) / billedTotal);
+      ventile.set(it, part);
+      reste -= part;
+    });
+  }
+
   for (const it of items) {
     // Disponibilité « confirmées » uniquement (hors verrous) : les résas déjà
     // insérées dans CETTE transaction sont comptées (status='confirmed').
@@ -82,6 +102,8 @@ export const fulfillOrder = db.transaction((sessionId, paymentIntent = null, amo
     const reservationId = insertReservation({
       userId: order.user_id, spaceId: it.space_id, startIso: it.start_at, endIso: it.end_at,
       seats: it.seats, priceCents: it.price_cents, tarifType: it.tarif_type,
+      // Lignes couvertes par l'abonnement : rien n'a été encaissé.
+      paidCents: paid ? (ventile.has(it) ? ventile.get(it) : null) : 0,
       paymentStatus: paid ? 'paid' : 'free', paymentMethod: method, quotaDays: it.quota_days || 0,
       stripeSessionId: sessionId, paymentIntent,
     });
@@ -120,7 +142,8 @@ export function attachReceipt(sessionId, receiptUrl) {
 const getOrderByPi = db.prepare(`SELECT * FROM reservation_orders WHERE payment_intent = ?`);
 const setOrderRefund = db.prepare(`UPDATE reservation_orders SET refunded_cents = @cents, updated_at = datetime('now') WHERE id = @id`);
 const refundResFull = db.prepare(
-  `UPDATE reservations SET payment_status = 'refunded', refunded_cents = price_cents, refunded_at = @at
+  `UPDATE reservations SET payment_status = 'refunded',
+      refunded_cents = COALESCE(paid_cents, price_cents), refunded_at = @at
     WHERE payment_intent = @pi AND payment_status != 'refunded'`
 );
 const refundResPartial = db.prepare(
