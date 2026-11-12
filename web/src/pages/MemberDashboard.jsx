@@ -30,7 +30,7 @@ const periodFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', d
 
 // Encart abonnement : formule active, période, jauge de quota (Essentiel), accès
 // au portail Stripe. Invite à s'abonner si aucun abonnement actif.
-function SubscriptionCard({ sub, onManage, onCancel, onResume, busy }) {
+function SubscriptionCard({ sub, tarifs, onManage, onCancel, onResume, busy }) {
   // Confirmation en deux temps : résilier ne doit pas tenir en un seul clic,
   // mais sans imposer une fenêtre modale pour autant.
   const [confirming, setConfirming] = useState(false);
@@ -74,7 +74,8 @@ function SubscriptionCard({ sub, onManage, onCancel, onResume, busy }) {
           </div>
           <div className="quota-bar"><div className="quota-fill" style={{ width: `${pct}%` }} /></div>
           <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>
-            Au-delà de {sub.quota_total} jours, les réservations Open Space passent au tarif ponctuel (12 € / 20 €).
+            Au-delà de {sub.quota_total} jours, les réservations Open Space passent au tarif ponctuel
+            {tarifs ? ` (${eur(tarifs.open_space.demi_journee)} la demi-journée, ${eur(tarifs.open_space.journee)} la journée)` : ''}.
           </p>
         </div>
       )}
@@ -127,6 +128,7 @@ export default function MemberDashboard() {
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
   const [sub, setSub] = useState(null);
+  const [tarifs, setTarifs] = useState(null);
   const [subBusy, setSubBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -141,6 +143,10 @@ export default function MemberDashboard() {
 
   const loadSub = useCallback(() => api.get('/subscriptions/me').then(setSub).catch(() => {}), []);
   useEffect(() => { loadSub(); }, [loadSub]);
+
+  // Grille tarifaire : les montants cités dans l'encart d'abonnement étaient
+  // écrits en dur et ne suivaient pas ceux réellement appliqués.
+  useEffect(() => { api.get('/pricing').then(setTarifs).catch(() => {}); }, []);
 
   // Reprise de souscription : l'utilisateur a cliqué « S'abonner » sans être
   // connecté ; après connexion, on relance le Checkout Stripe de la formule choisie.
@@ -285,6 +291,7 @@ export default function MemberDashboard() {
       {/* ABONNEMENT */}
       <SubscriptionCard
             sub={sub}
+            tarifs={tarifs}
             onManage={managePortal}
             onCancel={() => setSubCancellation(true)}
             onResume={() => setSubCancellation(false)}
