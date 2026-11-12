@@ -61,6 +61,10 @@ export const fulfillOrder = db.transaction((sessionId, paymentIntent = null, amo
   const order = getOrderBySession.get(sessionId);
   if (!order) return { created: [], conflicts: [], alreadyProcessed: false, unknown: true };
   if (order.status === 'paid') return { created: [], conflicts: [], alreadyProcessed: true, userId: order.user_id };
+  // Commande close parce que le membre avait relancé un paiement : un webhook
+  // tardif sur cette session ne doit pas ressusciter des créneaux déjà repris
+  // (ou déjà réservés autrement) et créer un doublon.
+  if (order.status === 'abandoned') return { created: [], conflicts: [], alreadyProcessed: true, userId: order.user_id };
 
   const items = JSON.parse(order.payload);
   const created = [];
