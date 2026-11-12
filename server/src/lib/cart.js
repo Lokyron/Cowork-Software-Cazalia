@@ -11,9 +11,9 @@
 import { db } from '../db.js';
 import { config } from '../config.js';
 import { fail } from './errors.js';
-import { createBookingCheckoutSession } from './stripe.js';
-import { createPendingOrder } from './orders.js';
-import { validatePromoForCheckout, computeDiscount, ensurePromoMirrored } from './promos.js';
+import { createBookingCheckoutSession, expireCheckoutSession } from './stripe.js';
+import { createPendingOrder, abandonPendingOrders } from './orders.js';
+import { validatePromoForCheckout, computeDiscount, ensurePromoMirrored, recordRedemption } from './promos.js';
 import { ensureVoucherForReservation } from './unifi.js';
 import { ensureAccessPinForReservation } from './unifiAccess.js';
 import { sendBookingConfirmation } from './mailer.js';
@@ -191,7 +191,7 @@ const consumeQuotaStmt = db.prepare(
 // dans son quota) confirme en 1 clic, sans paiement. On crée les réservations en
 // conservant leur mode de couverture, et on DÉCRÉMENTE le quota pour les lignes
 // SUBSCRIPTION_QUOTA - le tout dans une transaction atomique.
-const checkoutCoveredTx = db.transaction((userId, holds) => {
+const checkoutCoveredTx = db.transaction((userId, holds, promo = null) => {
   const created = [];
   for (const h of holds) {
     if (!withinOpeningHours(h.start_at, h.end_at)) throw fail('HORS_HORAIRES');
@@ -207,11 +207,14 @@ const checkoutCoveredTx = db.transaction((userId, holds) => {
     created.push({ reservationId, cost: h.cost });
     delHold.run(h.id);
   }
+  // Panier offert par un code promo : l'utilisation est comptabilisée ici, dans
+  // la même transaction, puisqu'il n'y aura pas de webhook pour le faire.
+  if (promo) recordRedemption({ promoId: promo.id, userId, orderId: null });
   return { reservations: created, total: 0, count: created.length };
 });
 
-async function checkoutCovered(userId, holds) {
-  const result = checkoutCoveredTx(userId, holds);
+async function checkoutCovered(userId, holds, promo = null) {
+  const result = checkoutCoveredTx(userId, holds, promo);
   await Promise.allSettled(
     result.reservations.flatMap((r) => [
       ensureVoucherForReservation(r.reservationId),
@@ -321,6 +324,23 @@ export async function startBookingCheckout(userId, baseUrl, { promoCode = null }
   // On rafraîchit d'abord le miroir depuis Stripe pour ce code précis.
   if (promoCode) await ensurePromoMirrored(promoCode);
   const promo = promoCode ? validatePromoForCheckout({ code: promoCode, userId, items }) : null;
+
+  // Remise couvrant la totalité du panier : il n'y a rien à encaisser. Passer
+  // quand même par Stripe imposait au client une page de paiement à 0 €, la
+  // saisie de son e-mail, puis l'attente du webhook avant de voir sa
+  // réservation. On confirme directement, comme pour un panier couvert par
+  // l'abonnement. La remise est calculée sur le miroir local, rafraîchi juste
+  // au-dessus par ensurePromoMirrored.
+  if (promo && totalCents - computeDiscount(promo, items) <= 0) {
+    return checkoutCovered(userId, holds, promo);
+  }
+
+  // Une tentative de paiement précédente, restée en attente, est caduque dès
+  // qu'on en ouvre une nouvelle : on la clôt pour qu'elle cesse d'alimenter le
+  // bandeau « paiement en cours de traitement » et la file de réconciliation.
+  for (const sid of abandonPendingOrders(userId)) {
+    await expireCheckoutSession(sid).catch(() => { /* déjà expirée ou payée */ });
+  }
 
   const session = await createBookingCheckoutSession({
     userId, items, baseUrl, promotionCodeId: promo?.stripe_promo_id || null,

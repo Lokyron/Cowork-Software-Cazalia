@@ -260,6 +260,19 @@ export async function getReceiptUrl(paymentIntentId) {
 }
 
 /**
+ * Clôt une session Checkout encore ouverte (tentative de paiement caduque).
+ * Sans effet si la session est déjà expirée ou payée - l'appelant ignore l'échec.
+ *
+ * @param {string} sessionId Session Checkout Stripe.
+ * @returns {Promise<import('stripe').Stripe.Checkout.Session|null>}
+ */
+export async function expireCheckoutSession(sessionId) {
+  const stripe = client();
+  if (!stripe || !sessionId) return null;
+  return stripe.checkout.sessions.expire(sessionId);
+}
+
+/**
  * Récupère une session Checkout (pour la réconciliation d'une commande restée
  * `pending` : vérifier a posteriori si le paiement a finalement abouti).
  *

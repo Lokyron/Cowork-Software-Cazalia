@@ -18,7 +18,11 @@ export default function Booking() {
     add: (payload) => api.post('/cart', payload).then((r) => { refreshCart(); return r; }),
     remove: (id) => api.del(`/cart/${id}`).then((r) => { refreshCart(); return r; }),
     previewPromo: (code) => api.post('/cart/promo/preview', { code }),
-    checkout: (promoCode) => api.post('/cart/checkout', promoCode ? { promo_code: promoCode } : {}),
+    // Confirmation directe (panier offert ou couvert par l'abonnement) : le panier
+    // est vidé côté serveur, l'icône du header doit suivre. Sur le chemin Stripe,
+    // la page est quittée aussitôt, donc le rafraîchissement est sans effet.
+    checkout: (promoCode) => api.post('/cart/checkout', promoCode ? { promo_code: promoCode } : {})
+      .then((r) => { refreshCart(); return r; }),
   }), [refreshCart]);
 
   return (
