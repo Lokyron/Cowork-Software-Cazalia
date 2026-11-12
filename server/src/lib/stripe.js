@@ -126,10 +126,13 @@ export async function createBookingCheckoutSession({ userId, items, baseUrl, pro
   return stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],
-    // Ne réclame une carte que si un paiement est réellement dû : un code promo à
-    // 100 % (total 0 €) passe alors sans saisie de carte (payment_status =
-    // 'no_payment_required'), que le webhook traite comme une réservation gratuite.
-    payment_method_collection: 'if_required',
+    // Pas de `payment_method_collection` ici : Stripe le refuse hors abonnement
+    // (« You can only set `payment_method_collection` if there are recurring
+    // prices »), ce qui faisait échouer tout le tunnel de réservation. Le
+    // comportement voulu est de toute façon celui par défaut en mode 'payment' :
+    // un total de 0 € (code promo à 100 %) se règle sans saisie de carte, avec
+    // payment_status = 'no_payment_required', que le webhook traite comme une
+    // réservation gratuite.
     client_reference_id: String(userId),
     metadata: { kind: 'booking', user_id: String(userId) },
     line_items,
