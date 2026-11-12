@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS spaces (
   price_day_cents       INTEGER,
   color            TEXT    DEFAULT '#1C3155',
   description      TEXT,                                   -- descriptif public (landing)
+  tagline          TEXT,                                   -- phrase d'accroche de la carte (landing) ; NULL = phrase par défaut selon le type
+  position         INTEGER NOT NULL DEFAULT 0,             -- ordre d'affichage (landing et admin) ; à égalité, tri par nom
   amenities        TEXT,                                   -- prestations incluses, 1 par ligne
   photo            TEXT,                                   -- nom de fichier dans le dossier des médias
   active           INTEGER NOT NULL DEFAULT 1,

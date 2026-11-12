@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { api, msg } from '../api.js';
 import { prepareImage } from '../lib/image.js';
 
-const EMPTY = { name: '', kind: 'zone', category: '', capacity: 8, exclusive: false, privatizable: false, price_per_hour: 7, price_half_day: '', price_day: '', color: '#1C3155', description: '', amenities: '', photo: null, active: true };
+const EMPTY = { name: '', kind: 'zone', category: '', capacity: 8, exclusive: false, privatizable: false, price_per_hour: 7, price_half_day: '', price_day: '', color: '#1C3155', description: '', tagline: '', amenities: '', photo: null, position: 0, active: true };
 // Centimes (API) → chaîne euros pour l'édition ('' si forfait non défini).
 const centsToEur = (c) => (c == null ? '' : String(c / 100));
 
@@ -25,7 +25,7 @@ export default function AdminSpaces() {
 
   const startEdit = (s) => {
     setEditingId(s.id);
-    setForm({ name: s.name, kind: s.kind, category: s.category || '', capacity: s.capacity, exclusive: !!s.exclusive, privatizable: !!s.privatizable, price_per_hour: centsToEur(s.price_per_hour_cents), price_half_day: centsToEur(s.price_half_day_cents), price_day: centsToEur(s.price_day_cents), color: s.color, description: s.description || '', amenities: s.amenities || '', photo: s.photo || null, active: !!s.active });
+    setForm({ name: s.name, kind: s.kind, category: s.category || '', capacity: s.capacity, exclusive: !!s.exclusive, privatizable: !!s.privatizable, price_per_hour: centsToEur(s.price_per_hour_cents), price_half_day: centsToEur(s.price_half_day_cents), price_day: centsToEur(s.price_day_cents), color: s.color, description: s.description || '', tagline: s.tagline || '', amenities: s.amenities || '', photo: s.photo || null, position: s.position ?? 0, active: !!s.active });
   };
   const reset = () => { setEditingId(null); setForm(EMPTY); };
 
@@ -35,6 +35,7 @@ export default function AdminSpaces() {
     const payload = {
       ...form,
       capacity: Number(form.capacity),
+      position: Number(form.position) || 0,
       // Euros (laissés tels quels) ; le serveur convertit en centimes. '' = forfait non proposé.
       price_per_hour: form.price_per_hour,
       price_half_day: form.price_half_day,
@@ -103,6 +104,10 @@ export default function AdminSpaces() {
                 <label>{form.exclusive ? 'Tarif horaire € (forfait salle)' : 'Tarif horaire € (par place)'}</label>
                 <input type="number" min="0" step="0.01" value={form.price_per_hour} onChange={set('price_per_hour')} />
               </div>
+              <div className="field" style={{ maxWidth: 110 }}>
+                <label>Ordre <span className="muted">(1, 2, 3…)</span></label>
+                <input type="number" min="0" step="1" value={form.position} onChange={set('position')} />
+              </div>
               <div className="field" style={{ maxWidth: 90 }}>
                 <label>Couleur</label>
                 <input type="color" value={form.color} onChange={set('color')} style={{ height: 42, padding: 4 }} />
@@ -124,6 +129,10 @@ export default function AdminSpaces() {
               onError={(text) => setFeedback({ type: 'error', text })}
             />
             <div className="field" style={{ marginTop: 14 }}>
+              <label>Phrase d'accroche <span className="muted">(carte de la landing ; vide = phrase par défaut)</span></label>
+              <input value={form.tagline} onChange={set('tagline')} placeholder="Ex. Jusqu'à 7 places sur ce créneau." />
+            </div>
+            <div className="field">
               <label>Description (affichée sur la landing)</label>
               <textarea rows={3} value={form.description} onChange={set('description')} placeholder="Descriptif de l'espace…" />
             </div>
@@ -145,10 +154,11 @@ export default function AdminSpaces() {
         <div className="card">
           <h2>Espaces existants</h2>
           <table>
-            <thead><tr><th>Nom</th><th>Type</th><th>Cap.</th><th>€/h · ½j · j</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Nom</th><th>Type</th><th>Cap.</th><th>€/h · ½j · j</th><th></th></tr></thead>
             <tbody>
               {spaces.map((s) => (
                 <tr key={s.id} style={{ opacity: s.active ? 1 : 0.5 }}>
+                  <td className="muted">{s.position}</td>
                   <td><span className="dot" style={{ background: s.color }} />{s.name}</td>
                   <td>{s.exclusive ? 'Exclusive' : s.privatizable ? 'Focus' : 'Open-space'}</td>
                   <td>{s.capacity}</td>

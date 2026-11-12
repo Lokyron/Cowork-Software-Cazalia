@@ -226,6 +226,22 @@ if (!spaceCols.includes('amenities')) db.exec(`ALTER TABLE spaces ADD COLUMN ame
 // Photo de l'espace : nom de fichier dans le dossier des médias (cf. lib/media.js).
 if (!spaceCols.includes('photo')) db.exec(`ALTER TABLE spaces ADD COLUMN photo TEXT`);
 
+// Phrase d'accroche de la carte sur la landing (éditable depuis l'admin).
+// NULL = on garde la phrase par défaut calculée côté front selon le type.
+if (!spaceCols.includes('tagline')) db.exec(`ALTER TABLE spaces ADD COLUMN tagline TEXT`);
+
+// Ordre d'affichage choisi dans l'admin. Au premier ajout de la colonne, on
+// recopie l'ordre actuel (kind, name) : l'affichage ne bouge pas tant que
+// personne n'a rien réglé.
+const addingSpacePosition = !spaceCols.includes('position');
+if (addingSpacePosition) {
+  db.exec(`ALTER TABLE spaces ADD COLUMN position INTEGER NOT NULL DEFAULT 0`);
+  db.exec(`UPDATE spaces SET position = (
+             SELECT COUNT(*) FROM spaces s2
+              WHERE s2.kind < spaces.kind
+                 OR (s2.kind = spaces.kind AND s2.name < spaces.name))`);
+}
+
 // ── Refonte modèle éco. : abonnements + catégories d'espaces + quota ──────────
 // Catégorie métier de l'espace (pilote tarification + réservabilité en ligne).
 const addingSpaceCategory = !spaceCols.includes('category');

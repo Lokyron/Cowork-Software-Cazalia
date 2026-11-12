@@ -55,21 +55,33 @@ adminRouter.get('/dashboard', (_req, res) => {
 const insertSpace = db.prepare(
   `INSERT INTO spaces (name, kind, category, capacity, exclusive, privatizable, credits_per_hour,
                        price_per_hour_cents, price_half_day_cents, price_day_cents,
-                       color, description, amenities, photo, active)
+                       color, description, tagline, amenities, photo, position, active)
    VALUES (@name, @kind, @category, @capacity, @exclusive, @privatizable, @credits_per_hour,
            @price_per_hour_cents, @price_half_day_cents, @price_day_cents,
-           @color, @description, @amenities, @photo, @active)`
+           @color, @description, @tagline, @amenities, @photo, @position, @active)`
 );
 
 // Euros (saisis dans l'admin) → centimes. '' ou absent → null (forfait non proposé).
 const eurToCents = (v) => (v == null || v === '' ? null : Math.max(0, Math.round(Number(v) * 100)));
 
 // Catégorie métier valide (ou null). Pilote la tarification et la réservabilité.
+// Accroche : chaîne vide = pas d'accroche propre → NULL (phrase par défaut).
+const normTagline = (v) => {
+  const t = String(v ?? '').trim();
+  return t ? t : null;
+};
+
+// Ordre d'affichage : entier positif ; toute saisie invalide retombe sur 0.
+const normPosition = (v) => {
+  const n = Math.trunc(Number(v));
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+};
+
 const SPACE_CATEGORIES = ['OPEN_SPACE', 'MEETING_ROOM', 'CONFIDENTIAL', 'PRIVATE_OFFICE'];
 const normCategory = (v) => (SPACE_CATEGORIES.includes(v) ? v : null);
 
 adminRouter.get('/spaces', (_req, res) => {
-  res.json({ spaces: db.prepare(`SELECT * FROM spaces ORDER BY kind, name`).all() });
+  res.json({ spaces: db.prepare(`SELECT * FROM spaces ORDER BY position, kind, name`).all() });
 });
 
 adminRouter.post('/spaces', (req, res) => {
@@ -93,7 +105,9 @@ adminRouter.post('/spaces', (req, res) => {
       credits_per_hour: 0, // LEGACY (plus utilisé)
       color: b.color || '#1C3155',
       description: b.description != null ? String(b.description) : defaults.description,
+      tagline: normTagline(b.tagline),
       amenities: b.amenities != null ? String(b.amenities) : defaults.amenities,
+      position: normPosition(b.position),
       // Nom de fichier réduit à un nom nu : la valeur ne sert ensuite qu'à
       // construire une URL /api/media, jamais un chemin de système de fichiers.
       photo: safeName(b.photo) || null,
@@ -129,7 +143,9 @@ adminRouter.put('/spaces/:id', (req, res) => {
     credits_per_hour: existing.credits_per_hour, // LEGACY
     color: b.color ?? existing.color,
     description: b.description != null ? String(b.description) : existing.description,
+    tagline: b.tagline !== undefined ? normTagline(b.tagline) : (existing.tagline ?? null),
     amenities: b.amenities != null ? String(b.amenities) : existing.amenities,
+    position: b.position !== undefined ? normPosition(b.position) : existing.position,
     photo: b.photo !== undefined ? (safeName(b.photo) || null) : (existing.photo ?? null),
     active: b.active != null ? (b.active ? 1 : 0) : existing.active,
   };
@@ -138,7 +154,8 @@ adminRouter.put('/spaces/:id', (req, res) => {
         credits_per_hour=@credits_per_hour,
         price_per_hour_cents=@price_per_hour_cents, price_half_day_cents=@price_half_day_cents, price_day_cents=@price_day_cents,
         color=@color,
-        description=@description, amenities=@amenities, photo=@photo, active=@active WHERE id=@id`
+        description=@description, tagline=@tagline, amenities=@amenities, photo=@photo,
+        position=@position, active=@active WHERE id=@id`
   ).run({ ...next, id });
   res.json({ space: db.prepare(`SELECT * FROM spaces WHERE id = ?`).get(id) });
 });

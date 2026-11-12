@@ -31,8 +31,8 @@ spacesRouter.get('/spaces', (_req, res) => {
     .prepare(
       `SELECT id, name, kind, category, capacity, exclusive, privatizable,
               price_per_hour_cents, price_half_day_cents, price_day_cents,
-              color, description, amenities, photo
-         FROM spaces WHERE active = 1 ORDER BY kind, name`
+              color, description, tagline, amenities, photo
+         FROM spaces WHERE active = 1 ORDER BY position, kind, name`
     )
     .all();
   res.json({ spaces: rows });

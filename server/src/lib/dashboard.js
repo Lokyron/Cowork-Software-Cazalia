@@ -84,7 +84,7 @@ export function getDashboardStats() {
   const days30Ago = parisToUtc(addDays(today, -30));
 
   const spaces = db
-    .prepare(`SELECT id, name, color, kind, capacity FROM spaces WHERE active = 1 ORDER BY kind, name`)
+    .prepare(`SELECT id, name, color, kind, capacity FROM spaces WHERE active = 1 ORDER BY position, kind, name`)
     .all();
 
   // Réservations confirmées des 14 derniers jours (couvre KPIs jour, occupation, histogramme, à-venir).
