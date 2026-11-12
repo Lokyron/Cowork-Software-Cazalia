@@ -71,6 +71,7 @@ const MESSAGES = {
   COMPLET: 'Ce créneau est complet.',
   PAIEMENT_INDISPONIBLE: 'Le paiement en ligne n’est pas disponible pour le moment.',
   ESPACE_NON_RESERVABLE: 'Cet espace ne se réserve pas en ligne.',
+  ESPACE_INTROUVABLE: 'Cet espace n’est plus disponible. Rechargez la page.',
   ABONNEMENT_INDISPONIBLE: 'La souscription en ligne n’est pas disponible pour le moment.',
   TIER_INVALIDE: 'Formule d’abonnement invalide.',
   DEJA_ABONNE: 'Vous avez déjà un abonnement actif. Gérez-le depuis votre espace client.',
@@ -147,6 +148,10 @@ const MESSAGES = {
   PROSPECT_INTROUVABLE: 'Contact introuvable.',
   TROP_DE_TENTATIVES: 'Trop de tentatives. Réessayez dans quelques minutes.',
 };
+// Un code inconnu est affiché tel quel entre parenthèses : sans lui, une panne
+// imprévue devient indiscernable de toutes les autres pour qui la signale. Le
+// code transite déjà en clair dans la réponse de l'API : rien de plus n'est exposé.
 export function msg(code) {
-  return MESSAGES[code] || 'Une erreur est survenue.';
+  if (MESSAGES[code]) return MESSAGES[code];
+  return code ? `Une erreur est survenue (${code}).` : 'Une erreur est survenue.';
 }

@@ -112,5 +112,17 @@ const CODE_TO_STATUS = {
 export function sendBusinessError(res, err, fallbackStatus = 400, extra) {
   const code = err.code || 'ERREUR';
   const status = CODE_TO_STATUS[code] || fallbackStatus;
+  // Une erreur dont le code n'est PAS un code métier répertorié n'a pas été
+  // prévue : exception SQLite, erreur du SDK Stripe, bogue. Le client ne reçoit
+  // toujours que le code (jamais le message ni la pile, cf. CWE-209), mais le
+  // serveur la journalise, sans quoi ce genre de panne reste invisible.
+  if (!CODE_TO_STATUS[code]) {
+    securityEvent('erreur_inattendue', {
+      code,
+      message: String(err?.message || '').slice(0, 300),
+      route: `${res.req?.method || '?'} ${res.req?.originalUrl || '?'}`,
+      stack: String(err?.stack || '').split('\n').slice(1, 4).join(' | ').slice(0, 500),
+    });
+  }
   return res.status(status).json({ error: code, ...(extra || {}) });
 }
