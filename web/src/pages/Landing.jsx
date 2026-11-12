@@ -63,7 +63,7 @@ export default function Landing() {
             </p>
             <ul className="features">
               <li>Internet haut débit & prise à chaque poste</li>
-              <li>Salles privatives réservables à l'heure</li>
+              <li>Open Space - Salle de réunion - Salle confidentielle</li>
               <li>Cuisine, café et thé inclus</li>
               <li>Accès souple, à la carte ou au forfait</li>
             </ul>
