@@ -27,4 +27,5 @@ DOCUMENTATION.md
 *.pdf
 
 # Config locale de l_IDE / session
-.claude/
+.claude/*
+!.claude/agents/
