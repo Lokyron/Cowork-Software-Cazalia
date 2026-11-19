@@ -21,7 +21,7 @@ import { adminSetPassword, createResetToken } from '../lib/passwords.js';
 import { adminUpdateUser, adminCreateUser, deleteUserAccount } from '../lib/users.js';
 import { sendPasswordResetEmail, sendReservationNotification, sendBookingConfirmation } from '../lib/mailer.js';
 import { defaultSpaceContent } from '../lib/spaceContent.js';
-import { safeName } from '../lib/media.js';
+import { safeName, purgeSpaceFrame } from '../lib/media.js';
 import { getDashboardStats } from '../lib/dashboard.js';
 import { securityEvent } from '../lib/audit.js';
 import {
@@ -157,6 +157,9 @@ adminRouter.put('/spaces/:id', (req, res) => {
         description=@description, tagline=@tagline, amenities=@amenities, photo=@photo,
         position=@position, active=@active WHERE id=@id`
   ).run({ ...next, id });
+  // Le cadrage appartient à la photo affichée : photo changée ou espace
+  // désactivé, il n'a plus lieu d'être.
+  if (next.photo !== (existing.photo ?? null) || !next.active) purgeSpaceFrame(id);
   res.json({ space: db.prepare(`SELECT * FROM spaces WHERE id = ?`).get(id) });
 });
 

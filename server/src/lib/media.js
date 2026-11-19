@@ -126,11 +126,128 @@ export function getMedia() {
 /** Vue publique : les URLs à utiliser telles quelles par le front. */
 export function getMediaUrls() {
   const m = getMedia();
+  const fr = getFrames();
   return {
     carousel: m.carousel.map(mediaUrl),
     hero: mediaUrl(m.hero),
     presentation: mediaUrl(m.presentation),
+    // Cadrages non destructifs. Le carrousel est keyé par URL (le public ne
+    // connaît pas les noms de fichiers) ; les espaces passent par `/api/spaces`.
+    frames: {
+      carousel: Object.fromEntries(Object.entries(fr.carousel).map(([f, v]) => [mediaUrl(f), v])),
+      hero: fr.hero,
+      presentation: fr.presentation,
+    },
   };
+}
+
+/** Contextes de cadrage : un cadrage par EMPLACEMENT, jamais par photo seule. */
+export const FRAME_CONTEXTS = ['carousel', 'hero', 'presentation', 'spaces'];
+
+const clampNum = (v, min, max) => Math.min(max, Math.max(min, v));
+const round2 = (v) => Math.round(v * 100) / 100;
+
+/**
+ * Valide et borne un cadrage reçu (ne jamais faire confiance au front).
+ *
+ * `zoom` ∈ [1, 3], `posX`/`posY` ∈ [0, 100] (%). Le cadrage par défaut
+ * (zoom 1, centré) n'est pas stocké : l'absence de clé = affichage d'origine.
+ *
+ * @param {unknown} raw Cadrage reçu.
+ * @returns {{zoom: number, posX: number, posY: number} | null} Cadrage borné, ou
+ *          `null` s'il est invalide ou équivaut au défaut.
+ */
+export function normalizeFrame(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const zoom = Number(raw.zoom ?? 1);
+  const posX = Number(raw.posX ?? 50);
+  const posY = Number(raw.posY ?? 50);
+  if (![zoom, posX, posY].every(Number.isFinite)) return null;
+  const frame = {
+    zoom: round2(clampNum(zoom, 1, 3)),
+    posX: round2(clampNum(posX, 0, 100)),
+    posY: round2(clampNum(posY, 0, 100)),
+  };
+  if (frame.zoom === 1 && frame.posX === 50 && frame.posY === 50) return null;
+  return frame;
+}
+
+const framesOf = (s) => (s.frames && typeof s.frames === 'object' ? s.frames : {});
+
+/**
+ * Enregistre (ou supprime, si défaut/invalide) le cadrage d'un emplacement.
+ * Ne touche jamais aux champs `carousel`/`hero`/`presentation` du réglage.
+ *
+ * @param {string} context `FRAME_CONTEXTS`.
+ * @param {string | number | null} target Nom de fichier (carrousel) ou id d'espace ;
+ *        ignoré pour le bandeau et la présentation.
+ * @param {unknown} frame Cadrage brut, ou `null` pour réinitialiser.
+ * @returns {boolean} `false` si le contexte est inconnu.
+ */
+export function setFrame(context, target, frame) {
+  if (!FRAME_CONTEXTS.includes(context)) return false;
+  const s = readSetting();
+  const frames = { ...framesOf(s) };
+  const clean = normalizeFrame(frame);
+  if (context === 'hero' || context === 'presentation') {
+    if (clean) frames[context] = clean; else delete frames[context];
+  } else {
+    const group = { ...(frames[context] && typeof frames[context] === 'object' ? frames[context] : {}) };
+    const key = String(target);
+    if (clean) group[key] = clean; else delete group[key];
+    if (Object.keys(group).length) frames[context] = group; else delete frames[context];
+  }
+  setSetting('media', { ...s, frames });
+  return true;
+}
+
+/**
+ * Retire le cadrage d'un espace (désactivé, ou photo changée).
+ * @param {number | string} spaceId Id de l'espace.
+ * @returns {void}
+ */
+export function purgeSpaceFrame(spaceId) {
+  const s = readSetting();
+  const spaces = framesOf(s).spaces;
+  if (!spaces || !(String(spaceId) in spaces)) return;
+  setFrame('spaces', spaceId, null);
+}
+
+/** Retire de `frames` les cadrages carrousel dont la clé n'est plus dans `keep`. */
+function pruneCarouselFrames(frames, keep) {
+  if (!frames.carousel) return frames;
+  const kept = Object.fromEntries(Object.entries(frames.carousel).filter(([f]) => keep.has(f)));
+  const next = { ...frames };
+  if (Object.keys(kept).length) next.carousel = kept; else delete next.carousel;
+  return next;
+}
+
+/**
+ * Cadrages effectifs, filtrés sur les cibles RÉELLEMENT présentes (photo du
+ * carrousel présente, emplacement occupé, espace actif si `spaceIds` fourni).
+ * Forme interne : carrousel keyé par FICHIER, espaces par id.
+ *
+ * @param {{spaceIds?: Iterable<number|string>}} [opts]
+ * @returns {{carousel: Object, hero: Object | null, presentation: Object | null, spaces: Object}}
+ */
+export function getFrames({ spaceIds } = {}) {
+  const s = readSetting();
+  const f = framesOf(s);
+  const m = getMedia();
+  const out = { carousel: {}, hero: null, presentation: null, spaces: {} };
+  for (const file of m.carousel) {
+    const fr = normalizeFrame(f.carousel?.[file]);
+    if (fr) out.carousel[file] = fr;
+  }
+  if (m.hero) out.hero = normalizeFrame(f.hero);
+  if (m.presentation) out.presentation = normalizeFrame(f.presentation);
+  const ids = spaceIds ? new Set([...spaceIds].map(String)) : null;
+  for (const [id, raw] of Object.entries(f.spaces && typeof f.spaces === 'object' ? f.spaces : {})) {
+    if (ids && !ids.has(id)) continue;
+    const fr = normalizeFrame(raw);
+    if (fr) out.spaces[id] = fr;
+  }
+  return out;
 }
 
 /**
@@ -223,7 +340,13 @@ export function setSlot(slot, file) {
   // Une photo promue en bandeau quitte le carrousel : la même image aux deux
   // endroits n'a pas de sens et surprendrait à la suppression.
   const carousel = (Array.isArray(s.carousel) ? s.carousel : getMedia().carousel).filter((f) => f !== file);
-  setSetting('media', { ...s, carousel, [slot]: file || null });
+  // Son cadrage de carrousel n'a plus lieu d'être (le cadrage de l'emplacement
+  // se règle ensuite pour sa nouvelle place).
+  let frames = framesOf(s);
+  if (file && frames.carousel?.[file]) frames = pruneCarouselFrames(frames, new Set(carousel));
+  // L'ancien cadrage de l'emplacement ne vaut pas pour la nouvelle photo.
+  if (frames[slot]) { frames = { ...frames }; delete frames[slot]; }
+  setSetting('media', { ...s, carousel, [slot]: file || null, frames });
 }
 
 /**
@@ -242,7 +365,7 @@ export function setCarouselOrder(order) {
   const clean = (Array.isArray(order) ? order : [])
     .map((f) => safeName(f))
     .filter((f) => f && present.has(f) && !slots.has(f) && !seen.has(f) && seen.add(f));
-  setSetting('media', { ...s, carousel: clean });
+  setSetting('media', { ...s, carousel: clean, frames: pruneCarouselFrames(framesOf(s), new Set(clean)) });
   return clean;
 }
 
@@ -259,11 +382,15 @@ export function deleteImage(name, onDetach) {
   if (!full) return false;
   const safe = safeName(name);
   const s = readSetting();
+  const frames = { ...pruneCarouselFrames(framesOf(s), new Set(Object.keys(framesOf(s).carousel || {}).filter((f) => f !== safe))) };
+  if (s.hero === safe) delete frames.hero;
+  if (s.presentation === safe) delete frames.presentation;
   setSetting('media', {
     ...s,
     carousel: (Array.isArray(s.carousel) ? s.carousel : []).filter((f) => f !== safe),
     hero: s.hero === safe ? null : (s.hero ?? null),
     presentation: s.presentation === safe ? null : (s.presentation ?? null),
+    frames,
   });
   if (onDetach) onDetach(safe);
   try {

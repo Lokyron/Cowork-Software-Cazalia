@@ -847,6 +847,9 @@ a.kpi:hover { transform: translateY(-2px); }
   object-fit: cover;
   border: none;
 }
+/* Cadrage non destructif : le <figure> porte la mise en forme, l'image la recadre. */
+figure.hero-img { margin: 0; overflow: hidden; }
+.hero-img > .photo-img { position: absolute; inset: 0; }
 .hero-overlay {
   position: absolute;
   inset: 0;
@@ -926,6 +929,7 @@ h2.big { font-size: clamp(24px, 3.4vw, 36px); letter-spacing: -0.8px; margin: 10
   border-radius: var(--radius);
   box-shadow: var(--glass-shadow);
 }
+figure.split-photo { margin: 0; overflow: hidden; }
 @media (max-width: 820px) { .split { grid-template-columns: 1fr; gap: 28px; } }
 
 /* Cartes espaces */
@@ -935,6 +939,7 @@ h2.big { font-size: clamp(24px, 3.4vw, 36px); letter-spacing: -0.8px; margin: 10
 .space-photo, .space-card .photo-ph {
   width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 0; border: none;
 }
+figure.space-photo { margin: 0; overflow: hidden; }
 .space-card-body { padding: 18px 20px 20px; }
 .price { font-size: 22px; font-weight: 800; color: var(--navy); }
 .price small { font-size: 13px; font-weight: 600; color: var(--muted); }
@@ -965,6 +970,7 @@ h2.big { font-size: clamp(24px, 3.4vw, 36px); letter-spacing: -0.8px; margin: 10
   transition: transform 0.25s ease;
 }
 .carousel-item:hover { transform: scale(1.05); }
+figure.carousel-item { margin: 0 16px 0 0; overflow: hidden; }
 /* Le décalage de -50 % correspond exactement à une copie (marge uniforme) → boucle continue. */
 @keyframes carousel-scroll {
   from { transform: translateX(0); }
@@ -977,6 +983,9 @@ h2.big { font-size: clamp(24px, 3.4vw, 36px); letter-spacing: -0.8px; margin: 10
   .carousel-track { animation: none; }
   .carousel { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
+
+/* Image recadrée à l'intérieur de son cadre (zoom/déplacement posés en style inline). */
+.photo-img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 /* Infos */
 .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
@@ -1220,6 +1229,20 @@ h2.big { font-size: clamp(24px, 3.4vw, 36px); letter-spacing: -0.8px; margin: 10
   background: none; border: 0; padding: 0; width: auto;
   color: var(--red); font-size: 12px; cursor: pointer; text-decoration: underline;
 }
+.link-action {
+  background: none; border: 0; padding: 0; width: auto;
+  color: var(--accent); font-size: 12px; cursor: pointer; text-decoration: underline;
+}
+.link-action:disabled { opacity: 0.5; cursor: default; }
+/* Éditeur de cadrage : l'aperçu est clippé au vrai format de l'emplacement. */
+.frame-editor { width: min(640px, 100%); }
+.frame-preview {
+  position: relative; width: 100%; overflow: hidden; border-radius: 12px;
+  background: #0f172a; cursor: grab; touch-action: none; user-select: none;
+}
+.frame-preview:active { cursor: grabbing; }
+.frame-zoom { display: grid; gap: 4px; margin-top: 12px; font-size: 13px; }
+.frame-zoom input { width: 100%; }
 .link-danger:disabled { opacity: 0.5; cursor: default; }
 
 .photo-slot { display: grid; gap: 12px; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }

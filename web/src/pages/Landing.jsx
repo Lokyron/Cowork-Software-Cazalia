@@ -15,7 +15,7 @@ export default function Landing() {
   const [gallery, setGallery] = useState([]); // photos du carrousel (dossier dédié)
   // Photos réglées depuis l'administration. Tant qu'aucune n'est déposée, on
   // garde celles livrées avec l'application : la page n'est jamais vide.
-  const [media, setMedia] = useState({ hero: null, presentation: null });
+  const [media, setMedia] = useState({ hero: null, presentation: null, frames: {} });
   const [openSpace, setOpenSpace] = useState(null); // { space, photoSrc } pour la modale
   const [devis, setDevis] = useState(false); // modale « Demander un devis » (Bureau privé)
 
@@ -23,7 +23,7 @@ export default function Landing() {
     api.get('/spaces').then((r) => setSpaces(r.spaces)).catch(() => {});
     api.get('/media').then((r) => {
       setGallery(r.carousel || []);
-      setMedia({ hero: r.hero || null, presentation: r.presentation || null });
+      setMedia({ hero: r.hero || null, presentation: r.presentation || null, frames: r.frames || {} });
     }).catch(() => {});
   }, []);
 
@@ -38,7 +38,7 @@ export default function Landing() {
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section className="hero">
-        <Photo src={media.hero || '/images/hero.jpg'} alt="Notre espace de co-working" className="hero-img" caption="Photo d'ambiance à venir" />
+        <Photo src={media.hero || '/images/hero.jpg'} alt="Notre espace de co-working" className="hero-img" frame={media.hero ? media.frames.hero : undefined} caption="Photo d'ambiance à venir" />
         <div className="hero-overlay" />
         <div className="hero-content">
           <span className="eyebrow">Espace de co-working</span>
@@ -71,7 +71,7 @@ export default function Landing() {
               <li>Accès souple, à la carte ou au forfait</li>
             </ul>
           </div>
-          <Photo src={media.presentation || '/images/presentation.jpg'} alt="Intérieur de l'espace" className="split-photo" caption="Photo du lieu à venir" />
+          <Photo src={media.presentation || '/images/presentation.jpg'} alt="Intérieur de l'espace" className="split-photo" frame={media.presentation ? media.frames.presentation : undefined} caption="Photo du lieu à venir" />
         </div>
       </section>
 
@@ -93,7 +93,7 @@ export default function Landing() {
                 className="card space-card space-pick"
                 onClick={() => setOpenSpace({ space: s, photoSrc })}
               >
-                <Photo src={photoSrc} alt={s.name} className="space-photo" caption={s.name} />
+                <Photo src={photoSrc} alt={s.name} className="space-photo" frame={s.photo ? s.photo_frame : undefined} caption={s.name} />
                 <div className="space-card-body">
                   <div className="flex-between">
                     <strong><span className="dot" style={{ background: s.color }} />{s.name}</strong>
@@ -140,7 +140,7 @@ export default function Landing() {
             {/* Photos réglées dans l'admin (API /media), dupliquées pour une boucle sans couture. */}
             <div className="carousel-track">
               {[...gallery, ...gallery].map((src, i) => (
-                <Photo key={i} src={src} alt={`Photo ${(i % gallery.length) + 1}`} className="carousel-item" caption="Photo" />
+                <Photo key={i} src={src} alt={`Photo ${(i % gallery.length) + 1}`} className="carousel-item" frame={media.frames.carousel?.[src]} caption="Photo" />
               ))}
             </div>
           </div>

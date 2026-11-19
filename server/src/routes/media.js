@@ -17,6 +17,7 @@ import { rateLimit } from '../security.js';
 import {
   SLOTS, listFiles, getMedia, getMediaUrls, mediaUrl, mediaPath, mimeForFile,
   safeName, saveImage, addToCarousel, setSlot, setCarouselOrder, deleteImage, isWritable,
+  FRAME_CONTEXTS, getFrames, setFrame, purgeSpaceFrame,
 } from '../lib/media.js';
 
 export const mediaRouter = Router();
@@ -24,7 +25,8 @@ export const mediaRouter = Router();
 // ── Public ───────────────────────────────────────────────────────────────────
 /**
  * GET /api/media - photos publiées (carrousel, bandeau, présentation).
- * @returns 200 `{carousel: string[], hero: string|null, presentation: string|null}`
+ * `frames` : cadrages non destructifs (carrousel keyé par URL, bandeau, présentation).
+ * @returns 200 `{carousel: string[], hero: string|null, presentation: string|null, frames}`
  */
 mediaRouter.get('/media', (_req, res) => res.json(getMediaUrls()));
 
@@ -62,16 +64,22 @@ export const adminMediaRouter = Router();
 adminMediaRouter.use(requireAdmin);
 
 const detachFromSpaces = (file) => {
-  try { db.prepare(`UPDATE spaces SET photo = NULL WHERE photo = ?`).run(file); } catch { /* colonne absente */ }
+  try {
+    const ids = db.prepare(`SELECT id FROM spaces WHERE photo = ?`).all(file).map((r) => r.id);
+    db.prepare(`UPDATE spaces SET photo = NULL WHERE photo = ?`).run(file);
+    ids.forEach(purgeSpaceFrame); // le cadrage suivait la photo
+  } catch { /* colonne absente */ }
 };
 
 /**
  * GET /api/admin/media - bibliothèque complète (noms de fichiers inclus).
- * @returns 200 `{files, carousel, hero, presentation, spaces}`
+ * `frames` est en forme interne (carrousel keyé par fichier, espaces par id).
+ * @returns 200 `{files, carousel, hero, presentation, spaces, frames}`
  */
 adminMediaRouter.get('/', (_req, res) => {
   const m = getMedia();
   const withUrl = (f) => ({ file: f, url: mediaUrl(f) });
+  const spaces = db.prepare(`SELECT id, name, photo FROM spaces WHERE active = 1 ORDER BY name`).all();
   res.json({
     // `writable` à faux = volume mal monté : l'interface le signale avant que
     // l'exploitant ne tente un envoi voué à l'échec.
@@ -80,8 +88,8 @@ adminMediaRouter.get('/', (_req, res) => {
     carousel: m.carousel.map(withUrl),
     hero: m.hero ? withUrl(m.hero) : null,
     presentation: m.presentation ? withUrl(m.presentation) : null,
-    spaces: db.prepare(`SELECT id, name, photo FROM spaces WHERE active = 1 ORDER BY name`).all()
-      .map((s) => ({ ...s, url: mediaUrl(s.photo) })),
+    spaces: spaces.map((s) => ({ ...s, url: mediaUrl(s.photo) })),
+    frames: getFrames({ spaceIds: spaces.map((s) => s.id) }),
   });
 });
 
@@ -155,6 +163,34 @@ adminMediaRouter.put('/slot', (req, res) => {
     }
     const m = getMedia();
     res.json({ ok: true, hero: m.hero, presentation: m.presentation });
+  } catch (err) { sendBusinessError(res, err); }
+});
+
+/**
+ * PUT /api/admin/media/frame - recadrage non destructif d'une photo, PAR EMPLACEMENT.
+ * Corps : `{context: 'carousel'|'hero'|'presentation'|'spaces', target, frame}` ;
+ * `target` = nom de fichier (carrousel) ou id d'espace ; ignoré pour hero/presentation.
+ * `frame` = `{zoom, posX, posY}` (bornés côté serveur) ou `null` pour réinitialiser.
+ * Le fichier d'origine n'est jamais modifié.
+ * @returns 200 `{ok, frames}` · 400 `CONTEXTE_INCONNU` / `FICHIER_INTROUVABLE` / `ESPACE_INTROUVABLE`
+ */
+adminMediaRouter.put('/frame', (req, res) => {
+  try {
+    const context = String(req.body?.context || '');
+    if (!FRAME_CONTEXTS.includes(context)) return res.status(400).json({ error: 'CONTEXTE_INCONNU' });
+    let target = null;
+    if (context === 'carousel') {
+      target = safeName(req.body?.target);
+      if (!target || !getMedia().carousel.includes(target)) return res.status(400).json({ error: 'FICHIER_INTROUVABLE' });
+    } else if (context === 'spaces') {
+      const id = Number(req.body?.target);
+      const ok = Number.isInteger(id) && db.prepare(`SELECT 1 FROM spaces WHERE id = ? AND active = 1`).get(id);
+      if (!ok) return res.status(400).json({ error: 'ESPACE_INTROUVABLE' });
+      target = id;
+    }
+    setFrame(context, target, req.body?.frame);
+    const ids = db.prepare(`SELECT id FROM spaces WHERE active = 1`).all().map((s) => s.id);
+    res.json({ ok: true, frames: getFrames({ spaceIds: ids }) });
   } catch (err) { sendBusinessError(res, err); }
 });
 

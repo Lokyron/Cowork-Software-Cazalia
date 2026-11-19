@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, msg } from '../api.js';
 import { prepareImage } from '../lib/image.js';
+import { frameStyle } from '../components/Photo.jsx';
 
 // Écran « Photos » : les images de la page d'accueil sont modifiables ici, sans
 // passer par le code ni par un accès au serveur. Les photos sont stockées dans
@@ -52,11 +53,106 @@ function DropZone({ onFiles, busy, multiple = true, label }) {
   );
 }
 
+
+// Format réel de chaque emplacement sur la page d'accueil : l'aperçu du
+// cadrage doit montrer exactement ce que verront les visiteurs.
+const FRAME_ASPECT = { carousel: '320 / 210', hero: '2 / 1', presentation: '4 / 3', spaces: '16 / 10' };
+const DEFAULT_FRAME = { zoom: 1, posX: 50, posY: 50 };
+const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+
+/**
+ * Éditeur de cadrage (non destructif) : glisser pour déplacer, molette ou
+ * curseur pour zoomer. Le fichier d'origine n'est jamais modifié ; seul le
+ * cadrage de CET emplacement est enregistré.
+ */
+function FrameEditor({ target, onClose, onSaved, flash }) {
+  const [frame, setFrame] = useState({ ...DEFAULT_FRAME, ...(target.frame || {}) });
+  const [busy, setBusy] = useState(false);
+  const box = useRef(null);
+  const drag = useRef(null);
+
+  // La molette doit pouvoir empêcher le défilement de la page : écouteur natif non passif.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return undefined;
+    const onWheel = (e) => {
+      e.preventDefault();
+      setFrame((f) => ({ ...f, zoom: clamp(Math.round((f.zoom - e.deltaY * 0.002) * 100) / 100, 1, 3) }));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  const down = (e) => {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    drag.current = { x: e.clientX, y: e.clientY };
+  };
+  const move = (e) => {
+    if (!drag.current) return;
+    const r = box.current.getBoundingClientRect();
+    const dx = e.clientX - drag.current.x;
+    const dy = e.clientY - drag.current.y;
+    drag.current = { x: e.clientX, y: e.clientY };
+    // Faire glisser l'image vers la droite révèle sa partie gauche : la position recule.
+    setFrame((f) => ({
+      ...f,
+      posX: clamp(f.posX - (dx / r.width) * 100 / f.zoom, 0, 100),
+      posY: clamp(f.posY - (dy / r.height) * 100 / f.zoom, 0, 100),
+    }));
+  };
+  const up = () => { drag.current = null; };
+
+  const save = async (value) => {
+    setBusy(true);
+    try {
+      await api.put('/admin/media/frame', { context: target.context, target: target.key, frame: value });
+      await onSaved();
+      flash('ok', value ? 'Cadrage enregistré.' : 'Cadrage réinitialisé.');
+      onClose();
+    } catch (err) { flash('error', msg(err.code)); setBusy(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal frame-editor" onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ marginTop: 0 }}>Cadrer la photo</h2>
+        <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>
+          {target.label} · Glissez l'image pour la déplacer, utilisez la molette ou le curseur pour zoomer.
+          La photo d'origine n'est pas modifiée.
+        </p>
+        <div
+          ref={box}
+          className="frame-preview"
+          style={{ aspectRatio: FRAME_ASPECT[target.context] }}
+          onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+        >
+          <img src={target.url} alt="" draggable={false} className="photo-img" style={frameStyle(frame)} />
+        </div>
+        <label className="frame-zoom">
+          <span>Zoom ×{frame.zoom.toFixed(2)}</span>
+          <input
+            type="range" min="1" max="3" step="0.05" value={frame.zoom}
+            onChange={(e) => setFrame((f) => ({ ...f, zoom: Number(e.target.value) }))}
+          />
+        </label>
+        <div className="flex-between" style={{ marginTop: 14, gap: 8 }}>
+          <button className="outline" onClick={() => save(null)} disabled={busy}>Réinitialiser</button>
+          <span style={{ display: 'flex', gap: 8 }}>
+            <button className="outline" onClick={onClose} disabled={busy}>Annuler</button>
+            <button onClick={() => save({ zoom: frame.zoom, posX: frame.posX, posY: frame.posY })} disabled={busy}>Enregistrer</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPhotos() {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [drag, setDrag] = useState({ from: null, over: null });
+  const [framing, setFraming] = useState(null); // photo en cours de cadrage
 
   const flash = (type, text) => { setFeedback({ type, text }); setTimeout(() => setFeedback(null), 5000); };
   const load = async () => setData(await api.get('/admin/media'));
@@ -153,6 +249,9 @@ export default function AdminPhotos() {
               <img src={p.url} alt="" loading="lazy" />
               <figcaption>
                 <span className="muted">{i + 1}</span>
+                <button className="link-action" onClick={() => setFraming({ context: 'carousel', key: p.file, url: p.url, label: 'Carrousel', frame: data.frames?.carousel?.[p.file] })} disabled={busy}>
+                  Cadrer{data.frames?.carousel?.[p.file] ? ' ✓' : ''}
+                </button>
                 <button className="link-danger" onClick={() => remove(p.file)} disabled={busy}>Supprimer</button>
               </figcaption>
             </figure>
@@ -173,7 +272,12 @@ export default function AdminPhotos() {
           >
             {current ? (
               <div className="photo-slot">
-                <img src={current.url} alt="" />
+                <div>
+                  <img src={current.url} alt="" />
+                  <button className="outline" style={{ marginTop: 8 }} onClick={() => setFraming({ context: slot, key: null, url: current.url, label: title, frame: data.frames?.[slot] })} disabled={busy}>
+                    Cadrer{data.frames?.[slot] ? ' ✓' : ''}
+                  </button>
+                </div>
                 <DropZone onFiles={(f) => send(f, slot)} busy={busy} multiple={false} label="Remplacer cette photo" />
               </div>
             ) : (
@@ -194,6 +298,7 @@ export default function AdminPhotos() {
               {s.url ? <img src={s.url} alt={s.name} loading="lazy" /> : <div className="photo-ph"><span>📷 {s.name}</span></div>}
               <figcaption>
                 <strong style={{ fontSize: 13 }}>{s.name}</strong>
+                {s.photo && <button className="link-action" onClick={() => setFraming({ context: 'spaces', key: s.id, url: s.url, label: s.name, frame: data.frames?.spaces?.[s.id] })} disabled={busy}>Cadrer{data.frames?.spaces?.[s.id] ? ' ✓' : ''}</button>}
                 {s.photo && <button className="link-danger" onClick={() => setSpacePhoto(s.id, null)} disabled={busy}>Retirer</button>}
               </figcaption>
               <SpaceUpload spaceId={s.id} onDone={load} flash={flash} />
@@ -202,6 +307,8 @@ export default function AdminPhotos() {
           {data.spaces.length === 0 && <p className="muted">Aucun espace actif.</p>}
         </div>
       </Section>
+
+      {framing && <FrameEditor target={framing} onClose={() => setFraming(null)} onSaved={load} flash={flash} />}
     </div>
   );
 }

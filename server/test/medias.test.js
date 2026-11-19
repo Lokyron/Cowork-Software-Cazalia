@@ -196,3 +196,103 @@ test('la colonne photo existe sur les espaces et accepte un nom nu', () => {
   db.prepare(`UPDATE spaces SET photo = NULL WHERE photo = ?`).run('salle-ab12cd.jpg');
   assert.equal(db.prepare(`SELECT photo FROM spaces WHERE id = ?`).get(id).photo, null);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cadrage non destructif (frames)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const rawMedia = () => JSON.parse(db.prepare(`SELECT value FROM app_settings WHERE key = 'media'`).get().value);
+
+test('un cadrage est borné côté serveur et le défaut n\'est pas stocké', () => {
+  assert.deepEqual(media.normalizeFrame({ zoom: 9, posX: -20, posY: 500 }), { zoom: 3, posX: 0, posY: 100 });
+  assert.deepEqual(media.normalizeFrame({ zoom: 0.2, posX: 30, posY: 40 }), { zoom: 1, posX: 30, posY: 40 });
+  assert.equal(media.normalizeFrame({ zoom: 1, posX: 50, posY: 50 }), null);
+  assert.equal(media.normalizeFrame({ zoom: 'abc', posX: 1, posY: 1 }), null);
+  assert.equal(media.normalizeFrame(null), null);
+  assert.equal(media.normalizeFrame('x'), null);
+
+  reset();
+  media.saveImage(JPEG, 'a');
+  const [a] = media.listFiles();
+  media.setFrame('carousel', a, { zoom: 2, posX: 10, posY: 90 });
+  assert.deepEqual(media.getFrames().carousel[a], { zoom: 2, posX: 10, posY: 90 });
+  media.setFrame('carousel', a, { zoom: 1, posX: 50, posY: 50 }); // défaut = suppression
+  assert.equal(rawMedia().frames.carousel, undefined);
+  assert.equal(media.setFrame('inconnu', null, { zoom: 2 }), false);
+});
+
+test('un réglage media SANS clé frames se lit comme avant', () => {
+  reset();
+  media.saveImage(JPEG, 'a');
+  const [a] = media.listFiles();
+  db.prepare(`INSERT INTO app_settings (key, value) VALUES ('media', ?)`).run(JSON.stringify({ carousel: [a], hero: null, presentation: null }));
+  assert.deepEqual(media.getMedia().carousel, [a]);
+  assert.deepEqual(media.getFrames(), { carousel: {}, hero: null, presentation: null, spaces: {} });
+  const urls = media.getMediaUrls();
+  assert.deepEqual(urls.carousel, [media.mediaUrl(a)]);
+  assert.deepEqual(urls.frames, { carousel: {}, hero: null, presentation: null });
+});
+
+test('la vue publique clé les cadrages du carrousel par URL', () => {
+  reset();
+  media.saveImage(JPEG, 'a');
+  const [a] = media.listFiles();
+  media.setFrame('carousel', a, { zoom: 1.5, posX: 20, posY: 30 });
+  assert.deepEqual(media.getMediaUrls().frames.carousel, { [media.mediaUrl(a)]: { zoom: 1.5, posX: 20, posY: 30 } });
+});
+
+test('supprimer une photo purge ses cadrages', () => {
+  reset();
+  const { file } = media.saveImage(JPEG, 'a');
+  media.addToCarousel(file);
+  media.setFrame('carousel', file, { zoom: 2, posX: 10, posY: 10 });
+  media.setSlot('hero', file); // quitte le carrousel, cadrage carrousel retiré
+  media.setFrame('hero', null, { zoom: 2, posX: 10, posY: 10 });
+  assert.equal(rawMedia().frames.carousel, undefined);
+  assert.ok(rawMedia().frames.hero);
+  media.deleteImage(file);
+  assert.equal(rawMedia().frames.hero, undefined);
+
+  const { file: b } = media.saveImage(PNG, 'b');
+  media.addToCarousel(b);
+  media.setFrame('carousel', b, { zoom: 2, posX: 10, posY: 10 });
+  media.deleteImage(b);
+  assert.equal(rawMedia().frames.carousel, undefined);
+});
+
+test('réordonner le carrousel purge les cadrages hors de l\'ordre', () => {
+  reset();
+  const a = media.saveImage(JPEG, 'a').file;
+  const b = media.saveImage(PNG, 'b').file;
+  media.addToCarousel(a); media.addToCarousel(b);
+  media.setFrame('carousel', a, { zoom: 2, posX: 10, posY: 10 });
+  media.setFrame('carousel', b, { zoom: 2, posX: 20, posY: 20 });
+  media.setCarouselOrder([b]);
+  assert.deepEqual(Object.keys(rawMedia().frames.carousel), [b]);
+});
+
+test('promouvoir une photo en bandeau retire son cadrage de carrousel', () => {
+  reset();
+  const a = media.saveImage(JPEG, 'a').file;
+  const b = media.saveImage(PNG, 'b').file;
+  media.addToCarousel(a); media.addToCarousel(b);
+  media.setFrame('carousel', a, { zoom: 2, posX: 10, posY: 10 });
+  media.setFrame('carousel', b, { zoom: 2, posX: 20, posY: 20 });
+  media.setSlot('hero', a);
+  assert.deepEqual(Object.keys(rawMedia().frames.carousel), [b]);
+  // Remplacer la photo du bandeau efface l'ancien cadrage du bandeau.
+  media.setFrame('hero', null, { zoom: 2, posX: 10, posY: 10 });
+  media.setSlot('hero', b);
+  assert.equal(rawMedia().frames.hero, undefined);
+});
+
+test('le cadrage d\'un espace est purgé et filtré sur les espaces actifs', () => {
+  reset();
+  media.setFrame('spaces', 7, { zoom: 2, posX: 10, posY: 10 });
+  media.setFrame('spaces', 8, { zoom: 2, posX: 20, posY: 20 });
+  assert.deepEqual(Object.keys(media.getFrames({ spaceIds: [7] }).spaces), ['7']);
+  media.purgeSpaceFrame(7);
+  assert.deepEqual(Object.keys(rawMedia().frames.spaces), ['8']);
+  media.purgeSpaceFrame(8);
+  assert.equal(rawMedia().frames.spaces, undefined);
+});

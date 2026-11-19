@@ -5,6 +5,7 @@ import { effectivePricing } from '../lib/pricing.js';
 import { toUtcIso } from '../lib/time.js';
 import { config } from '../config.js';
 import { getArrival } from '../lib/settings.js';
+import { getFrames } from '../lib/media.js';
 import { sendBusinessError } from '../middleware.js';
 
 export const spacesRouter = Router();
@@ -24,6 +25,7 @@ spacesRouter.get('/config', (_req, res) => {
 /**
  * GET /api/spaces - espaces actifs (vitrine publique).
  * La sélection de colonnes est explicite : rien d'interne ne fuit par un `*`.
+ * `photo_frame` : cadrage non destructif de la photo (ou `null`).
  * @returns 200 `{spaces}`
  */
 spacesRouter.get('/spaces', (_req, res) => {
@@ -35,7 +37,8 @@ spacesRouter.get('/spaces', (_req, res) => {
          FROM spaces WHERE active = 1 ORDER BY position, kind, name`
     )
     .all();
-  res.json({ spaces: rows });
+  const { spaces: frames } = getFrames({ spaceIds: rows.map((r) => r.id) });
+  res.json({ spaces: rows.map((r) => ({ ...r, photo_frame: r.photo ? (frames[r.id] || null) : null })) });
 });
 
 /**
