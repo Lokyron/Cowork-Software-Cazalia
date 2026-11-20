@@ -1043,7 +1043,8 @@ figure.carousel-item { margin: 0 16px 0 0; overflow: hidden; }
 
 @media (max-width: 760px) {
   /* Navigation repliable (menu burger) */
-  .nav { gap: 10px; padding: 0 14px; }
+  /* Au-dessus de la bulle d'aide (90) : le menu déplié vit dans le contexte d'empilement de .nav. */
+  .nav { gap: 10px; padding: 0 14px; z-index: 95; }
   .nav-burger { display: inline-flex; align-items: center; justify-content: center; }
   .nav-collapse {
     display: none;
@@ -1060,7 +1061,7 @@ figure.carousel-item { margin: 0 16px 0 0; overflow: hidden; }
     padding: 8px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 12px 28px rgba(15, 23, 42, 0.3);
-    z-index: 60;
+    z-index: 95;
   }
   .nav-collapse.open { display: flex; }
   .nav-collapse nav { flex-direction: column; align-items: stretch; gap: 2px; flex: none; }
@@ -1324,3 +1325,45 @@ figure.carousel-item { margin: 0 16px 0 0; overflow: hidden; }
 }
 .tarif-seg-btn.active { color: var(--navy); }
 @media (max-width: 480px) { .tarif-seg-btn { font-size: 13px; padding: 10px 2px; } }
+
+/* ── Bulle d'aide ───────────────────────────────────────────────────────────── */
+.help-bubble {
+  position: fixed; right: 20px; bottom: 20px; z-index: 90;
+  width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer; color: #fff;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.38);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.help-bubble:hover { transform: scale(1.07); box-shadow: 0 12px 30px rgba(59, 130, 246, 0.46); }
+.help-bubble:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px var(--accent-2); }
+.help-panel {
+  position: fixed; right: 20px; bottom: 88px; z-index: 90;
+  width: min(300px, calc(100vw - 40px)); padding: 16px;
+  background: var(--glass-strong);
+  backdrop-filter: blur(22px) saturate(165%);
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
+  border: 1px solid var(--glass-border); border-radius: 18px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.25);
+  animation: rise 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.help-title { margin: 0 0 4px; font-size: 17px; }
+.help-lead { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+.help-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;
+  margin-top: 4px; padding: 10px 12px; border: 0; border-radius: 12px;
+  background: transparent; box-shadow: none; text-align: left;
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--ink);
+  cursor: pointer; text-decoration: none; transition: background 0.15s ease;
+}
+.help-item svg { flex-shrink: 0; color: var(--accent); }
+.help-item:hover { background: rgba(59, 130, 246, 0.1); transform: none; filter: none; box-shadow: none; }
+.help-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.help-item.primary { background: rgba(59, 130, 246, 0.14); color: var(--accent-2); }
+.help-item.primary:hover { background: rgba(59, 130, 246, 0.22); transform: none; filter: none; box-shadow: none; }
+@media (max-width: 640px) {
+  .help-bubble { right: 16px; bottom: 16px; }
+  .help-panel { right: 16px; bottom: 80px; }
+  /* Réserve basse : la bulle (56 px + 16 px de marge) ne recouvre pas le pied de page. */
+  .site-footer { padding-bottom: 88px; }
+}

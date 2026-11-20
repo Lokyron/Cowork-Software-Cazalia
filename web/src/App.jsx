@@ -4,6 +4,7 @@ import { useAuth } from './auth.jsx';
 import { useCart } from './cart.jsx';
 import Background from './components/Background.jsx';
 import TwoFactorBanner from './components/TwoFactorBanner.jsx';
+import HelpBubble from './components/HelpBubble.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import Rejoindre from './pages/Rejoindre.jsx';
@@ -187,6 +188,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {!isLanding && <SiteFooter />}
+      <HelpBubble />
     </>
   );
 }
