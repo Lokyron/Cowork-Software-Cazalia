@@ -6,6 +6,7 @@ import GoogleCalendarLink from '../components/GoogleCalendarLink.jsx';
 import WeekGrid from '../components/WeekGrid.jsx';
 import BookingModal from '../components/BookingModal.jsx';
 import VoucherBlock from '../components/VoucherBlock.jsx';
+import CancelConfirm from '../components/CancelConfirm.jsx';
 
 export default function MemberPlanning() {
   const [weekStart, setWeekStart] = useState(() => startOfWeekStr(todayStr()));
@@ -13,6 +14,8 @@ export default function MemberPlanning() {
   const [selected, setSelected] = useState(null);
   const [booking, setBooking] = useState(null);
   const [feedback, setFeedback] = useState(null);
+  const [confirming, setConfirming] = useState(null); // id de la résa en attente de confirmation d'annulation
+  const [cancelBusy, setCancelBusy] = useState(false);
 
   const load = useCallback(async () => {
     const r = await api.get('/reservations/me');
@@ -37,7 +40,9 @@ export default function MemberPlanning() {
   });
 
   const cancel = async (id) => {
+    if (cancelBusy) return;
     setFeedback(null);
+    setCancelBusy(true);
     try {
       const r = await api.del(`/reservations/${id}`);
       setFeedback({
@@ -48,6 +53,9 @@ export default function MemberPlanning() {
       load();
     } catch (err) {
       setFeedback({ type: 'error', text: msg(err.code) });
+    } finally {
+      setCancelBusy(false);
+      setConfirming(null);
     }
   };
 
@@ -83,14 +91,14 @@ export default function MemberPlanning() {
       </p>
 
       {selected && (
-        <div className="modal-overlay" onClick={() => setSelected(null)}>
+        <div className="modal-overlay" onClick={() => { if (!cancelBusy) { setSelected(null); setConfirming(null); } }}>
           <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
             <div className="flex-between" style={{ marginBottom: 8 }}>
               <h2 style={{ margin: 0 }}>
                 <span className="dot" style={{ background: selected.space_color }} />
                 {selected.space_name}
               </h2>
-              <button className="ghost" onClick={() => setSelected(null)} aria-label="Fermer">✕</button>
+              <button className="ghost" onClick={() => { setSelected(null); setConfirming(null); }} aria-label="Fermer">✕</button>
             </div>
             <table style={{ marginBottom: 14 }}>
               <tbody>
@@ -102,10 +110,13 @@ export default function MemberPlanning() {
             <VoucherBlock reservation={selected} />
             <div className="flex-between">
               <GoogleCalendarLink reservation={selected} />
-              {new Date(selected.start_at).getTime() > Date.now() && (
-                <button className="outline small" onClick={() => cancel(selected.id)}>Annuler la réservation</button>
+              {new Date(selected.start_at).getTime() > Date.now() && confirming !== selected.id && (
+                <button className="outline small" onClick={() => setConfirming(selected.id)}>Annuler la réservation</button>
               )}
             </div>
+            {confirming === selected.id && (
+              <CancelConfirm reservation={selected} busy={cancelBusy} onConfirm={() => cancel(selected.id)} onKeep={() => setConfirming(null)} />
+            )}
           </div>
         </div>
       )}

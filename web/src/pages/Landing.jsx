@@ -5,7 +5,7 @@ import { api } from '../api.js';
 import { eur, spacePrice } from '../price.js';
 import Photo from '../components/Photo.jsx';
 import SpaceModal from '../components/SpaceModal.jsx';
-import DevisModal from '../components/DevisModal.jsx';
+import ContactModal, { subjectForSpace } from '../components/ContactModal.jsx';
 import PublicHeader from '../components/PublicHeader.jsx';
 
 export default function Landing() {
@@ -17,7 +17,7 @@ export default function Landing() {
   // garde celles livrées avec l'application : la page n'est jamais vide.
   const [media, setMedia] = useState({ hero: null, presentation: null, frames: {} });
   const [openSpace, setOpenSpace] = useState(null); // { space, photoSrc } pour la modale
-  const [devis, setDevis] = useState(false); // modale « Demander un devis » (Bureau privé)
+  const [devis, setDevis] = useState(null); // formulaire « Demander un devis » : { subject } quand ouvert
 
   useEffect(() => {
     api.get('/spaces').then((r) => setSpaces(r.spaces)).catch(() => {});
@@ -107,12 +107,18 @@ export default function Landing() {
                   </p>
                   <div className="flex-between">
                     <span className="price">
-                      {/* Prix d'appel « À partir de … » ; Bureau privé : aucun prix. */}
+                      {/* Prix d'appel « À partir de … » ; double mode : mention du devis longue durée. */}
                       {(() => {
                         const p = spacePrice(s);
-                        if (p.kind === 'price') return <>{p.from && <small>À partir de </small>}{eur(p.min)}</>;
+                        if (p.kind === 'price') {
+                          return (
+                            <>
+                              {p.from && <small>À partir de </small>}{eur(p.min)}
+                              {p.quote && <small style={{ display: 'block', fontWeight: 400 }}>Longue durée sur devis</small>}
+                            </>
+                          );
+                        }
                         if (p.kind === 'libre') return <small>Libre-service</small>;
-                        if (p.kind === 'devis') return null;
                         return <small>sur devis</small>;
                       })()}
                     </span>
@@ -201,11 +207,19 @@ export default function Landing() {
           photoSrc={openSpace.photoSrc}
           onClose={() => setOpenSpace(null)}
           onReserve={goReserve}
-          onDevis={() => { setOpenSpace(null); setDevis(true); }}
+          onDevis={() => { setDevis({ subject: subjectForSpace(openSpace.space) }); setOpenSpace(null); }}
         />
       )}
 
-      {devis && <DevisModal onClose={() => setDevis(false)} />}
+      {devis && (
+        <ContactModal
+          onClose={() => setDevis(null)}
+          initialSubject={devis.subject}
+          source="devis_bureau_prive"
+          title="Demander un devis"
+          intro="Contrat longue durée personnalisé. Laissez-nous vos coordonnées et décrivez votre besoin."
+        />
+      )}
     </div>
   );
 }

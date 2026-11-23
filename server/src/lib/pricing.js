@@ -12,6 +12,8 @@
 //     - sans abo / Essentiel hors quota → ponctuel (12 € / 20 €)
 //     - Essentiel avec quota            → 0 € (décompte 0,5 / 1 jour sur 12)
 //     - Confort / Premium               → 0 € illimité
+//   Bureau privé : demi-journée / journée, tarif = colonnes de l'espace, toujours
+//     payé à l'acte (jamais inclus dans un abonnement, aucun quota).
 //   Salle de réunion : heure / demi-journée / journée.
 //     - sans abo / Essentiel            → plein tarif (20 / 35 / 50 €)
 //     - Confort                         → −50 %
@@ -49,8 +51,13 @@ export function spaceCategory(space) {
   return space?.category || null;
 }
 
-/** Un espace est-il réservable en ligne ? (confidentiel/bureau privé : non). */
+/**
+ * Un espace est-il réservable en ligne ? Fondé sur la colonne `online_bookable`.
+ * Repli sur la catégorie (ancien comportement) si la propriété est absente de
+ * l'objet : certains appels passent un espace partiellement chargé.
+ */
 export function isOnlineBookable(space) {
+  if (space && space.online_bookable != null) return Number(space.online_bookable) === 1;
   const cat = spaceCategory(space);
   return cat === 'OPEN_SPACE' || cat === 'MEETING_ROOM';
 }
@@ -127,6 +134,28 @@ export function effectivePricing({ user, space, startIso, endIso, seats = 1, tar
     }
     return { cents: baseCents, method: 'STRIPE_ONE_OFF', quotaDays: 0, baseCents, discountLabel: null };
   }
+
+  // Bureau privé : réservation ponctuelle demi-journée / journée UNIQUEMENT, au
+  // tarif saisi dans l'admin (colonnes de l'espace). Jamais inclus dans un
+  // abonnement, ne consomme aucun quota, quel que soit le tier : règle métier.
+  // Prix absent ou nul → indisponible (jamais une réservation à 0 € par erreur).
+  if (cat === 'PRIVATE_OFFICE') {
+    // Ceinture : un bureau privé se réserve en entier au forfait saisi. S'il n'est
+    // pas exclusif (donnée aberrante), il serait traité comme un inventaire de
+    // places : N réservations simultanées et tarif multiplié. On refuse de le tarifer.
+    if (!space.exclusive) throw fail('ESPACE_NON_RESERVABLE');
+    if (tarifType !== 'demi_journee' && tarifType !== 'journee') throw fail('TARIF_INDISPONIBLE');
+    const col = tarifType === 'demi_journee' ? space.price_half_day_cents : space.price_day_cents;
+    const unit = Number(col);
+    if (!Number.isFinite(unit) || unit <= 0) throw fail('TARIF_INDISPONIBLE');
+    const baseCents = Math.round(unit) * units;
+    return { cents: baseCents, method: 'STRIPE_ONE_OFF', quotaDays: 0, baseCents, discountLabel: null };
+  }
+
+  // Garde-fou : une catégorie inconnue/absente (ex. CONFIDENTIAL, ou espace sans
+  // catégorie marqué réservable en ligne) n'a aucune grille : on refuse plutôt
+  // que de retomber sur un tarif qui ne le concerne pas.
+  if (cat !== 'MEETING_ROOM') throw fail('TARIF_INDISPONIBLE');
 
   // MEETING_ROOM
   let base;

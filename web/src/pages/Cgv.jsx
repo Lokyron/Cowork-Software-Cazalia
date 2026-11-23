@@ -142,21 +142,29 @@ export default function Cgv() {
       </p>
 
       <h2 id="annulation">8. Annulation, report et remboursement</h2>
-      <p>Sauf conditions particulières affichées lors de la réservation&nbsp;:</p>
+      <p>
+        L'annulation d'une réservation est possible à tout moment depuis l'espace membre. Elle emporte les
+        effets suivants&nbsp;:
+      </p>
       <ul>
-        <li><strong>Annulation plus de 48&nbsp;heures avant</strong> le créneau&nbsp;: remboursement
-          intégral.</li>
-        <li><strong>Annulation entre 48&nbsp;heures et 24&nbsp;heures avant</strong>&nbsp;: remboursement
-          (sauf mention contraire pour les salles privatisées).</li>
-        <li><strong>Annulation moins de 24&nbsp;heures avant, ou absence (no-show)</strong>&nbsp;: le
-          montant reste dû.</li>
+        <li><strong>Annulation plus de 24&nbsp;heures avant le début du créneau</strong>&nbsp;:
+          remboursement intégral du montant réglé.</li>
+        <li><strong>Annulation moins de 24&nbsp;heures avant le début du créneau, ou absence
+          (no-show)</strong>&nbsp;: aucun remboursement, le montant reste dû.</li>
+        <li><strong>Aucun remboursement partiel</strong>&nbsp;: le remboursement est intégral ou nul,
+          sans distinction selon la salle réservée.</li>
         <li><strong>Annulation par l'Éditeur</strong> (fermeture, indisponibilité, force majeure)&nbsp;:
           remboursement intégral des sommes versées pour les créneaux concernés.</li>
       </ul>
       <p>
-        Un report peut être proposé selon les disponibilités. En cas de remboursement en numéraire d'une
-        somme réglée en ligne, le remboursement est effectué via Stripe sur le moyen de paiement d'origine,
-        généralement sous <strong>5 à 10 jours ouvrés</strong>. Toute demande s'effectue via le{' '}
+        Seules les <strong>réservations ponctuelles réglées à l'unité</strong> ouvrent droit à
+        remboursement. Une réservation incluse dans un abonnement n'ouvre droit à aucun remboursement&nbsp;;
+        lorsque le créneau est encore à venir, le jour de quota correspondant est restitué.
+      </p>
+      <p>
+        Le remboursement n'est pas automatique&nbsp;: il est traité par la gestionnaire à la suite de
+        l'annulation, puis recrédité via Stripe sur le moyen de paiement d'origine, sous quelques jours
+        ouvrés. Un report peut être proposé selon les disponibilités. Toute demande s'effectue via le{' '}
         <Link to="/reclamation">formulaire de réclamation</Link>.
       </p>
 

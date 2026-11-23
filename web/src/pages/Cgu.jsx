@@ -177,8 +177,12 @@ export default function Cgu() {
       <p>
         Sauf conditions particulières affichées lors de la réservation, l'annulation par le Membre donne
         lieu au <strong>remboursement du paiement</strong> correspondant si elle intervient <strong>plus de
-        24&nbsp;heures</strong> avant le début du créneau. Passé ce délai, le montant reste dû. Une
-        annulation à l'initiative de l'Éditeur (fermeture, indisponibilité, force majeure) donne lieu au
+        24&nbsp;heures</strong> avant le début du créneau. Passé ce délai, ou en cas d'absence, aucun
+        remboursement n'est dû&nbsp;; il n'existe pas de remboursement partiel. Seules les réservations
+        ponctuelles réglées à l'unité sont remboursables&nbsp;: une réservation incluse dans un abonnement
+        n'ouvre pas droit à remboursement (le jour de quota est restitué si le créneau est encore à venir).
+        Le remboursement est traité par la gestionnaire puis recrédité via Stripe. Une annulation à
+        l'initiative de l'Éditeur (fermeture, indisponibilité, force majeure) donne lieu au
         remboursement intégral des sommes versées pour les créneaux concernés.
       </p>
 

@@ -2,9 +2,17 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { api, msg } from '../api.js';
 import { prepareImage } from '../lib/image.js';
 
-const EMPTY = { name: '', kind: 'zone', category: '', capacity: 8, exclusive: false, privatizable: false, price_per_hour: 7, price_half_day: '', price_day: '', color: '#1C3155', description: '', tagline: '', amenities: '', photo: null, position: 0, active: true };
+const EMPTY = { name: '', kind: 'zone', category: '', online_bookable: false, quote_available: false, capacity: 8, exclusive: false, privatizable: false, price_per_hour: 7, price_half_day: '', price_day: '', color: '#1C3155', description: '', tagline: '', amenities: '', photo: null, position: 0, active: true };
 // Centimes (API) → chaîne euros pour l'édition ('' si forfait non défini).
 const centsToEur = (c) => (c == null ? '' : String(c / 100));
+
+// Modes de réservation proposés par défaut selon la catégorie choisie. N'est
+// appliqué qu'à la CRÉATION et quand on CHANGE la catégorie dans le formulaire :
+// l'ouverture d'un espace existant ne touche jamais à ses réglages.
+const defaultModes = (category) => ({
+  online_bookable: category === 'OPEN_SPACE' || category === 'MEETING_ROOM',
+  quote_available: category === 'PRIVATE_OFFICE',
+});
 
 export default function AdminSpaces() {
   const [spaces, setSpaces] = useState([]);
@@ -23,9 +31,21 @@ export default function AdminSpaces() {
     setForm((f) => ({ ...f, [k]: v }));
   };
 
+  // Changement de catégorie : recale les modes sur le défaut de la catégorie. Un
+  // bureau privé est une pièce unique réservée en entier (le serveur l'impose aussi).
+  const setCategory = (e) => {
+    const category = e.target.value;
+    setForm((f) => ({
+      ...f,
+      category,
+      ...defaultModes(category),
+      ...(category === 'PRIVATE_OFFICE' ? { exclusive: true, privatizable: false } : {}),
+    }));
+  };
+
   const startEdit = (s) => {
     setEditingId(s.id);
-    setForm({ name: s.name, kind: s.kind, category: s.category || '', capacity: s.capacity, exclusive: !!s.exclusive, privatizable: !!s.privatizable, price_per_hour: centsToEur(s.price_per_hour_cents), price_half_day: centsToEur(s.price_half_day_cents), price_day: centsToEur(s.price_day_cents), color: s.color, description: s.description || '', tagline: s.tagline || '', amenities: s.amenities || '', photo: s.photo || null, position: s.position ?? 0, active: !!s.active });
+    setForm({ name: s.name, kind: s.kind, category: s.category || '', online_bookable: !!s.online_bookable, quote_available: !!s.quote_available, capacity: s.capacity, exclusive: !!s.exclusive, privatizable: !!s.privatizable, price_per_hour: centsToEur(s.price_per_hour_cents), price_half_day: centsToEur(s.price_half_day_cents), price_day: centsToEur(s.price_day_cents), color: s.color, description: s.description || '', tagline: s.tagline || '', amenities: s.amenities || '', photo: s.photo || null, position: s.position ?? 0, active: !!s.active });
   };
   const reset = () => { setEditingId(null); setForm(EMPTY); };
 
@@ -80,18 +100,31 @@ export default function AdminSpaces() {
               </div>
             </div>
             <div className="field">
-              <label>Catégorie <span className="muted" style={{ fontWeight: 400 }}>(tarification & réservabilité)</span></label>
-              <select value={form.category} onChange={set('category')}>
-                <option value="">- Non catégorisé (non réservable en ligne) -</option>
+              <label>Catégorie <span className="muted" style={{ fontWeight: 400 }}>(grille de tarification ; les modes se règlent ci-dessous)</span></label>
+              <select value={form.category} onChange={setCategory}>
+                <option value="">- Non catégorisé (aucune grille de prix) -</option>
                 <option value="OPEN_SPACE">Open Space (½-journée / journée)</option>
                 <option value="MEETING_ROOM">Salle de réunion (heure / forfaits)</option>
-                <option value="CONFIDENTIAL">Salle confidentielle (libre-service, non réservable)</option>
-                <option value="PRIVATE_OFFICE">Bureau privé (sur devis, non réservable)</option>
+                <option value="CONFIDENTIAL">Salle confidentielle (libre-service)</option>
+                <option value="PRIVATE_OFFICE">Bureau privé (½-journée / journée, tarif de l'espace)</option>
               </select>
             </div>
             <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 14 }}>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" style={{ width: 'auto' }} checked={form.exclusive} onChange={set('exclusive')} />
+                <input type="checkbox" style={{ width: 'auto' }} checked={form.online_bookable} onChange={set('online_bookable')} />
+                Réservable en ligne
+              </label>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="checkbox" style={{ width: 'auto' }} checked={form.quote_available} onChange={set('quote_available')} />
+                Devis sur demande
+              </label>
+            </div>
+            <p className="muted" style={{ fontSize: 13, margin: '6px 0 0' }}>
+              Les deux modes sont cumulables (ex. bureau privé : ponctuel en ligne et longue durée sur devis).
+            </p>
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 14 }}>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="checkbox" style={{ width: 'auto' }} checked={form.exclusive} disabled={form.category === 'PRIVATE_OFFICE'} onChange={set('exclusive')} />
                 Réservation exclusive (bloque toute la salle, tarif forfait)
               </label>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', opacity: form.exclusive ? 0.5 : 1 }}>
@@ -123,6 +156,10 @@ export default function AdminSpaces() {
                 <input type="number" min="0" step="0.01" placeholder="ex. 20" value={form.price_day} onChange={set('price_day')} />
               </div>
             </div>
+            <p className="muted" style={{ fontSize: 13, margin: '0 0 8px' }}>
+              La réservation en ligne d'un bureau privé exige un tarif demi-journée et/ou journée renseigné (supérieur à 0) :
+              à défaut, l'espace reste seulement sur devis. Seuls ces deux forfaits sont acceptés pour un bureau privé.
+            </p>
             <SpacePhotoField
               photo={form.photo}
               onChange={(photo) => setForm((f) => ({ ...f, photo }))}
@@ -154,7 +191,7 @@ export default function AdminSpaces() {
         <div className="card">
           <h2>Espaces existants</h2>
           <table>
-            <thead><tr><th>#</th><th>Nom</th><th>Type</th><th>Cap.</th><th>€/h · ½j · j</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Nom</th><th>Type</th><th>Cap.</th><th>Modes</th><th>€/h · ½j · j</th><th></th></tr></thead>
             <tbody>
               {spaces.map((s) => (
                 <tr key={s.id} style={{ opacity: s.active ? 1 : 0.5 }}>
@@ -162,6 +199,12 @@ export default function AdminSpaces() {
                   <td><span className="dot" style={{ background: s.color }} />{s.name}</td>
                   <td>{s.exclusive ? 'Exclusive' : s.privatizable ? 'Focus' : 'Open-space'}</td>
                   <td>{s.capacity}</td>
+                  <td>
+                    {s.online_bookable ? <span className="badge green">En ligne</span> : null}
+                    {s.online_bookable && s.quote_available ? ' ' : null}
+                    {s.quote_available ? <span className="badge grey">Devis</span> : null}
+                    {!s.online_bookable && !s.quote_available ? <span className="muted">Aucun</span> : null}
+                  </td>
                   <td className="muted seats">
                     {centsToEur(s.price_per_hour_cents) || '-'}€
                     {' · '}{s.price_half_day_cents != null ? `${s.price_half_day_cents / 100}€` : '-'}

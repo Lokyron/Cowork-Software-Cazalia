@@ -189,7 +189,7 @@ test('escapeHtml et headerSafe couvrent les caractères significatifs', () => {
 test('l’export CSV neutralise les cellules interprétables comme formules', () => {
   createProspect({
     first_name: `=cmd|'/c calc'!A1`, last_name: '+SUM(A1)', email: 'formule@test.local',
-    phone: '0612345678', consent: true,
+    phone: '0612345678', consent: true, subject: 'Autre demande',
   });
   const csv = exportCsv();
   const ligne = csv.split('\r\n').find((l) => l.includes('formule@test.local'));

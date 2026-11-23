@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { api, msg } from '../api.js';
 import { parisLocalToUtcIso } from '../time.js';
 import TimeSelect from './TimeSelect.jsx';
+import { ResendVerification } from './EmailVerifyBanner.jsx';
+import { spaceModes, tarifTypesOffered } from '../price.js';
 
 // Panier de réservation multi-espaces réutilisable (client ou admin).
 //   adapter : { list(), add(payload), remove(id), checkout() }.
@@ -47,7 +49,9 @@ function formuleTimes(id, date) {
   return null; // 'heure' : plage libre
 }
 
-export default function CartBuilder({ adapter, admin = false, onDone }) {
+// `blocked` : adresse e-mail non confirmée (membre). Le serveur refuse de toute façon
+// (EMAIL_NON_VERIFIE) ; on désactive ici l'ajout et la validation pour le dire avant l'échec.
+export default function CartBuilder({ adapter, admin = false, blocked = false, onDone }) {
   const [spaces, setSpaces] = useState([]);
   const [cart, setCart] = useState({ holds: [], total: 0 });
   const [spaceId, setSpaceId] = useState('');
@@ -70,11 +74,12 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
   const [promoBusy, setPromoBusy] = useState(false);
 
   const reload = () => adapter.list().then(setCart).catch(() => {});
-  // Seuls l'Open Space et la Salle de réunion sont réservables en ligne : la salle
-  // confidentielle (libre-service) et le bureau privé (sur devis) sont exclus.
+  // Seuls les espaces réservables en ligne ET tarifables sont proposés (colonne
+  // `online_bookable` ; un bureau privé sans tarif saisi est exclu, le serveur
+  // le refuserait). La salle confidentielle (libre-service) est exclue.
   useEffect(() => {
     api.get('/spaces')
-      .then((r) => setSpaces((r.spaces || []).filter((s) => s.category === 'OPEN_SPACE' || s.category === 'MEETING_ROOM')))
+      .then((r) => setSpaces((r.spaces || []).filter((s) => spaceModes(s).online)))
       .catch(() => {});
   }, []);
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [adapter.key]);
@@ -92,10 +97,13 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
   const space = spaces.find((s) => String(s.id) === String(spaceId));
   useEffect(() => { setSeats(1); }, [spaceId]);
 
-  // Open Space : forfaits demi-journée / journée uniquement (pas d'horaire).
-  const isOpenSpace = space?.category === 'OPEN_SPACE';
-  const availFormules = isOpenSpace ? FORMULES.filter((f) => f.id !== 'heure') : FORMULES;
-  useEffect(() => { if (isOpenSpace && formule === 'heure') setFormule('matin'); }, [isOpenSpace, formule]);
+  // Formules offertes selon l'espace (miroir du serveur) : Open Space et bureau
+  // privé = demi-journée / journée uniquement (pas d'horaire).
+  const offered = space ? tarifTypesOffered(space) : null;
+  const availFormules = offered ? FORMULES.filter((f) => offered.includes(f.tarif)) : FORMULES;
+  useEffect(() => {
+    if (availFormules.length > 0 && !availFormules.some((f) => f.id === formule)) setFormule(availFormules[0].id);
+  }, [space, formule]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tarifType = FORMULES.find((f) => f.id === formule)?.tarif || 'heure';
   // Créneau effectif : plage libre à l'heure, sinon fenêtre du forfait choisi.
@@ -167,7 +175,7 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
   };
 
   const total = cart.total || 0;
-  const canAdd = space && iso && iso.valid && !busy && (admin || !full);
+  const canAdd = space && iso && iso.valid && !busy && !blocked && (admin || !full);
 
   return (
     <div className="cart-grid">
@@ -334,9 +342,15 @@ export default function CartBuilder({ adapter, admin = false, onDone }) {
                 </label>
               </div>
             )}
+            {blocked && (
+              <div className="alert error" style={{ marginTop: 12 }}>
+                Validez votre adresse e-mail pour finaliser votre réservation.<br />
+                <ResendVerification />
+              </div>
+            )}
             <button
               style={{ marginTop: 12, width: '100%' }}
-              disabled={busy || (!admin && !cgvAccepted)}
+              disabled={busy || blocked || (!admin && !cgvAccepted)}
               onClick={doCheckout}
             >
               {admin

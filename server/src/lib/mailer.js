@@ -186,7 +186,7 @@ const countSentTodayStmt = db.prepare(
  * @returns {'critical' | 'marketing' | 'transactional'}
  */
 function mailKind(templateCode, marketing) {
-  if (templateCode === 'password_reset') return 'critical';
+  if (templateCode === 'password_reset' || templateCode === 'email_verification') return 'critical';
   if (marketing || templateCode === 'manual') return 'marketing';
   return 'transactional';
 }
@@ -325,7 +325,7 @@ const getUserStmt = db.prepare(`SELECT id, email, display_name, first_name, noti
 
 // Détermine si l'utilisateur accepte cette catégorie. Le reset part toujours.
 function allowed(user, code, marketing) {
-  if (code === 'password_reset') return true;
+  if (code === 'password_reset' || code === 'email_verification') return true;
   if (marketing || code === 'manual') return !!user.notify_marketing;
   return !!user.notify_booking; // transactionnels réservation
 }
@@ -453,6 +453,19 @@ export async function sendRefundRequestToAdmin(reservationId, { amount } = {}) {
 }
 
 // ── Compat / réutilisés par les routes existantes ────────────────────────────
+/**
+ * Envoie le lien de vérification d'adresse e-mail. Message de service : exempté des
+ * préférences de notification et du plafond quotidien (cf. `mailKind`, `allowed`).
+ *
+ * @param {{to: string, displayName: string, verifyUrl: string, userId: number}} p
+ */
+export async function sendEmailVerificationEmail({ to, displayName, verifyUrl, userId }) {
+  const vars = { first_name: (displayName || '').split(' ')[0] || displayName, verify_link: verifyUrl, client_name: displayName };
+  if (userId) return sendToUser({ userId, code: 'email_verification', vars });
+  const rendered = renderTemplate('email_verification', vars);
+  return sendMail({ to, subject: rendered.subject, html: rendered.html, templateCode: 'email_verification' });
+}
+
 export async function sendPasswordResetEmail({ to, displayName, resetUrl, userId }) {
   const vars = { first_name: (displayName || '').split(' ')[0] || displayName, reset_link: resetUrl, client_name: displayName };
   if (userId) return sendToUser({ userId, code: 'password_reset', vars });

@@ -99,6 +99,12 @@ export default function Rejoindre() {
             les formules à l'heure et à la demi-journée n'y donnent pas droit.
           </p>
 
+          <p className="muted" style={{ fontSize: 14, textAlign: 'left', lineHeight: 1.6 }}>
+            ✉️ <strong>Confirmez votre adresse e-mail</strong>&nbsp;: un message vient de vous être envoyé
+            (pensez à vérifier vos courriers indésirables). Vous pouvez parcourir votre espace dès maintenant,
+            mais la réservation d'un créneau n'est possible qu'une fois votre adresse confirmée.
+          </p>
+
           <button type="button" style={{ width: '100%', marginTop: 8 }} onClick={() => navigate('/mon-espace')}>
             Accéder à mon espace
           </button>

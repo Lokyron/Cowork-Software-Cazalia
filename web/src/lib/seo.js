@@ -97,6 +97,7 @@ export const PAGES = [
 export const PRIVATE_PATHS = [
   '/login',
   '/reset-password',
+  '/verifier-email',
   '/mot-de-passe-oublie',
   '/reserver',
   '/mon-espace',

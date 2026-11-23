@@ -2,14 +2,17 @@ import { db } from '../db.js';
 import { config } from '../config.js';
 import { hashPassword } from '../auth.js';
 import { fail } from './errors.js';
+import { markUnverified } from './emailVerification.js';
 
 const getById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 const emailTaken = db.prepare(`SELECT id FROM users WHERE email = ? AND id <> ?`);
 const countAdmins = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE role = 'admin'`);
 const emailExists = db.prepare(`SELECT id FROM users WHERE email = ?`);
 const insertStmt = db.prepare(
-  `INSERT INTO users (email, display_name, first_name, last_name, phone, password_hash, role, must_change_password)
-   VALUES (@email, @display_name, @first_name, @last_name, @phone, @password_hash, @role, 1)`
+  // Compte créé par la gestionnaire : elle saisit l'adresse d'un membre qu'elle connaît,
+  // elle est donc considérée comme vérifiée (email_verified = 1).
+  `INSERT INTO users (email, display_name, first_name, last_name, phone, password_hash, role, must_change_password, email_verified)
+   VALUES (@email, @display_name, @first_name, @last_name, @phone, @password_hash, @role, 1, 1)`
 );
 const updateStmt = db.prepare(
   `UPDATE users SET
@@ -46,7 +49,7 @@ export function getProfile(userId) {
     display_name: u.display_name, company_name: u.company_name, vat_number: u.vat_number,
     billing_address: u.billing_address,
     notify_booking: !!u.notify_booking, notify_marketing: !!u.notify_marketing,
-    role: u.role, totp_enabled: !!u.totp_enabled,
+    role: u.role, totp_enabled: !!u.totp_enabled, email_verified: !!u.email_verified,
   };
 }
 
@@ -71,6 +74,10 @@ export function updateOwnProfile(userId, body) {
   const phone = String(body?.phone ?? u.phone ?? '').trim();
   if (!firstName || !lastName || !email || !phone) throw fail('CHAMPS_INVALIDES');
   if (emailTaken.get(email, userId)) throw fail('EMAIL_DEJA_PRIS');
+  // Changement réel d'adresse : elle doit être reconfirmée (sinon la règle de blocage des
+  // réservations se contournerait en deux clics). Enregistrer le profil sans toucher
+  // à l'e-mail ne change rien.
+  const emailChanged = email !== String(u.email || '').toLowerCase();
   updateProfileStmt.run({
     id: userId, first_name: firstName, last_name: lastName, email, phone,
     display_name: `${firstName} ${lastName}`,
@@ -80,6 +87,7 @@ export function updateOwnProfile(userId, body) {
     notify_booking: body?.notify_booking != null ? (body.notify_booking ? 1 : 0) : u.notify_booking,
     notify_marketing: body?.notify_marketing != null ? (body.notify_marketing ? 1 : 0) : u.notify_marketing,
   });
+  if (emailChanged) markUnverified(userId);
   return getProfile(userId);
 }
 
@@ -98,6 +106,7 @@ export function publicUser(u) {
     phone: u.phone,
     role: u.role,
     must_change_password: !!u.must_change_password,
+    email_verified: !!u.email_verified,
   };
 }
 
@@ -123,6 +132,7 @@ const deleteTx = db.transaction((userId) => {
   db.prepare(`DELETE FROM claims WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM password_resets WHERE user_id = ?`).run(userId);
+  db.prepare(`DELETE FROM email_verifications WHERE user_id = ?`).run(userId);
   db.prepare(`DELETE FROM reservations WHERE user_id = ?`).run(userId);
 
   // 3. Le compte lui-même (plus aucune ligne ne le référence).

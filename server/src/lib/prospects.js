@@ -10,6 +10,19 @@ function bizErr(code) {
 export const PROSPECT_STATUSES = ['nouveau', 'contacte', 'journee_offerte', 'converti', 'pas_interesse'];
 export const PROSPECT_ACTIVITIES = ['independant', 'salarie_teletravail', 'etudiant', 'entreprise', 'autre'];
 
+// Sujets proposés dans le formulaire de contact / devis (liste fermée).
+// ⚠ Cette liste est dupliquée côté front (`LEAD_SUBJECTS` dans
+// web/src/components/ContactModal.jsx) : le dossier `web/` est construit à part et
+// ne peut pas importer ce module. Les deux listes doivent rester synchronisées.
+export const LEAD_SUBJECTS = [
+  'Informations sur les espaces',
+  'Tarifs et offres',
+  'Réservation et disponibilités',
+  'Location du bureau privatif',
+  'Location de la salle de réunion',
+  'Autre demande',
+];
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
@@ -19,8 +32,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  *
  * @param {Record<string, unknown>} [input] Corps de la requête publique.
  * @returns {{first_name: string, last_name: string, email: string, phone: string,
- *            activity: string | null, consent: 1}} Enregistrement prêt à insérer.
- * @throws {Error} `CHAMPS_INVALIDES`, `EMAIL_INVALIDE`, `TELEPHONE_INVALIDE`, `CONSENTEMENT_REQUIS`.
+ *            activity: string | null, subject: string, consent: 1}} Enregistrement prêt à insérer.
+ * @throws {Error} `CHAMPS_INVALIDES`, `EMAIL_INVALIDE`, `TELEPHONE_INVALIDE`, `SUJET_INVALIDE`, `CONSENTEMENT_REQUIS`.
  */
 function sanitize(input = {}) {
   const first_name = String(input.first_name ?? '').trim();
@@ -42,14 +55,17 @@ function sanitize(input = {}) {
   } else {
     activity = null;
   }
+  // Sujet obligatoire, strictement dans la liste fermée (jamais de texte libre en base).
+  const subject = typeof input.subject === 'string' ? input.subject.trim() : '';
+  if (!LEAD_SUBJECTS.includes(subject)) throw bizErr('SUJET_INVALIDE');
   if (!consent) throw bizErr('CONSENTEMENT_REQUIS');
 
-  return { first_name, last_name, email, phone, activity, consent: 1 };
+  return { first_name, last_name, email, phone, activity, subject, consent: 1 };
 }
 
 const insertStmt = db.prepare(
-  `INSERT INTO prospects (first_name, last_name, email, phone, activity, consent, source)
-   VALUES (@first_name, @last_name, @email, @phone, @activity, @consent, @source)`
+  `INSERT INTO prospects (first_name, last_name, email, phone, activity, subject, consent, source)
+   VALUES (@first_name, @last_name, @email, @phone, @activity, @subject, @consent, @source)`
 );
 
 /**
@@ -87,7 +103,7 @@ export function listProspects({ q, status } = {}) {
     params.q = `%${q.trim()}%`;
   }
   const sql =
-    `SELECT id, first_name, last_name, email, phone, activity, consent, status, note, source, created_at
+    `SELECT id, first_name, last_name, email, phone, activity, consent, status, note, source, subject, created_at
      FROM prospects ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
      ORDER BY created_at DESC`;
   return db.prepare(sql).all(params);
@@ -170,10 +186,10 @@ function defuseFormula(value) {
  */
 export function exportCsv() {
   const rows = db
-    .prepare(`SELECT first_name, last_name, email, phone, activity, status, note, source, created_at
+    .prepare(`SELECT first_name, last_name, email, phone, activity, status, note, source, subject, created_at
               FROM prospects ORDER BY created_at DESC`)
     .all();
-  const headers = ['Prénom', 'Nom', 'Email', 'Téléphone', 'Activité', 'Statut', 'Note', 'Source', 'Reçu le'];
+  const headers = ['Prénom', 'Nom', 'Email', 'Téléphone', 'Activité', 'Statut', 'Note', 'Source', 'Sujet', 'Reçu le'];
   const esc = (v) => {
     const s = defuseFormula(v == null ? '' : String(v));
     return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -181,7 +197,7 @@ export function exportCsv() {
   const lines = [headers.join(';')];
   for (const r of rows) {
     lines.push(
-      [r.first_name, r.last_name, r.email, r.phone, r.activity || '', r.status, r.note || '', r.source || '', r.created_at]
+      [r.first_name, r.last_name, r.email, r.phone, r.activity || '', r.status, r.note || '', r.source || '', r.subject || '', r.created_at]
         .map(esc)
         .join(';')
     );

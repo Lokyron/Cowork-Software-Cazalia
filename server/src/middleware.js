@@ -94,6 +94,10 @@ const CODE_TO_STATUS = {
   TIER_INVALIDE: 400,
   DEJA_ABONNE: 409,
   AUCUN_ABONNEMENT: 409,
+  EMAIL_NON_VERIFIE: 403,
+  // Indisponibilité du service d'envoi (pas une faute de l'utilisateur).
+  EMAIL_ENVOI_IMPOSSIBLE: 503,
+  SUJET_INVALIDE: 400,
 };
 
 /**

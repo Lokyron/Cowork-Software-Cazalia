@@ -3,6 +3,7 @@ import { api, msg } from '../api.js';
 import { parisLocalToUtcIso } from '../time.js';
 import TimeSelect from './TimeSelect.jsx';
 import CreateMemberModal from './CreateMemberModal.jsx';
+import { spaceModes } from '../price.js';
 
 // Modale de réservation depuis le planning.
 //  - mode 'admin'  : choix du client (autocomplete + création rapide) + droits bypass.
@@ -35,7 +36,7 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
   useEffect(() => {
     api.get('/spaces').then((r) => {
       const all = r.spaces || [];
-      setSpaces(isAdmin ? all : all.filter((s) => s.category === 'OPEN_SPACE' || s.category === 'MEETING_ROOM'));
+      setSpaces(isAdmin ? all : all.filter((s) => spaceModes(s).online));
     }).catch(() => {});
   }, [isAdmin]);
   useEffect(() => { if (isAdmin) api.get('/admin/members').then((r) => setMembers(r.members)).catch(() => {}); }, [isAdmin]);
@@ -69,9 +70,9 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
   const customCents = customCost !== '' ? Math.round(Number(customCost) * 100) : null;
   const effectiveCents = isAdmin && customCents != null ? customCents : costCents;
   const full = avail && avail.seats_left < seats;
-  // Open Space : réservation par forfait (demi-journée / journée) depuis la page
-  // Réserver - ce modal horaire ne le gère pas côté client.
-  const openSpaceBlocked = !isAdmin && space?.category === 'OPEN_SPACE';
+  // Open Space et bureau privé : réservation par forfait (demi-journée / journée)
+  // depuis la page Réserver - ce modal horaire ne le gère pas côté client.
+  const openSpaceBlocked = !isAdmin && (space?.category === 'OPEN_SPACE' || space?.category === 'PRIVATE_OFFICE');
 
   const canSubmit = () => {
     if (!space || !iso || !iso.valid || busy) return false;

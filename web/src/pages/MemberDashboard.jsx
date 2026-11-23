@@ -8,6 +8,7 @@ import AccessPinBlock from '../components/AccessPinBlock.jsx';
 import GoogleCalendarLink from '../components/GoogleCalendarLink.jsx';
 import CartSidebar from '../components/CartSidebar.jsx';
 import ReservationNotice from '../components/ReservationNotice.jsx';
+import CancelConfirm from '../components/CancelConfirm.jsx';
 
 const dFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' });
 const tFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hour12: false });
@@ -251,8 +252,14 @@ export default function MemberDashboard() {
     return { current: inProgress, next: fut[0] || null, upcoming: fut.slice(1), past: pastOnes };
   }, [reservations, now]);
 
+  // `confirming` = id de la réservation dont l'annulation attend confirmation ;
+  // `cancelBusy` verrouille les boutons pendant l'appel (un clic = un appel).
+  const [confirming, setConfirming] = useState(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
   const cancel = async (id) => {
+    if (cancelBusy) return;
     setFeedback(null);
+    setCancelBusy(true);
     try {
       const r = await api.del(`/reservations/${id}`);
       setFeedback({
@@ -263,6 +270,7 @@ export default function MemberDashboard() {
       });
       load().catch(() => {});
     } catch (err) { setFeedback({ type: 'error', text: msg(err.code) }); }
+    finally { setCancelBusy(false); setConfirming(null); }
   };
 
   if (loading) return <p className="muted">Chargement…</p>;
@@ -331,9 +339,13 @@ export default function MemberDashboard() {
             </div>
             <div className="hero-actions">
               <GoogleCalendarLink reservation={next} />
-              <button className="outline small" onClick={() => cancel(next.id)}>Annuler</button>
+              <button className="outline small" onClick={() => setConfirming(next.id)} disabled={cancelBusy}>Annuler</button>
             </div>
           </div>
+
+          {confirming === next.id && (
+            <CancelConfirm reservation={next} busy={cancelBusy} onConfirm={() => cancel(next.id)} onKeep={() => setConfirming(null)} />
+          )}
 
           <AccessPinBlock reservation={next} />
           <VoucherBlock reservation={next} />
@@ -359,15 +371,20 @@ export default function MemberDashboard() {
           {upcoming.length === 0 && <p className="muted">Rien d'autre de prévu.</p>}
           <div className="stack">
             {upcoming.map((r) => (
-              <div key={r.id} className="flex-between" style={{ borderBottom: '1px solid var(--line)', paddingBottom: 8 }}>
-                <div>
-                  <div><span className="dot" style={{ background: r.space_color }} /><strong>{r.space_name}</strong></div>
-                  <div className="muted seats">{fmtDateTime(r.start_at)} → {fmtDateTime(r.end_at)} · {eur(r.price_cents)}</div>
+              <div key={r.id} style={{ borderBottom: '1px solid var(--line)', paddingBottom: 8 }}>
+                <div className="flex-between">
+                  <div>
+                    <div><span className="dot" style={{ background: r.space_color }} /><strong>{r.space_name}</strong></div>
+                    <div className="muted seats">{fmtDateTime(r.start_at)} → {fmtDateTime(r.end_at)} · {eur(r.price_cents)}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                    <GoogleCalendarLink reservation={r} />
+                    <button className="outline small" onClick={() => setConfirming(r.id)} disabled={cancelBusy}>Annuler</button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                  <GoogleCalendarLink reservation={r} />
-                  <button className="outline small" onClick={() => cancel(r.id)}>Annuler</button>
-                </div>
+                {confirming === r.id && (
+                  <CancelConfirm reservation={r} busy={cancelBusy} onConfirm={() => cancel(r.id)} onKeep={() => setConfirming(null)} />
+                )}
               </div>
             ))}
           </div>

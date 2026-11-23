@@ -24,6 +24,7 @@ import { defaultSpaceContent } from '../lib/spaceContent.js';
 import { safeName, purgeSpaceFrame } from '../lib/media.js';
 import { getDashboardStats } from '../lib/dashboard.js';
 import { securityEvent } from '../lib/audit.js';
+import { adminMarkVerified } from '../lib/emailVerification.js';
 import {
   listProspects,
   countsByStatus,
@@ -53,10 +54,10 @@ adminRouter.get('/dashboard', (_req, res) => {
 
 // ── Espaces : CRUD (zones et salles, une seule table) ────────────────────────
 const insertSpace = db.prepare(
-  `INSERT INTO spaces (name, kind, category, capacity, exclusive, privatizable, credits_per_hour,
+  `INSERT INTO spaces (name, kind, category, online_bookable, quote_available, capacity, exclusive, privatizable, credits_per_hour,
                        price_per_hour_cents, price_half_day_cents, price_day_cents,
                        color, description, tagline, amenities, photo, position, active)
-   VALUES (@name, @kind, @category, @capacity, @exclusive, @privatizable, @credits_per_hour,
+   VALUES (@name, @kind, @category, @online_bookable, @quote_available, @capacity, @exclusive, @privatizable, @credits_per_hour,
            @price_per_hour_cents, @price_half_day_cents, @price_day_cents,
            @color, @description, @tagline, @amenities, @photo, @position, @active)`
 );
@@ -88,17 +89,23 @@ adminRouter.post('/spaces', (req, res) => {
   try {
     const b = req.body || {};
     const kind = b.kind === 'room' ? 'room' : 'zone';
-    const exclusive = b.exclusive ? 1 : 0;
+    const category = normCategory(b.category);
+    // Un bureau privé est une pièce unique qui se réserve en entier au forfait :
+    // on force « exclusif » et on interdit la privatisation, quelles que soient
+    // les valeurs reçues (sinon : sur-booking et tarif multiplié par place).
+    const exclusive = category === 'PRIVATE_OFFICE' ? 1 : (b.exclusive ? 1 : 0);
     // Exclusif : la capacité = nb d'occupants (info). Inventaire : nb de places.
     const capacity = Math.max(1, Number(b.capacity) || 1);
     const defaults = defaultSpaceContent(kind);
     const space = {
       name: String(b.name || '').trim(),
       kind,
-      category: normCategory(b.category),
+      category,
+      online_bookable: b.online_bookable ? 1 : 0,
+      quote_available: b.quote_available ? 1 : 0,
       capacity,
       exclusive,
-      privatizable: !exclusive && b.privatizable ? 1 : 0,
+      privatizable: category !== 'PRIVATE_OFFICE' && !exclusive && b.privatizable ? 1 : 0,
       price_per_hour_cents: eurToCents(b.price_per_hour) ?? 0,
       price_half_day_cents: eurToCents(b.price_half_day),
       price_day_cents: eurToCents(b.price_day),
@@ -129,11 +136,16 @@ adminRouter.put('/spaces/:id', (req, res) => {
   const b = req.body || {};
   const kind = b.kind === 'room' || b.kind === 'zone' ? b.kind : existing.kind;
   const capacity = Math.max(1, Number(b.capacity ?? existing.capacity) || 1);
-  const exclusive = b.exclusive != null ? (b.exclusive ? 1 : 0) : existing.exclusive;
+  const category = b.category !== undefined ? normCategory(b.category) : (existing.category ?? null);
+  // Bureau privé : pièce unique réservée en entier (voir POST). Forcé à chaque
+  // mise à jour, y compris quand la catégorie ne change pas.
+  const exclusive = category === 'PRIVATE_OFFICE' ? 1 : (b.exclusive != null ? (b.exclusive ? 1 : 0) : existing.exclusive);
   const next = {
     name: b.name != null ? String(b.name).trim() : existing.name,
     kind,
-    category: b.category !== undefined ? normCategory(b.category) : (existing.category ?? null),
+    category,
+    online_bookable: b.online_bookable != null ? (b.online_bookable ? 1 : 0) : existing.online_bookable,
+    quote_available: b.quote_available != null ? (b.quote_available ? 1 : 0) : existing.quote_available,
     capacity,
     exclusive,
     privatizable: exclusive ? 0 : (b.privatizable != null ? (b.privatizable ? 1 : 0) : existing.privatizable),
@@ -150,7 +162,7 @@ adminRouter.put('/spaces/:id', (req, res) => {
     active: b.active != null ? (b.active ? 1 : 0) : existing.active,
   };
   db.prepare(
-    `UPDATE spaces SET name=@name, kind=@kind, category=@category, capacity=@capacity, exclusive=@exclusive, privatizable=@privatizable,
+    `UPDATE spaces SET name=@name, kind=@kind, category=@category, online_bookable=@online_bookable, quote_available=@quote_available, capacity=@capacity, exclusive=@exclusive, privatizable=@privatizable,
         credits_per_hour=@credits_per_hour,
         price_per_hour_cents=@price_per_hour_cents, price_half_day_cents=@price_half_day_cents, price_day_cents=@price_day_cents,
         color=@color,
@@ -297,12 +309,12 @@ adminRouter.get('/members/:id', (req, res) => {
   const id = Number(req.params.id);
   const member = db
     .prepare(
-      `SELECT id, email, display_name, first_name, last_name, phone, role, created_at
+      `SELECT id, email, display_name, first_name, last_name, phone, role, created_at, email_verified
          FROM users WHERE id = ?`
     )
     .get(id);
   if (!member) return res.status(404).json({ error: 'UTILISATEUR_INTROUVABLE' });
-  res.json({ member });
+  res.json({ member: { ...member, email_verified: !!member.email_verified } });
 });
 
 // Création d'un compte par l'admin (mot de passe par défaut + changement forcé).
@@ -386,6 +398,20 @@ adminRouter.post('/users/:id/reset-link', async (req, res) => {
       // Lien renvoyé uniquement quand l'email n'a pas pu partir (SMTP absent).
       reset_url: mail.sent ? undefined : resetUrl,
     });
+  } catch (err) {
+    sendBusinessError(res, err);
+  }
+});
+
+// ── Marquer l'adresse d'un membre comme vérifiée ─────────────────────────────
+// Recours de la gestionnaire quand le courrier de vérification ne peut pas partir
+// (SMTP en panne, plafond atteint) : sans cela le membre resterait bloqué.
+adminRouter.post('/users/:id/verify-email', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const user = adminMarkVerified(id);
+    securityEvent('admin_email_verifie', { adminId: req.user.id, cibleId: id, ip: req.ip });
+    res.json({ ok: true, user });
   } catch (err) {
     sendBusinessError(res, err);
   }

@@ -57,6 +57,15 @@ export default function MemberDetail({ memberId, onClose, onChanged, onBook }) {
     } catch (err) { flash('error', msg(err.code)); }
   };
 
+  const markVerified = async () => {
+    setFeedback(null);
+    try {
+      await api.post(`/admin/users/${memberId}/verify-email`);
+      flash('ok', 'Adresse marquée comme vérifiée : le membre peut réserver.');
+      refresh();
+    } catch (err) { flash('error', msg(err.code)); }
+  };
+
   if (!data) {
     return (
       <div className="modal-overlay" onClick={onClose}>
@@ -76,7 +85,12 @@ export default function MemberDetail({ memberId, onClose, onChanged, onBook }) {
           <button className="ghost" style={{ color: 'var(--ink)', border: '1px solid var(--line)' }} onClick={onClose}>✕</button>
         </div>
         <div className="flex-between" style={{ marginBottom: 16, gap: 12 }}>
-          <p className="subtitle" style={{ margin: 0 }}>{m.email}</p>
+          <p className="subtitle" style={{ margin: 0 }}>
+            {m.email}{' '}
+            {m.role !== 'admin' && (m.email_verified
+              ? <span className="badge green">adresse vérifiée</span>
+              : <span className="badge grey">adresse non vérifiée</span>)}
+          </p>
           {onBook && <button className="small" onClick={() => onBook(m)}>＋ Réserver un créneau</button>}
         </div>
 
@@ -102,6 +116,18 @@ export default function MemberDetail({ memberId, onClose, onChanged, onBook }) {
           </div>
           <button type="submit" style={{ marginTop: 14 }}>Enregistrer les informations</button>
         </form>
+
+        {/* Vérification de l'adresse : visible uniquement tant qu'elle n'est pas confirmée */}
+        {m.role !== 'admin' && !m.email_verified && (
+          <div className="card" style={{ background: 'rgba(255,255,255,0.5)', marginBottom: 14 }}>
+            <h2>Adresse e-mail</h2>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Cette adresse n’a pas encore été confirmée : le membre ne peut pas réserver. Si le courrier de
+              confirmation ne lui parvient pas, vous pouvez la valider vous-même après vous être assuré qu’elle est correcte.
+            </p>
+            <button className="outline" onClick={markVerified}>Marquer l’adresse comme vérifiée</button>
+          </div>
+        )}
 
         {/* Mot de passe */}
         <div className="card" style={{ background: 'rgba(255,255,255,0.5)', marginBottom: 14 }}>

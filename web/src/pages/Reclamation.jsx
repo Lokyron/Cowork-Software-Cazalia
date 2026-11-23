@@ -84,14 +84,17 @@ export default function Reclamation() {
 
       <h2>Rappel de la politique d'annulation</h2>
       <ul>
-        <li><strong>Plus de 48&nbsp;h avant</strong> le créneau&nbsp;: remboursement intégral.</li>
-        <li><strong>Entre 48&nbsp;h et 24&nbsp;h avant</strong>&nbsp;: remboursement (sauf salle
-          privatisée).</li>
-        <li><strong>Moins de 24&nbsp;h avant ou absence (no-show)</strong>&nbsp;: montant dû.</li>
+        <li><strong>Annulation plus de 24&nbsp;h avant</strong> le début du créneau&nbsp;: remboursement
+          intégral.</li>
+        <li><strong>Moins de 24&nbsp;h avant ou absence (no-show)</strong>&nbsp;: aucun remboursement.
+          Il n'existe pas de remboursement partiel.</li>
+        <li><strong>Réservation incluse dans un abonnement</strong>&nbsp;: pas de remboursement&nbsp;; le
+          jour de quota est restitué si le créneau est encore à venir.</li>
         <li><strong>Annulation par CAZALIA</strong>&nbsp;: remboursement intégral.</li>
       </ul>
       <p className="muted" style={{ fontSize: 14 }}>
-        Remboursement en numéraire (paiement en ligne) traité via Stripe sous 5 à 10 jours ouvrés.
+        Seules les réservations ponctuelles réglées à l'unité sont remboursables. Le remboursement est
+        traité par la gestionnaire puis recrédité via Stripe sous quelques jours ouvrés.
       </p>
 
       <h2>Votre demande</h2>

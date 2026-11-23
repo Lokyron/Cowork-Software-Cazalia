@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, msg } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import DevisModal from '../components/DevisModal.jsx';
+import ContactModal from '../components/ContactModal.jsx';
 import PublicHeader from '../components/PublicHeader.jsx';
 import ReservationNotice from '../components/ReservationNotice.jsx';
 
@@ -78,23 +78,6 @@ const ponctuelFrom = (t) => [
   },
 ];
 
-// Tableau comparatif. Colonnes : Sans abonnement / Essentiel / Confort / Premium.
-const compareFrom = (t) => [
-  ['Open Space',
-    `${eurc(t.open_space.demi_journee)} ½j · ${eurc(t.open_space.journee)} j`,
-    `${t.essentiel_quota_days} j/mois inclus`, 'Illimité', 'Illimité'],
-  ['Salle de réunion',
-    `${eurc(t.meeting_room.heure)}/h · ${eurc(t.meeting_room.demi_journee)} ½j · ${eurc(t.meeting_room.journee)} j`,
-    'Tarif standard', `−${Math.round((1 - t.confort_meeting_discount) * 100)} %`, 'Illimitée incluse'],
-  // La même longue phrase répétée quatre fois ne se lisait plus : la mention
-  // part en note sous le tableau, les cases disent simplement l'essentiel.
-  ['Salle confidentielle *', 'Incluse', 'Incluse', 'Incluse', 'Incluse'],
-  ['Abonnement mensuel', '—',
-    eurc(t.subscriptions.ESSENTIEL), eurc(t.subscriptions.CONFORT), eurc(t.subscriptions.PREMIUM)],
-];
-
-const COLS = ['Sans abonnement', 'Essentiel', 'Confort', 'Premium'];
-
 // Univers du sélecteur segmenté. L'ordre fixe l'ordre d'affichage et la position
 // du surligné glissant. « Abonnement » est au centre et affiché par défaut.
 const SEGMENTS = [
@@ -149,7 +132,6 @@ export default function Pricing() {
 
   const plans = plansFrom(tarifs);
   const ponctuel = ponctuelFrom(tarifs);
-  const compare = compareFrom(tarifs);
   const goReserver = () => navigate(user ? '/reserver' : '/login');
 
   return (
@@ -270,63 +252,23 @@ export default function Pricing() {
       </div>
       )}
 
-      {/* ── Tableau comparatif (toujours visible) ─────────────────────────── */}
-      <div className="card" style={{ marginTop: 20 }}>
-        <h3 style={{ marginTop: 0 }}>Comparatif complet</h3>
-        <div className="table-wrap">
-          <table className="compare-table">
-            <thead>
-              <tr>
-                <th></th>
-                {COLS.map((c) => (
-                  <th key={c} className={c === 'Confort' ? 'col-pop' : undefined}>
-                    {c}
-                    {c === 'Confort' && <span className="compare-pop"> Le plus populaire</span>}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {compare.map((row) => (
-                <tr key={row[0]}>
-                  <th scope="row">{row[0]}</th>
-                  {COLS.map((c, i) => (
-                    <td key={c} data-col={c} className={c === 'Confort' ? 'col-pop' : undefined}>{row[i + 1]}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="compare-cta">
-                <th scope="row"></th>
-                <td data-col="Sans abonnement">
-                  <button className="outline small" onClick={goReserver}>Réserver</button>
-                </td>
-                {plans.map((p) => (
-                  <td key={p.tier} data-col={p.name} className={p.popular ? 'col-pop' : undefined}>
-                    <button
-                      className={p.popular ? 'small' : 'outline small'}
-                      disabled={busyTier === p.tier}
-                      onClick={() => subscribe(p.tier)}
-                    >
-                      {busyTier === p.tier ? '…' : "S'abonner"}
-                    </button>
-                  </td>
-                ))}
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <p className="muted" style={{ fontSize: 13, margin: '12px 0 0' }}>
-          * {CONFIDENTIELLE}, quelle que soit la formule.
-        </p>
-      </div>
+      <p className="muted" style={{ fontSize: 13, margin: '18px 0 0' }}>
+        Salle confidentielle : {CONFIDENTIELLE.charAt(0).toLowerCase() + CONFIDENTIELLE.slice(1)}, quelle que soit la formule.
+      </p>
 
       <p className="muted" style={{ textAlign: 'center', marginTop: 18 }}>
         <Link to="/">← Retour à l'accueil</Link>
       </p>
 
-      {devis && <DevisModal onClose={() => setDevis(false)} />}
+      {devis && (
+        <ContactModal
+          onClose={() => setDevis(false)}
+          initialSubject="Location du bureau privatif"
+          source="devis_bureau_prive"
+          title="Demander un devis"
+          intro="Contrat longue durée personnalisé. Laissez-nous vos coordonnées et décrivez votre besoin."
+        />
+      )}
       </div>
       </main>
     </>

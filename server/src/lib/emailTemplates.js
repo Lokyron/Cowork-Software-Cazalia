@@ -22,6 +22,9 @@ export const TEMPLATE_VARIABLES = [
   ['previous_time', "Ancienne plage horaire (déplacement de réservation)"],
   ['calendar_url', "Lien « Ajouter à Google Agenda »"],
   ['reset_link', 'Lien de réinitialisation du mot de passe'],
+  ['verify_link', "Lien de vérification de l'adresse e-mail"],
+  ['lead_subject', 'Sujet choisi dans le formulaire de contact'],
+  ['lead_message', 'Message saisi dans le formulaire de contact'],
   ['dashboard_url', "Lien vers l'espace client"],
   ['site_name', "Nom de l'établissement"],
 ];
@@ -167,6 +170,31 @@ ${ctaStack('{{dashboard_url}}', 'Voir ma réservation')}`,
 <p style="margin:0 0 16px;line-height:1.6;">Vous avez demandé à réinitialiser votre mot de passe. Ce lien est valable 2&nbsp;heures :</p>
 <p style="margin:0 0 16px;">${btn('{{reset_link}}', 'Choisir un nouveau mot de passe')}</p>
 <p style="margin:0;color:#5b6577;font-size:13px;line-height:1.6;">Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>`,
+  },
+  {
+    code: 'email_verification',
+    label: "Vérification de l'adresse e-mail",
+    subject: 'Confirmez votre adresse e-mail {{site_name}}',
+    body_html: `
+<h1 style="margin:0 0 12px;font-size:22px;">Confirmez votre adresse e-mail</h1>
+<p style="margin:0 0 16px;line-height:1.6;">Bonjour {{first_name}},</p>
+<p style="margin:0 0 16px;line-height:1.6;">Bienvenue chez {{site_name}}. Pour pouvoir réserver un espace, merci de confirmer votre adresse e-mail en cliquant sur le bouton ci-dessous. Ce lien est valable 7&nbsp;jours :</p>
+<p style="margin:0 0 16px;">${btn('{{verify_link}}', 'Confirmer mon adresse')}</p>
+<p style="margin:0;color:#5b6577;font-size:13px;line-height:1.6;">Si vous n'êtes pas à l'origine de cette inscription, ignorez cet e-mail. Vous pouvez demander un nouveau lien depuis votre espace membre.</p>`,
+  },
+  {
+    code: 'lead_ack',
+    label: 'Accusé de réception (formulaire de contact)',
+    subject: 'Nous avons bien reçu votre demande - {{site_name}}',
+    body_html: `
+<h1 style="margin:0 0 12px;font-size:22px;">Merci de nous avoir contactés</h1>
+<p style="margin:0 0 16px;line-height:1.6;">Bonjour {{first_name}},</p>
+<p style="margin:0 0 16px;line-height:1.6;">Nous avons bien pris en compte votre demande et nous vous répondrons dans les meilleurs délais.</p>
+<p style="margin:0 0 6px;line-height:1.6;color:#5b6577;">Pour mémoire, voici votre demande :</p>
+<p style="margin:0 0 6px;line-height:1.6;"><strong>Sujet :</strong> {{lead_subject}}</p>
+<p style="margin:12px 0 4px;line-height:1.6;"><strong>Votre message :</strong></p>
+<p style="margin:0 0 16px;line-height:1.6;white-space:pre-wrap;">{{lead_message}}</p>
+<p style="margin:0;color:#5b6577;font-size:13px;line-height:1.6;">Cet e-mail est un accusé de réception automatique. Si vous n'êtes pas à l'origine de cette demande, vous pouvez l'ignorer.</p>`,
   },
   {
     code: 'manual',

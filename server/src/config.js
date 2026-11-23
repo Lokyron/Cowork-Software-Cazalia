@@ -89,6 +89,10 @@ export const config = {
   },
   // Durée de validité d'un lien de réinitialisation de mot de passe.
   resetTokenTtlMs: Number(process.env.RESET_TOKEN_TTL_MS) || 1000 * 60 * 60 * 2, // 2 h
+  // Durée de validité d'un lien de vérification d'adresse e-mail. Plus longue que
+  // celle du mot de passe : le membre peut cliquer bien plus tard, et un lien
+  // expiré n'est ici qu'un désagrément (il peut en redemander un), pas une faille.
+  emailVerifyTokenTtlMs: Number(process.env.EMAIL_VERIFY_TOKEN_TTL_MS) || 1000 * 60 * 60 * 24 * 7, // 7 j
   // URL publique utilisée pour construire le lien de reset (sinon dérivée de la requête).
   publicBaseUrl: process.env.PUBLIC_BASE_URL || null,
   // Fournisseur d'envoi d'e-mails : 'smtp' (nodemailer) ou 'brevo' (API HTTP).

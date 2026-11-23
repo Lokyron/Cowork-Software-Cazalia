@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
+import { useAuth } from '../auth.jsx';
+import { ResendVerification } from '../components/EmailVerifyBanner.jsx';
 import { useCart } from '../cart.jsx';
 import CartBuilder from '../components/CartBuilder.jsx';
 import ReservationNotice from '../components/ReservationNotice.jsx';
@@ -9,6 +11,9 @@ import ReservationNotice from '../components/ReservationNotice.jsx';
 export default function Booking() {
   const navigate = useNavigate();
   const { refresh: refreshCart } = useCart();
+  const { user } = useAuth();
+  // Adresse e-mail non confirmée : le serveur refuse toute réservation (EMAIL_NON_VERIFIE).
+  const blocked = user?.role !== 'admin' && user?.email_verified === false;
   const [done, setDone] = useState(null);
 
   // Garde l'icône panier du header en phase avec les ajouts/retraits faits ici.
@@ -36,6 +41,14 @@ export default function Booking() {
 
       <ReservationNotice variant="generic" style={{ marginBottom: 16 }} />
 
+      {blocked && (
+        <div className="alert error" style={{ marginBottom: 16 }}>
+          <strong>Validez votre adresse e-mail pour pouvoir réserver.</strong>{' '}
+          Cliquez sur le lien que nous vous avons envoyé à l'inscription ({user.email}).
+          <div style={{ marginTop: 8 }}><ResendVerification /></div>
+        </div>
+      )}
+
       {done ? (
         <div className="alert ok">
           {done.count} réservation{done.count > 1 ? 's' : ''} confirmée{done.count > 1 ? 's' : ''}.
@@ -46,7 +59,7 @@ export default function Booking() {
           </div>
         </div>
       ) : (
-        <CartBuilder adapter={adapter} onDone={setDone} />
+        <CartBuilder adapter={adapter} blocked={blocked} onDone={setDone} />
       )}
     </div>
   );

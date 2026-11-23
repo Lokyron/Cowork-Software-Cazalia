@@ -21,6 +21,7 @@ import {
   getActiveSpace, resolveSeats, priceCents, validateSlot, withinOpeningHours, availableSeats, insertReservation,
 } from './booking.js';
 import { effectivePricing, isOnlineBookable, loadPricingUser } from './pricing.js';
+import { assertCanBook } from './emailVerification.js';
 
 export const HOLD_MINUTES = 10;
 // Fenêtre élargie pendant un paiement Stripe en cours : on prolonge les verrous
@@ -76,10 +77,15 @@ export function purgeExpired() { delExpired.run(new Date().toISOString()); }
  * @param {number} [seatsRaw]
  * @param {{tarifType?:string, ignoreHours?:boolean, allowOverbooking?:boolean, customCostCents?:number, createdBy?:number}} [opts]
  * @returns {object} Ligne de panier créée.
- * @throws {Error} `ESPACE_INTROUVABLE`, `HORS_HORAIRES`, `COMPLET`, `PANIER_PLEIN`,
+ * @throws {Error} `EMAIL_NON_VERIFIE` (membre dont l'adresse n'est pas confirmée ; jamais en mode admin),
+ *         `ESPACE_INTROUVABLE`, `HORS_HORAIRES`, `COMPLET`, `PANIER_PLEIN`,
  *         `CRENEAU_INVALIDE`, `CRENEAU_PASSE`, `TARIF_INDISPONIBLE`, `CRENEAU_FORFAIT_INVALIDE`.
  */
 export function addHold(userId, spaceId, startRaw, endRaw, seatsRaw = 1, opts = {}) {
+  // Adresse e-mail non confirmée : pas de réservation. Contrôle placé AVANT toute
+  // écriture (et hors de la transaction de pose), état relu en base. Le mode admin
+  // (réservation posée par la gestionnaire pour un membre) n'est jamais concerné.
+  if (!opts?.adminMode) assertCanBook(userId);
   purgeExpired();
   const space = getActiveSpace(spaceId);
   if (!space) throw fail('ESPACE_INTROUVABLE');
@@ -292,10 +298,13 @@ export async function previewPromo(userId, code) {
  * @param {string} baseUrl Origine publique (URL de retour Stripe).
  * @param {{promoCode?: string|null}} [opts] Code promo saisi au panier (facultatif).
  * @returns {Promise<{url:string, total:number, count:number}>}
- * @throws {Error} `PANIER_VIDE`, `HORS_HORAIRES`, `COMPLET`, `STRIPE_NON_CONFIGURE`,
+ * @throws {Error} `EMAIL_NON_VERIFIE`, `PANIER_VIDE`, `HORS_HORAIRES`, `COMPLET`, `STRIPE_NON_CONFIGURE`,
  *         et les codes `PROMO_*` si le code promo est refusé.
  */
 export async function startBookingCheckout(userId, baseUrl, { promoCode = null } = {}) {
+  // Même garde que `addHold` (verrous posés avant la vérification, ou état changé
+  // depuis) : strictement avant tout paiement, jamais après encaissement.
+  assertCanBook(userId);
   purgeExpired();
   const holds = listHolds.all(userId, new Date().toISOString());
   if (!holds.length) throw fail('PANIER_VIDE');

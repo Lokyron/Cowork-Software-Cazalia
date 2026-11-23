@@ -38,6 +38,21 @@ export function setSetting(key, value) {
 const WIFI_SSID_DEFAULT = 'Cazalia-Coworkers';
 
 /**
+ * Sépare une adresse d'expédition de la forme « Nom <adresse@domaine> ».
+ * Une adresse nue est renvoyée telle quelle (cas normal), sans nom.
+ *
+ * @param {string} value Valeur brute (réglage ou variable d'environnement).
+ * @returns {{email: string, name: string | null}}
+ */
+export function parseFromAddress(value) {
+  const raw = String(value ?? '').trim();
+  const m = raw.match(/^(.*)<\s*([^<>\s]+@[^<>\s]+)\s*>\s*$/);
+  if (!m) return { email: raw, name: null };
+  const name = m[1].trim().replace(/^"(.*)"$/, '$1').trim();
+  return { email: m[2], name: name || null };
+}
+
+/**
  * Configuration SMTP effective (réglages en base par-dessus les variables
  * d'environnement), mot de passe DÉCHIFFRÉ.
  *
@@ -55,8 +70,11 @@ export function getSmtp() {
   const secureMode = s.secure_mode ?? (port === 465 ? 'ssl' : 'starttls'); // 'ssl'|'starttls'|'none'
   const user = s.user ?? config.smtp.user ?? '';
   const pass = s.pass_enc ? decryptSecret(s.pass_enc) : (config.smtp.pass ?? '');
-  const fromName = s.from_name ?? 'Cazalia';
-  const fromEmail = s.from_email ?? config.smtp.from ?? '';
+  // La valeur de repli (SMTP_FROM) peut être « Nom <adresse@domaine> » : on en extrait
+  // l'adresse nue (et le nom, si le réglage en base n'en définit pas).
+  const from = parseFromAddress(s.from_email ?? config.smtp.from ?? '');
+  const fromName = s.from_name ?? from.name ?? 'Cazalia';
+  const fromEmail = from.email;
   return { host, port, secureMode, user, pass, fromName, fromEmail, configured: Boolean(host && fromEmail) };
 }
 

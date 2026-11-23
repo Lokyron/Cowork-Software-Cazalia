@@ -107,7 +107,7 @@ export default function AdminProspects() {
           <table>
             <thead>
               <tr>
-                <th>Contact</th><th>Téléphone</th><th>Activité</th><th>Statut</th>
+                <th>Contact</th><th>Téléphone</th><th>Sujet / origine</th><th>Activité</th><th>Statut</th>
                 <th style={{ textAlign: 'right' }}>Reçu le</th>
               </tr>
             </thead>
@@ -119,13 +119,17 @@ export default function AdminProspects() {
                     <div className="muted" style={{ fontSize: 12 }}>{p.email}</div>
                   </td>
                   <td className="muted">{p.phone}</td>
+                  <td>
+                    {p.subject ? <div style={{ fontSize: 13 }}>{p.subject}</div> : null}
+                    <div className="muted" style={{ fontSize: 12 }}>{p.source || (p.subject ? '' : '-')}</div>
+                  </td>
                   <td className="muted">{ACTIVITY_LABEL[p.activity] || '-'}</td>
                   <td><StatusBadge status={p.status} /></td>
                   <td className="muted" style={{ textAlign: 'right' }}>{fmtDate(p.created_at)}</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={5} className="muted">
+                <tr><td colSpan={6} className="muted">
                   {prospects.length === 0
                     ? 'Aucune pré-inscription pour l’instant. Partagez le lien /rejoindre pour commencer à collecter des contacts.'
                     : 'Aucun contact ne correspond à ce filtre.'}
@@ -205,6 +209,7 @@ function ProspectDetail({ prospect, onClose, onChanged, onDeleted }) {
             <tr><td className="muted">Téléphone</td><td style={{ textAlign: 'right' }}><a href={`tel:${prospect.phone}`}>{prospect.phone}</a></td></tr>
             <tr><td className="muted">Activité</td><td style={{ textAlign: 'right' }}>{ACTIVITY_LABEL[prospect.activity] || '-'}</td></tr>
             <tr><td className="muted">Reçu le</td><td style={{ textAlign: 'right' }}>{fmtDate(prospect.created_at)}</td></tr>
+            {prospect.subject && <tr><td className="muted">Sujet</td><td style={{ textAlign: 'right' }}>{prospect.subject}</td></tr>}
             {prospect.source && <tr><td className="muted">Provenance</td><td style={{ textAlign: 'right' }}>{prospect.source}</td></tr>}
           </tbody>
         </table>

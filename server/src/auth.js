@@ -147,7 +147,7 @@ const insertSession = db.prepare(
   `INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)`
 );
 const getSession = db.prepare(
-  `SELECT s.id, s.user_id, s.expires_at, u.email, u.display_name, u.role, u.must_change_password, u.totp_enabled,
+  `SELECT s.id, s.user_id, s.expires_at, u.email, u.display_name, u.role, u.must_change_password, u.totp_enabled, u.email_verified,
           u.subscription_tier, u.subscription_status, u.open_space_quota_used,
           u.current_period_start, u.current_period_end
      FROM sessions s JOIN users u ON u.id = s.user_id
@@ -195,6 +195,8 @@ export function resolveSession(sessionId) {
     role: row.role,
     must_change_password: !!row.must_change_password,
     totp_enabled: !!row.totp_enabled,
+    // Adresse confirmée par e-mail ? Sinon les réservations sont refusées (EMAIL_NON_VERIFIE).
+    email_verified: !!row.email_verified,
     // Abonnement (refonte modèle éco.) : nécessaire au calcul du prix effectif.
     subscription_tier: row.subscription_tier || 'NONE',
     subscription_status: row.subscription_status || 'none',

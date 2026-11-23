@@ -69,6 +69,15 @@ if (!userCols.includes('notify_marketing')) db.exec(`ALTER TABLE users ADD COLUM
 if (!userCols.includes('cgu_accepted_at')) db.exec(`ALTER TABLE users ADD COLUMN cgu_accepted_at TEXT`);
 // Statut/profession facultatif, renseigné à l'inscription (page /rejoindre).
 if (!userCols.includes('activity')) db.exec(`ALTER TABLE users ADD COLUMN activity TEXT`);
+// Vérification d'adresse e-mail. DÉCISION DU PROPRIÉTAIRE : tous les comptes
+// existants au moment de la migration sont marqués vérifiés (aucun client actuel
+// ne doit être bloqué du jour au lendemain) ; seules les nouvelles inscriptions
+// partent à 0. Backfill gardé par l'ajout de la colonne : il ne se rejoue pas.
+const addingEmailVerified = !userCols.includes('email_verified');
+if (addingEmailVerified) {
+  db.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0`);
+  db.exec(`UPDATE users SET email_verified = 1`);
+}
 
 // Migration ponctuelle : chiffrement des secrets TOTP restés en clair.
 // Le secret TOTP est un facteur d'authentification à part entière ; stocké en
@@ -288,6 +297,22 @@ if (addingSpaceCategory) {
              WHERE category IS NULL AND (kind = 'zone' OR name LIKE '%pen%space%' OR name LIKE '%pen-space%')`);
 }
 
+// Modes de réservation d'un espace (réservation en ligne / devis), cumulables.
+// Backfill gardé par l'ajout de la colonne (n'écrase pas un réglage admin
+// ultérieur) : reproduit exactement l'ancien comportement déduit de la catégorie.
+// Placé APRÈS le backfill de `category`, dont il dépend.
+const modeSpaceCols = db.prepare(`PRAGMA table_info(spaces)`).all().map((c) => c.name);
+const addingOnlineBookable = !modeSpaceCols.includes('online_bookable');
+const addingQuoteAvailable = !modeSpaceCols.includes('quote_available');
+if (addingOnlineBookable) db.exec(`ALTER TABLE spaces ADD COLUMN online_bookable INTEGER NOT NULL DEFAULT 0`);
+if (addingQuoteAvailable) db.exec(`ALTER TABLE spaces ADD COLUMN quote_available INTEGER NOT NULL DEFAULT 0`);
+if (addingOnlineBookable) {
+  db.exec(`UPDATE spaces SET online_bookable = 1 WHERE category IN ('OPEN_SPACE', 'MEETING_ROOM')`);
+}
+if (addingQuoteAvailable) {
+  db.exec(`UPDATE spaces SET quote_available = 1 WHERE category = 'PRIVATE_OFFICE'`);
+}
+
 // Typologie de réservation : exclusif (bloque toute la salle, tarif forfait) vs
 // inventaire de places (tarif par place) + option de privatisation.
 const addingSpaceTypology = !spaceCols.includes('exclusive');
@@ -303,6 +328,25 @@ if (addingSpaceTypology) {
   db.exec(`UPDATE spaces SET privatizable = 1, capacity = CASE WHEN capacity < 2 THEN 2 ELSE capacity END
              WHERE kind = 'room' AND name LIKE '%ocus%'`);
 }
+
+// Rattrapage ponctuel : un bureau privé est une pièce unique qui se réserve en
+// entier (forfait, jamais par place). Le backfill historique de `exclusive` ne
+// visait que « réunion » / « focus » : un bureau privé existant peut donc être
+// resté en inventaire de places, ce qui permettrait de le sur-réserver et de
+// multiplier son tarif. Gardé par flag (n'écrase pas un réglage ultérieur) et
+// placé APRÈS le backfill de `category`, des modes et de la typologie.
+const bureauPriveFlag = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_bureau_prive_exclusif_v1');
+if (!bureauPriveFlag) {
+  const tx = db.transaction(() => {
+    db.prepare(`UPDATE spaces SET exclusive = 1, privatizable = 0 WHERE category = 'PRIVATE_OFFICE'`).run();
+    db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_bureau_prive_exclusif_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
+  });
+  tx();
+}
+
+// Sujet de la demande (formulaire de contact / devis unifié). Prospects antérieurs : NULL.
+const prospectCols = db.prepare(`PRAGMA table_info(prospects)`).all().map((c) => c.name);
+if (!prospectCols.includes('subject')) db.exec(`ALTER TABLE prospects ADD COLUMN subject TEXT`);
 
 // Remplit un contenu descriptif par défaut pour les espaces qui n'en ont pas encore
 // (INVENTÉ ; modifiable ensuite depuis l'admin Espaces).

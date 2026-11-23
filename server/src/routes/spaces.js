@@ -31,7 +31,7 @@ spacesRouter.get('/config', (_req, res) => {
 spacesRouter.get('/spaces', (_req, res) => {
   const rows = db
     .prepare(
-      `SELECT id, name, kind, category, capacity, exclusive, privatizable,
+      `SELECT id, name, kind, category, online_bookable, quote_available, capacity, exclusive, privatizable,
               price_per_hour_cents, price_half_day_cents, price_day_cents,
               color, description, tagline, amenities, photo
          FROM spaces WHERE active = 1 ORDER BY position, kind, name`

@@ -15,6 +15,7 @@ import {
 import { requireAuth, sendBusinessError } from '../middleware.js';
 import { rateLimit } from '../security.js';
 import { securityEvent } from '../lib/audit.js';
+import { fail } from '../lib/errors.js';
 import {
   assertStrongPassword,
   changeOwnPassword,
@@ -24,7 +25,8 @@ import {
 } from '../lib/passwords.js';
 import { deleteUserAccount, getProfile, updateOwnProfile } from '../lib/users.js';
 import { syncUser } from '../lib/newsletter.js';
-import { sendPasswordResetEmail } from '../lib/mailer.js';
+import { sendPasswordResetEmail, sendEmailVerificationEmail } from '../lib/mailer.js';
+import { createVerificationToken, getVerificationInfo, consumeVerificationToken } from '../lib/emailVerification.js';
 import { generateSecret, sealSecret, otpauthUri, qrDataUrl, verifyToken } from '../lib/twofactor.js';
 
 export const authRouter = Router();
@@ -40,6 +42,10 @@ const resetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
 // La 2FA se force par 10^6 combinaisons : sans plafond, quelques heures suffisent.
 const twoFactorLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 15 });
 const passwordChangeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
+// Vérification d'adresse : lecture/consommation d'un jeton (comme le reset)...
+const verifyLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
+// ... et renvoi du lien, qui déclenche un e-mail : plafond strict, calqué sur forgotLimiter.
+const resendVerifyLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 8 });
 
 // Format d'adresse e-mail accepté à l'inscription (contrôle de forme, pas de preuve).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -89,7 +95,7 @@ const clearCookieOptions = (req) => {
  *
  * @param {object} u Ligne `users` complète.
  * @returns {{id: number, email: string, display_name: string, role: string,
- *            must_change_password: boolean, totp_enabled: boolean}}
+ *            must_change_password: boolean, totp_enabled: boolean, email_verified: boolean}}
  */
 function publicUser(u) {
   return {
@@ -99,11 +105,38 @@ function publicUser(u) {
     role: u.role,
     must_change_password: !!u.must_change_password,
     totp_enabled: !!u.totp_enabled,
+    email_verified: !!u.email_verified,
     subscription_tier: u.subscription_tier || 'NONE',
     subscription_status: u.subscription_status || 'none',
     open_space_quota_used: Number(u.open_space_quota_used) || 0,
     current_period_end: u.current_period_end || null,
   };
+}
+
+/**
+ * Génère un lien de vérification et envoie l'e-mail correspondant.
+ * Ne lève jamais : l'envoi est « best-effort » et ne doit pas faire échouer
+ * l'inscription ni le changement d'adresse. Le résultat est renvoyé pour que le
+ * RENVOI explicite puisse, lui, signaler l'échec à l'utilisateur.
+ *
+ * @param {import('express').Request} req Requête en cours (origine du lien).
+ * @param {number} userId Compte à vérifier.
+ * @returns {Promise<{sent: boolean, reason?: string}>} `sent:false` si le courrier
+ *          n'est pas parti (SMTP absent, plafond, échec) ou si une exception a eu lieu.
+ */
+async function sendVerificationLink(req, userId) {
+  try {
+    const { token, user } = createVerificationToken(userId);
+    const base = config.publicBaseUrl || `${req.protocol}://${req.get('host')}`;
+    const out = await sendEmailVerificationEmail({
+      to: user.email, displayName: user.display_name,
+      verifyUrl: `${base}/verifier-email?token=${token}`, userId: user.id,
+    });
+    return { sent: Boolean(out?.sent), reason: out?.reason };
+  } catch (err) {
+    console.warn('[verification-email]', err.message); // jamais bloquant, rien n'est exposé
+    return { sent: false, reason: 'EXCEPTION' };
+  }
 }
 
 const findByEmail = db.prepare(`SELECT * FROM users WHERE email = ?`);
@@ -167,7 +200,10 @@ authRouter.post('/register', registerLimiter, (req, res) => {
 
     const session = createSession(user.id);
     res.cookie(config.cookieName, session.id, cookieOptions(req));
-    return res.status(201).json({ user });
+    // Lien de vérification d'adresse : best-effort, l'inscription réussit quoi qu'il arrive.
+    // (Le compte est connecté et navigue normalement ; seules les réservations attendent.)
+    sendVerificationLink(req, user.id).catch(() => {});
+    return res.status(201).json({ user: { ...user, email_verified: false } });
   } catch (err) {
     return sendBusinessError(res, err, 500);
   }
@@ -255,6 +291,12 @@ authRouter.get('/profile', requireAuth, (req, res) => {
 authRouter.patch('/me', requireAuth, (req, res) => {
   try {
     const profile = updateOwnProfile(req.user.id, req.body || {});
+    // L'adresse a réellement changé : updateOwnProfile a repassé le compte en « non vérifié »,
+    // on envoie un nouveau lien (best-effort) et on invalide l'ancien au passage.
+    if (profile.email !== req.user.email) {
+      securityEvent('email_change', { userId: req.user.id, ip: req.ip });
+      sendVerificationLink(req, req.user.id).catch(() => {});
+    }
     // Reflète l'opt-in/opt-out newsletter dans Brevo (best-effort, hors réponse).
     syncUser(req.user.id).catch(() => {});
     return res.json({ profile });
@@ -424,4 +466,70 @@ authRouter.post('/reset-password', resetLimiter, (req, res) => {
   } catch (err) {
     return sendBusinessError(res, err);
   }
+});
+
+// ── Vérification d'adresse e-mail ────────────────────────────────────────────
+// Le lien reçu par e-mail pointe vers la page publique /verifier-email?token=...
+// Tant que l'adresse n'est pas confirmée, les réservations sont refusées côté
+// serveur (`EMAIL_NON_VERIFIE`) ; l'inscription et la navigation restent libres.
+
+/**
+ * GET /api/auth/verify-email/:token - indique si un lien de vérification est
+ * valide. Aucune distinction entre jeton inexistant, expiré ou déjà consommé.
+ *
+ * @returns 200 `{valid:true, email}` · 400 `TOKEN_INVALIDE` · 429 `TROP_DE_TENTATIVES`
+ */
+authRouter.get('/verify-email/:token', verifyLimiter, (req, res) => {
+  const info = getVerificationInfo(req.params.token);
+  if (!info) return res.status(400).json({ error: 'TOKEN_INVALIDE' });
+  return res.json({ valid: true, email: info.email });
+});
+
+/**
+ * POST /api/auth/verify-email - consomme un jeton et confirme l'adresse.
+ * Idempotent du point de vue du membre : si son compte est déjà vérifié (jeton
+ * rejoué ou périmé), la réponse reste un succès - rien d'alarmant à afficher.
+ *
+ * @returns 200 `{ok:true}` · 400 `TOKEN_INVALIDE` (compte non vérifié) · 429 `TROP_DE_TENTATIVES`
+ */
+authRouter.post('/verify-email', verifyLimiter, (req, res) => {
+  try {
+    const token = String(req.body?.token || '');
+    try {
+      const { userId } = consumeVerificationToken(token);
+      securityEvent('email_verifie', { userId, ip: req.ip });
+    } catch (err) {
+      // Jeton refusé : si le membre connecté est déjà vérifié, ce n'est pas une erreur.
+      if (err.code === 'TOKEN_INVALIDE' && req.user && getUserFull.get(req.user.id)?.email_verified) {
+        return res.json({ ok: true, already_verified: true });
+      }
+      throw err;
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    return sendBusinessError(res, err);
+  }
+});
+
+/**
+ * POST /api/auth/resend-verification - renvoie le lien de vérification au
+ * membre connecté. Si le compte est déjà vérifié, rien n'est envoyé (réponse
+ * neutre). Si l'envoi n'a pas eu lieu, la réponse est une erreur : le membre ne
+ * doit pas croire qu'un courrier est parti. Limiteur strict (envoi d'e-mail
+ * déclenché par l'utilisateur).
+ *
+ * @returns 200 `{ok:true}` · 401 `NON_AUTHENTIFIE` · 429 `TROP_DE_TENTATIVES`
+ *          · 503 `EMAIL_ENVOI_IMPOSSIBLE`
+ */
+authRouter.post('/resend-verification', requireAuth, resendVerifyLimiter, async (req, res) => {
+  const u = getUserFull.get(req.user.id);
+  if (u && !u.email_verified) {
+    securityEvent('email_verification_renvoyee', { userId: u.id, ip: req.ip });
+    const out = await sendVerificationLink(req, u.id);
+    if (!out.sent) {
+      // La cause interne (SMTP absent, plafond…) reste dans le journal des e-mails.
+      return sendBusinessError(res, fail('EMAIL_ENVOI_IMPOSSIBLE'));
+    }
+  }
+  return res.json({ ok: true });
 });

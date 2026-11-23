@@ -4,6 +4,7 @@ import { useAuth } from './auth.jsx';
 import { useCart } from './cart.jsx';
 import Background from './components/Background.jsx';
 import TwoFactorBanner from './components/TwoFactorBanner.jsx';
+import EmailVerifyBanner from './components/EmailVerifyBanner.jsx';
 import HelpBubble from './components/HelpBubble.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
@@ -14,6 +15,7 @@ import Cgv from './pages/Cgv.jsx';
 import Reclamation from './pages/Reclamation.jsx';
 import Newsletter from './pages/Newsletter.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
+import VerifyEmail from './pages/VerifyEmail.jsx';
 import ForcePasswordChange from './pages/ForcePasswordChange.jsx';
 import Booking from './pages/Booking.jsx';
 import Pricing from './pages/Pricing.jsx';
@@ -159,6 +161,7 @@ export default function App() {
     <>
       <Background />
       {!isPublic && <Nav />}
+      {!isPublic && user && user.role !== 'admin' && user.email_verified === false && location.pathname !== '/verifier-email' && <EmailVerifyBanner />}
       {!isPublic && user && !user.totp_enabled && <TwoFactorBanner />}
       {/* Doit rester AVANT <Routes> : l'effet d'une page (ex. NotFound) passe après. */}
       <RouteSeo />
@@ -174,6 +177,7 @@ export default function App() {
         <Route path="/newsletter" element={<Shell><Newsletter /></Shell>} />
         <Route path="/login" element={user ? <Navigate to="/mon-espace" replace /> : <Shell><Login /></Shell>} />
         <Route path="/reset-password" element={<Shell><ResetPassword /></Shell>} />
+        <Route path="/verifier-email" element={<Shell><VerifyEmail /></Shell>} />
         <Route path="/mot-de-passe-oublie" element={<Shell><ForgotPassword /></Shell>} />
         <Route path="/reserver" element={<Guard><Shell><Booking /></Shell></Guard>} />
         <Route path="/mon-espace" element={<Guard><Shell><MemberDashboard /></Shell></Guard>} />

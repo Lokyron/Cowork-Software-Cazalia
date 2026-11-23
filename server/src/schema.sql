@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS users (
   -- Jours Open Space consommés sur la période en cours (Essentiel). Réel : une
   -- demi-journée vaut 0,5 j, une journée 1 j. Réinitialisé à chaque renouvellement.
   open_space_quota_used  REAL NOT NULL DEFAULT 0,
+  -- 0 tant que l'adresse n'a pas été confirmée par le lien reçu par e-mail : les
+  -- réservations des membres sont alors refusées (EMAIL_NON_VERIFIE).
+  email_verified INTEGER NOT NULL DEFAULT 0,
   -- 1 = résiliation demandée, effective au terme de la période déjà payée.
   subscription_cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -37,6 +40,11 @@ CREATE TABLE IF NOT EXISTS spaces (
   -- CONFIDENTIAL (libre-service) et PRIVATE_OFFICE (sur devis) ne sont pas
   -- réservables en ligne.
   category         TEXT,
+  -- Modes de réservation (indépendants de la catégorie, cumulables) :
+  -- online_bookable = proposé à la réservation en ligne ; quote_available =
+  -- proposé à la demande de devis. Un espace peut avoir les deux à 1.
+  online_bookable  INTEGER NOT NULL DEFAULT 0,
+  quote_available  INTEGER NOT NULL DEFAULT 0,
   capacity         INTEGER NOT NULL CHECK (capacity >= 1),  -- inventaire: nb de places ; exclusif: nb d'occupants max
   exclusive        INTEGER NOT NULL DEFAULT 0,              -- 1 = réservation bloque toute la salle (forfait), sinon inventaire de places
   privatizable     INTEGER NOT NULL DEFAULT 0,             -- 1 = espace inventaire offrant l'option "privatiser" (prendre toute la capacité)
@@ -109,6 +117,17 @@ CREATE TABLE IF NOT EXISTS password_resets (
 );
 CREATE INDEX IF NOT EXISTS idx_resets_user ON password_resets(user_id);
 
+-- Jetons de vérification d'adresse e-mail. Même structure que password_resets : seule
+-- l'EMPREINTE SHA-256 du jeton (préfixe `sha256:`) est stockée, jamais le jeton en clair.
+CREATE TABLE IF NOT EXISTS email_verifications (
+  token      TEXT    PRIMARY KEY,                       -- empreinte `sha256:<hex>` du jeton
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  expires_at TEXT    NOT NULL,
+  used_at    TEXT,                                       -- non NULL => déjà consommé / invalidé
+  created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_email_verif_user ON email_verifications(user_id);
+
 -- Sessions côté serveur (cookie httpOnly référence cet enregistrement).
 CREATE TABLE IF NOT EXISTS sessions (
   id         TEXT    PRIMARY KEY,                       -- token aléatoire
@@ -132,6 +151,7 @@ CREATE TABLE IF NOT EXISTS prospects (
                 CHECK (status IN ('nouveau','contacte','journee_offerte','converti','pas_interesse')),
   note        TEXT,                                    -- note libre (admin)
   source      TEXT,                                    -- provenance éventuelle (?src=...)
+  subject     TEXT,                                    -- sujet choisi dans le formulaire de contact (liste fermée, cf. lib/prospects.js)
   created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_prospects_created ON prospects(created_at);

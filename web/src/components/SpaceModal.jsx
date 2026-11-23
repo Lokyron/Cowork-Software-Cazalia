@@ -1,25 +1,30 @@
 import Photo from './Photo.jsx';
-import { eur, spacePrice } from '../price.js';
+import { eur, spacePrice, spaceModes } from '../price.js';
 import ReservationNotice from './ReservationNotice.jsx';
 
 // Fenêtre détaillée d'un espace (depuis la landing) : photo, descriptif complet,
-// prestations incluses, et appel à l'action adapté à la catégorie.
-//   • PRIVATE_OFFICE (Bureau privé) : hors des flux de commande en ligne -
-//     accessible exclusivement sur devis / demande de privatisation.
-//   • CONFIDENTIAL : libre-service sur place, sans réservation.
-//   • autres (open space / salle) : réservation en ligne.
+// prestations incluses, et appel à l'action fondé sur les DEUX modes de l'espace
+// (cf. price.js `spaceModes`) :
+//   • en ligne + devis : l'utilisateur choisit (réservation ponctuelle / devis) ;
+//   • en ligne seul    : réservation en ligne ;
+//   • devis seul       : demande de devis, prix masqué ;
+//   • aucun            : libre-service si CONFIDENTIAL, sinon aucun bouton.
 export default function SpaceModal({ space, photoSrc, onClose, onReserve, onDevis }) {
   const amenities = (space.amenities || '').split('\n').map((s) => s.trim()).filter(Boolean);
-  const isDevis = space.category === 'PRIVATE_OFFICE';
-  const isLibreService = space.category === 'CONFIDENTIAL';
+  const { online, quote } = spaceModes(space);
+  const isBoth = online && quote;
+  const isDevis = quote && !online;
+  const isLibreService = !online && !quote && space.category === 'CONFIDENTIAL';
   // Prix d'appel : « À partir de … » dès qu'il existe plusieurs tarifs. L'open
-  // space n'est jamais affiché à l'heure (cf. price.js). Bureau privé (isDevis) :
-  // aucun prix affiché (voir plus bas).
+  // space n'est jamais affiché à l'heure (cf. price.js). Masqué en mode devis seul.
   const p = spacePrice(space);
   const priceLabel = p.kind === 'price'
     ? (p.from ? `À partir de ${eur(p.min)}` : eur(p.min))
     : p.kind === 'libre' ? 'Libre-service'
-    : '-';
+    : '';
+  // Sans tarif exploitable (espace sans mode, hors libre-service) : pas de bloc
+  // prix, donc pas de séparateur orphelin.
+  const showPrice = !isDevis && priceLabel !== '';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -35,14 +40,15 @@ export default function SpaceModal({ space, photoSrc, onClose, onReserve, onDevi
 
         <div className="flex-between" style={{ margin: '14px 0' }}>
           <span className="badge grey">
-            {isDevis ? 'Bureau privé' : space.kind === 'room' ? 'Salle privative' : 'Open-space'}
+            {space.category === 'PRIVATE_OFFICE' ? 'Bureau privé' : space.kind === 'room' ? 'Salle privative' : 'Open-space'}
           </span>
           <span className="muted seats">
             {isDevis ? 'Privatisation longue durée'
+              : isBoth ? 'Ponctuel ou longue durée'
               : space.kind === 'room' ? 'Réservation exclusive'
               : `Jusqu'à ${space.capacity} places`}
-            {/* Bureau privé : aucune notion de prix affichée (uniquement sur devis). */}
-            {!isDevis && <> · <strong style={{ color: 'var(--navy)' }}>{priceLabel}</strong></>}
+            {/* Devis seul : aucune notion de prix affichée. */}
+            {showPrice && <> · <strong style={{ color: 'var(--navy)' }}>{priceLabel}</strong></>}
           </span>
         </div>
 
@@ -68,7 +74,14 @@ export default function SpaceModal({ space, photoSrc, onClose, onReserve, onDevi
             Accès <strong>libre-service</strong> sur place, sans réservation ni paiement en ligne.
           </div>
         )}
-        {!isDevis && !isLibreService && (
+        {isBoth && (
+          <div className="alert" style={{ marginTop: 16, background: 'rgba(59,130,246,0.06)', border: '1px solid var(--line)' }}>
+            Deux façons d'en profiter : <strong>réservez ponctuellement</strong> en ligne, à l'unité
+            (demi-journée ou journée), ou <strong>demandez un devis</strong> pour un contrat de
+            longue durée (trimestre ou année).
+          </div>
+        )}
+        {online && (
           <ReservationNotice
             variant={space.category === 'MEETING_ROOM' ? 'salle' : 'open_space'}
             style={{ marginTop: 16 }}
@@ -77,11 +90,10 @@ export default function SpaceModal({ space, photoSrc, onClose, onReserve, onDevi
 
         <div style={{ marginTop: 20, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button className="outline" onClick={onClose}>Fermer</button>
-          {isDevis ? (
-            <button onClick={onDevis}>Demander un devis</button>
-          ) : isLibreService ? null : (
-            <button onClick={onReserve}>Réserver cet espace</button>
+          {quote && (
+            <button className={isBoth ? 'outline' : undefined} onClick={onDevis}>Demander un devis</button>
           )}
+          {online && <button onClick={onReserve}>Réserver cet espace</button>}
         </div>
       </div>
     </div>
