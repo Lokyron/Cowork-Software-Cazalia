@@ -31,6 +31,8 @@ import AdminProspects from './pages/AdminProspects.jsx';
 import AdminEmails from './pages/AdminEmails.jsx';
 import AdminPhotos from './pages/AdminPhotos.jsx';
 import AdminUpdate from './pages/AdminUpdate.jsx';
+import NotFound from './pages/NotFound.jsx';
+import { RouteSeo } from './components/Seo.jsx';
 
 // Barre de navigation de l'application (utilisateur connecté).
 function Nav() {
@@ -158,6 +160,8 @@ export default function App() {
       <Background />
       {!isPublic && <Nav />}
       {!isPublic && user && !user.totp_enabled && <TwoFactorBanner />}
+      {/* Doit rester AVANT <Routes> : l'effet d'une page (ex. NotFound) passe après. */}
+      <RouteSeo />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/rejoindre" element={<Shell><Rejoindre /></Shell>} />
@@ -185,7 +189,7 @@ export default function App() {
         <Route path="/admin/emails" element={<Guard admin><Shell><AdminEmails /></Shell></Guard>} />
         <Route path="/admin/photos" element={<Guard admin><Shell><AdminPhotos /></Shell></Guard>} />
         <Route path="/admin/maj" element={<Guard admin><Shell><AdminUpdate /></Shell></Guard>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Shell><NotFound /></Shell>} />
       </Routes>
       {!isLanding && <SiteFooter />}
       <HelpBubble />

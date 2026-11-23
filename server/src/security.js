@@ -8,7 +8,9 @@ import { config } from './config.js';
 // La politique CSP autorise :
 //   - les scripts/styles du build Vite servis par l'origine elle-même ;
 //   - `'unsafe-inline'` pour les styles UNIQUEMENT (React/Vite injectent des
-//     styles inline ; aucun script inline n'est utilisé par l'application) ;
+//     styles inline ; aucun script inline n'est utilisé par l'application —
+//     le bloc `application/ld+json` de web/index.html est une donnée, pas un
+//     script exécutable, donc hors du champ de `script-src`) ;
 //   - Google Fonts (import dans `web/src/styles.css`) ;
 //   - `data:` pour les images (QR code de la 2FA rendu en data-URL).
 const CSP = [
