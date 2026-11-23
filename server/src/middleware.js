@@ -98,6 +98,8 @@ const CODE_TO_STATUS = {
   // Indisponibilité du service d'envoi (pas une faute de l'utilisateur).
   EMAIL_ENVOI_IMPOSSIBLE: 503,
   SUJET_INVALIDE: 400,
+  // Bloc « Votre besoin » du bureau privatif : postes, durée ou date de début invalides.
+  BESOIN_INVALIDE: 400,
 };
 
 /**

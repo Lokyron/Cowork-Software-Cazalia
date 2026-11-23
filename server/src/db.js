@@ -348,6 +348,14 @@ if (!bureauPriveFlag) {
 const prospectCols = db.prepare(`PRAGMA table_info(prospects)`).all().map((c) => c.name);
 if (!prospectCols.includes('subject')) db.exec(`ALTER TABLE prospects ADD COLUMN subject TEXT`);
 
+// Besoin exprimé pour le bureau privatif (nombre de postes, durée, début souhaité :
+// date ISO ou 'DES_QUE_POSSIBLE'). Prospects antérieurs et autres sujets : NULL.
+// `prospectCols` est relu ici : la migration `subject` ci-dessus a pu ajouter une colonne.
+const prospectColsNeed = db.prepare(`PRAGMA table_info(prospects)`).all().map((c) => c.name);
+if (!prospectColsNeed.includes('office_seats')) db.exec(`ALTER TABLE prospects ADD COLUMN office_seats INTEGER`);
+if (!prospectColsNeed.includes('office_duration')) db.exec(`ALTER TABLE prospects ADD COLUMN office_duration TEXT`);
+if (!prospectColsNeed.includes('office_start')) db.exec(`ALTER TABLE prospects ADD COLUMN office_start TEXT`);
+
 // Remplit un contenu descriptif par défaut pour les espaces qui n'en ont pas encore
 // (INVENTÉ ; modifiable ensuite depuis l'admin Espaces).
 const spacesToFill = db.prepare(`SELECT id, kind FROM spaces WHERE description IS NULL`).all();

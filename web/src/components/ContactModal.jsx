@@ -10,14 +10,42 @@ export const LEAD_SUBJECTS = [
   'Informations sur les espaces',
   'Tarifs et offres',
   'Réservation et disponibilités',
-  'Location du bureau privatif',
+  'Location du bureau privatif (longue durée)',
   'Location de la salle de réunion',
   'Autre demande',
 ];
 
+// Sujet qui affiche le bloc « Votre besoin » à la place du champ « Votre demande ».
+const OFFICE_SUBJECT = 'Location du bureau privatif (longue durée)';
+
+// Durées proposées pour le bureau privatif (liste fermée, ordre d'affichage).
+// ⚠ Dupliquée côté serveur (`OFFICE_DURATIONS` dans server/src/lib/prospects.js), qui
+// la revalide : les deux listes doivent rester synchronisées, au caractère près.
+export const OFFICE_DURATIONS = [
+  '1 à 3 mois',
+  '3 à 6 mois',
+  '6 à 12 mois',
+  '12 mois',
+  "Plus d'un an",
+  'Je ne sais pas encore',
+];
+
+// Valeur envoyée au serveur quand le visiteur veut commencer au plus tôt.
+const OFFICE_START_ASAP = 'DES_QUE_POSSIBLE';
+
+// Réponses du bloc « Votre besoin » (vides tant que le sujet n'est pas le bureau privatif).
+const EMPTY_NEED = { office_seats: '', office_duration: '', office_start: '', office_asap: false };
+
+/** Date du jour au format AAAA-MM-JJ (heure locale), pour l'attribut `min` du champ date. */
+const todayLocalIso = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 /** Sujet à pré-sélectionner pour une demande de devis sur un espace donné. */
 export function subjectForSpace(space) {
-  if (space?.category === 'PRIVATE_OFFICE') return 'Location du bureau privatif';
+  if (space?.category === 'PRIVATE_OFFICE') return OFFICE_SUBJECT;
   if (space?.category === 'MEETING_ROOM') return 'Location de la salle de réunion';
   return 'Autre demande';
 }
@@ -45,6 +73,7 @@ export default function ContactModal({
     phone: user?.phone || '',
     subject: LEAD_SUBJECTS.includes(initialSubject) ? initialSubject : '',
     message: '',
+    ...EMPTY_NEED,
     consent: false,
     website: '', // honeypot
   });
@@ -54,11 +83,41 @@ export default function ContactModal({
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
 
+  const isOffice = form.subject === OFFICE_SUBJECT;
+
+  // Le titre et l'accroche décrivent le contexte d'ouverture (« Demander un devis »).
+  // Si le visiteur change de sujet, ce contexte ne vaut plus : on repasse au texte
+  // générique, pour ne pas annoncer un contrat longue durée au-dessus d'une question
+  // sur les tarifs.
+  const onContext = !initialSubject || form.subject === initialSubject;
+  const heading = onContext ? title : 'Nous écrire';
+  const lead = onContext ? intro : 'Une question, un projet ? Écrivez-nous, nous vous répondons par e-mail.';
+
+  // Changer de sujet efface les réponses du bloc : on n'envoie jamais une durée
+  // pour une demande « Tarifs et offres ».
+  const changeSubject = (e) => {
+    const subject = e.target.value;
+    setForm((f) => ({ ...f, subject, ...(subject === OFFICE_SUBJECT ? {} : EMPTY_NEED) }));
+  };
+
+  // « Dès que possible » vide et désactive le champ de date.
+  const toggleAsap = (e) => {
+    const asap = e.target.checked;
+    setForm((f) => ({ ...f, office_asap: asap, office_start: asap ? '' : f.office_start }));
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true); setFeedback(null);
     try {
-      await api.post('/leads', { ...form, source });
+      const { office_seats, office_duration, office_start, office_asap, ...rest } = form;
+      const payload = { ...rest, source };
+      if (isOffice) {
+        payload.office_seats = Number(office_seats);
+        payload.office_duration = office_duration;
+        payload.office_start = office_asap ? OFFICE_START_ASAP : (office_start || '');
+      }
+      await api.post('/leads', payload);
       setDone(true);
     } catch (err) {
       setFeedback(msg(err.code));
@@ -70,7 +129,7 @@ export default function ContactModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(520px, 100%)' }}>
         <div className="flex-between" style={{ marginBottom: 12 }}>
-          <h2 style={{ margin: 0 }}>{title}</h2>
+          <h2 style={{ margin: 0 }}>{heading}</h2>
           <button className="ghost" style={{ color: 'var(--ink)', border: '1px solid var(--line)' }} onClick={onClose}>✕</button>
         </div>
 
@@ -82,7 +141,7 @@ export default function ContactModal({
         ) : (
           <form onSubmit={submit}>
             <p className="muted" style={{ marginTop: 0 }}>
-              {intro}
+              {lead}
             </p>
             {feedback && <div className="alert error">{feedback}</div>}
             <div className="row">
@@ -92,14 +151,59 @@ export default function ContactModal({
             <div className="field"><label>E-mail</label><input type="email" value={form.email} onChange={set('email')} required /></div>
             <div className="field"><label>Téléphone</label><input type="tel" value={form.phone} onChange={set('phone')} placeholder="06 12 34 56 78" required /></div>
             <div className="field"><label>Sujet</label>
-              <select value={form.subject} onChange={set('subject')} required>
+              <select value={form.subject} onChange={changeSubject} required>
                 <option value="" disabled>Choisissez un sujet</option>
                 {LEAD_SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-            <div className="field"><label>Votre demande</label>
-              <textarea rows={4} value={form.message} onChange={set('message')} placeholder="Décrivez votre demande (nombre de postes, durée souhaitée, dates, question…)" required />
-            </div>
+            {isOffice ? (
+              <fieldset className="need-block">
+                <legend className="need-title">Votre besoin</legend>
+                <div className="field">
+                  <label htmlFor="office-seats">Nombre de postes</label>
+                  <input id="office-seats" type="number" min="1" max="50" step="1" inputMode="numeric"
+                    value={form.office_seats} onChange={set('office_seats')} required />
+                  <span className="hint">
+                    Ce bureau privatif comporte deux postes. Si vous en souhaitez davantage, indiquez-nous
+                    tout de même votre besoin : nous étudierons ensemble la meilleure solution.
+                  </span>
+                </div>
+                <div className="field" role="radiogroup" aria-labelledby="office-duration-label">
+                  <label id="office-duration-label">Pour quelle durée envisagez-vous cette location ?</label>
+                  <div className="need-chips">
+                    {OFFICE_DURATIONS.map((d) => (
+                      <label key={d} className="need-chip">
+                        <input type="radio" name="office_duration" value={d} checked={form.office_duration === d}
+                          onChange={set('office_duration')} required />
+                        <span>{d}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="field">
+                  <label htmlFor="office-start">À partir de quand souhaitez-vous commencer ?</label>
+                  <div className="row need-start">
+                    <div className="field">
+                      <input id="office-start" type="date" min={todayLocalIso()} value={form.office_start}
+                        onChange={set('office_start')} disabled={form.office_asap} />
+                    </div>
+                    <label className="consent need-asap">
+                      <input type="checkbox" checked={form.office_asap} onChange={toggleAsap} />
+                      <span>Dès que possible</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label htmlFor="office-message">Un besoin particulier à nous préciser ? (facultatif)</label>
+                  <textarea id="office-message" rows={3} value={form.message} onChange={set('message')}
+                    placeholder="Mobilier, accès en soirée, stationnement…" />
+                </div>
+              </fieldset>
+            ) : (
+              <div className="field"><label>Votre demande</label>
+                <textarea rows={4} value={form.message} onChange={set('message')} placeholder="Décrivez votre demande (dates, effectif, question…)" required />
+              </div>
+            )}
             {/* Honeypot anti-robot : invisible pour un humain. */}
             <input type="text" value={form.website} onChange={set('website')} tabIndex={-1} autoComplete="off"
               style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }} aria-hidden="true" />
@@ -112,7 +216,7 @@ export default function ContactModal({
               <span>J'accepte d'être recontacté(e) au sujet de ma demande.</span>
             </label>
             <button type="submit" disabled={busy} style={{ marginTop: 12, width: '100%' }}>
-              {busy ? 'Envoi…' : 'Envoyer mon message'}
+              {busy ? 'Envoi…' : (isOffice ? 'Envoyer ma demande' : 'Envoyer mon message')}
             </button>
           </form>
         )}

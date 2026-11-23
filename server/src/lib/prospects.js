@@ -18,10 +18,48 @@ export const LEAD_SUBJECTS = [
   'Informations sur les espaces',
   'Tarifs et offres',
   'Réservation et disponibilités',
-  'Location du bureau privatif',
+  'Location du bureau privatif (longue durée)',
   'Location de la salle de réunion',
   'Autre demande',
 ];
+
+// Sujet qui déclenche le bloc « Votre besoin » (postes, durée, date de début).
+export const OFFICE_SUBJECT = 'Location du bureau privatif (longue durée)';
+
+// Durées de location proposées pour le bureau privatif (liste fermée).
+// ⚠ Cette liste est dupliquée côté front (`OFFICE_DURATIONS` dans
+// web/src/components/ContactModal.jsx) : le dossier `web/` est construit à part et
+// ne peut pas importer ce module. Les deux listes doivent rester synchronisées.
+export const OFFICE_DURATIONS = [
+  '1 à 3 mois',
+  '3 à 6 mois',
+  '6 à 12 mois',
+  '12 mois',
+  "Plus d'un an",
+  'Je ne sais pas encore',
+];
+
+// Valeur de `office_start` quand le visiteur veut commencer au plus tôt.
+export const OFFICE_START_ASAP = 'DES_QUE_POSSIBLE';
+const OFFICE_SEATS_MAX = 50;
+// Date de début : au plus 3 ans dans le futur.
+const OFFICE_START_MAX_YEARS = 3;
+
+/** Date du jour à Paris au format AAAA-MM-JJ (le « aujourd'hui » du visiteur). */
+function todayParis(ref = new Date()) {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Paris' }).format(ref);
+}
+
+/**
+ * Valide une date ISO AAAA-MM-JJ calendaire (refuse 2026-02-31) ; renvoie la chaîne ou null.
+ * @param {unknown} v
+ * @returns {string | null}
+ */
+function parseIsoDate(v) {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v ? v : null;
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -31,11 +69,21 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * il constitue une surface d'insertion directe en base.
  *
  * @param {Record<string, unknown>} [input] Corps de la requête publique.
+ * Pour le sujet « bureau privatif », `office_seats` (entier 1-50) et `office_duration`
+ * (liste fermée) sont obligatoires, `office_start` facultatif. Pour tout autre sujet,
+ * ces trois champs sont IGNORÉS et valent `null` : un appel direct à l'API ne doit pas
+ * polluer la base.
+ *
+ * @param {Record<string, unknown>} [input] Corps de la requête publique.
+ * @param {Date} [now] Instant de référence (tests de la date de début).
  * @returns {{first_name: string, last_name: string, email: string, phone: string,
- *            activity: string | null, subject: string, consent: 1}} Enregistrement prêt à insérer.
- * @throws {Error} `CHAMPS_INVALIDES`, `EMAIL_INVALIDE`, `TELEPHONE_INVALIDE`, `SUJET_INVALIDE`, `CONSENTEMENT_REQUIS`.
+ *            activity: string | null, subject: string, consent: 1,
+ *            office_seats: number | null, office_duration: string | null,
+ *            office_start: string | null}} Enregistrement prêt à insérer.
+ * @throws {Error} `CHAMPS_INVALIDES`, `EMAIL_INVALIDE`, `TELEPHONE_INVALIDE`, `SUJET_INVALIDE`,
+ *   `BESOIN_INVALIDE`, `CONSENTEMENT_REQUIS`.
  */
-function sanitize(input = {}) {
+function sanitize(input = {}, now = new Date()) {
   const first_name = String(input.first_name ?? '').trim();
   const last_name = String(input.last_name ?? '').trim();
   const email = String(input.email ?? '').trim().toLowerCase();
@@ -60,12 +108,53 @@ function sanitize(input = {}) {
   if (!LEAD_SUBJECTS.includes(subject)) throw bizErr('SUJET_INVALIDE');
   if (!consent) throw bizErr('CONSENTEMENT_REQUIS');
 
-  return { first_name, last_name, email, phone, activity, subject, consent: 1 };
+  // Bloc « Votre besoin » : uniquement pour le bureau privatif, sinon tout est ignoré.
+  let office_seats = null;
+  let office_duration = null;
+  let office_start = null;
+  if (subject === OFFICE_SUBJECT) {
+    // Nombre de postes : entier strict (nombre ou chaîne de chiffres), 1 à 50.
+    const rawSeats = input.office_seats;
+    const seatsOk = (typeof rawSeats === 'number' && Number.isInteger(rawSeats))
+      || (typeof rawSeats === 'string' && /^\d{1,3}$/.test(rawSeats.trim()));
+    office_seats = seatsOk ? Number(rawSeats) : NaN;
+    if (!(office_seats >= 1 && office_seats <= OFFICE_SEATS_MAX)) throw bizErr('BESOIN_INVALIDE');
+    // Durée : strictement dans la liste fermée.
+    office_duration = typeof input.office_duration === 'string' ? input.office_duration.trim() : '';
+    if (!OFFICE_DURATIONS.includes(office_duration)) throw bizErr('BESOIN_INVALIDE');
+    // Début : « dès que possible », une date AAAA-MM-JJ dans [hier, +3 ans], ou rien.
+    // La veille est tolérée à dessein : le champ du formulaire borne son `min` sur
+    // l'heure LOCALE du navigateur. Quelqu'un qui ouvre le formulaire à 23 h 55 et
+    // valide à 00 h 02 enverrait sinon une date « d'hier » pour le serveur et se
+    // verrait refuser sa demande. Une date de la veille est sans conséquence ici :
+    // c'est une intention de début de location, pas une réservation de créneau.
+    const rawStart = input.office_start;
+    if (rawStart != null && rawStart !== '') {
+      if (rawStart === OFFICE_START_ASAP) {
+        office_start = OFFICE_START_ASAP;
+      } else {
+        const iso = parseIsoDate(rawStart);
+        if (!iso) throw bizErr('BESOIN_INVALIDE');
+        const today = todayParis(now);
+        const floor = new Date(`${today}T00:00:00Z`);
+        floor.setUTCDate(floor.getUTCDate() - 1); // tolérance d'un jour, cf. commentaire
+        const limit = new Date(`${today}T00:00:00Z`);
+        limit.setUTCFullYear(limit.getUTCFullYear() + OFFICE_START_MAX_YEARS);
+        const min = floor.toISOString().slice(0, 10);
+        if (iso < min || iso > limit.toISOString().slice(0, 10)) throw bizErr('BESOIN_INVALIDE');
+        office_start = iso;
+      }
+    }
+  }
+
+  return { first_name, last_name, email, phone, activity, subject, consent: 1, office_seats, office_duration, office_start };
 }
 
 const insertStmt = db.prepare(
-  `INSERT INTO prospects (first_name, last_name, email, phone, activity, subject, consent, source)
-   VALUES (@first_name, @last_name, @email, @phone, @activity, @subject, @consent, @source)`
+  `INSERT INTO prospects (first_name, last_name, email, phone, activity, subject, consent, source,
+                          office_seats, office_duration, office_start)
+   VALUES (@first_name, @last_name, @email, @phone, @activity, @subject, @consent, @source,
+           @office_seats, @office_duration, @office_start)`
 );
 
 /**
@@ -73,11 +162,12 @@ const insertStmt = db.prepare(
  *
  * @param {Record<string, unknown>} input Champs du formulaire.
  * @param {string | null} [source] Origine de la saisie (page, campagne), tronquée à 120 caractères.
+ * @param {Date} [now] Instant de référence (tests).
  * @returns {{id: number | bigint, data: object}} Identifiant + données nettoyées (pour l'e-mail).
  * @throws {Error} Erreur métier de validation (cf. `sanitize`).
  */
-export function createProspect(input, source = null) {
-  const data = sanitize(input);
+export function createProspect(input, source = null, now = new Date()) {
+  const data = sanitize(input, now);
   data.source = source ? String(source).slice(0, 120) : null;
   const info = insertStmt.run(data);
   return { id: info.lastInsertRowid, data };
@@ -103,7 +193,7 @@ export function listProspects({ q, status } = {}) {
     params.q = `%${q.trim()}%`;
   }
   const sql =
-    `SELECT id, first_name, last_name, email, phone, activity, consent, status, note, source, subject, created_at
+    `SELECT id, first_name, last_name, email, phone, activity, consent, status, note, source, subject, office_seats, office_duration, office_start, created_at
      FROM prospects ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
      ORDER BY created_at DESC`;
   return db.prepare(sql).all(params);
@@ -186,10 +276,11 @@ function defuseFormula(value) {
  */
 export function exportCsv() {
   const rows = db
-    .prepare(`SELECT first_name, last_name, email, phone, activity, status, note, source, subject, created_at
+    .prepare(`SELECT first_name, last_name, email, phone, activity, status, note, source, subject,
+                     office_seats, office_duration, office_start, created_at
               FROM prospects ORDER BY created_at DESC`)
     .all();
-  const headers = ['Prénom', 'Nom', 'Email', 'Téléphone', 'Activité', 'Statut', 'Note', 'Source', 'Sujet', 'Reçu le'];
+  const headers = ['Prénom', 'Nom', 'Email', 'Téléphone', 'Activité', 'Statut', 'Note', 'Source', 'Sujet', 'Postes', 'Durée', 'Début souhaité', 'Reçu le'];
   const esc = (v) => {
     const s = defuseFormula(v == null ? '' : String(v));
     return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -197,7 +288,7 @@ export function exportCsv() {
   const lines = [headers.join(';')];
   for (const r of rows) {
     lines.push(
-      [r.first_name, r.last_name, r.email, r.phone, r.activity || '', r.status, r.note || '', r.source || '', r.subject || '', r.created_at]
+      [r.first_name, r.last_name, r.email, r.phone, r.activity || '', r.status, r.note || '', r.source || '', r.subject || '', r.office_seats ?? '', r.office_duration || '', r.office_start === OFFICE_START_ASAP ? 'Dès que possible' : r.office_start || '', r.created_at]
         .map(esc)
         .join(';')
     );

@@ -1136,6 +1136,53 @@ figure.carousel-item { margin: 0 16px 0 0; overflow: hidden; }
   transform: scale(1.15);
 }
 
+/* ── Formulaire de contact : bloc « Votre besoin » (bureau privatif) ─────────── */
+/* Encadré sobre : distingue le besoin de l'identité du visiteur. */
+.need-block {
+  margin: 0 0 14px;
+  padding: 14px 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(28, 49, 85, 0.03);
+  min-width: 0; /* un fieldset ne rétrécit pas sous son contenu par défaut */
+}
+.need-title { padding: 0 6px; font-size: 14px; font-weight: 700; color: var(--navy); }
+
+/* Pastilles de choix unique : radios masqués (mais focalisables, donc pas de
+   display:none) + libellés stylés. Elles passent à la ligne sur mobile. */
+.need-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.need-chip { position: relative; display: inline-block; margin: 0; cursor: pointer; }
+.need-chip input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  pointer-events: none;
+}
+.need-chip span {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid rgba(28, 49, 85, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.need-chip:hover span { border-color: var(--accent); }
+.need-chip input:checked + span { background: var(--navy); border-color: var(--navy); color: #fff; }
+.need-chip input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* Date de début + case « Dès que possible » côte à côte, empilées si l'écran est étroit. */
+.need-start { align-items: center; }
+.need-start > .field { flex: 1 1 160px; }
+.need-asap { margin: 0; flex: 0 0 auto; }
+.need-block input:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* ── Page légale (CGU / confidentialité) ─────────────────────────────────────── */
 .legal { max-width: 760px; margin: 0 auto; }
 .legal-logo { display: block; width: 150px; height: auto; margin: 6px 0 22px; }

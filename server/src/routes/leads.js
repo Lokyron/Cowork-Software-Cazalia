@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { createProspect, setProspectNote } from '../lib/prospects.js';
+import { createProspect, setProspectNote, OFFICE_START_ASAP } from '../lib/prospects.js';
 import { sendMail, renderRaw, renderTemplate } from '../lib/mailer.js';
 import { sendBusinessError } from '../middleware.js';
 import { rateLimit } from '../security.js';
@@ -17,6 +17,25 @@ const ACTIVITY_LABEL = {
   independant: 'Indépendant', salarie_teletravail: 'Salarié en télétravail',
   etudiant: 'Étudiant', entreprise: 'Entreprise', autre: 'Autre',
 };
+
+/** Date ISO AAAA-MM-JJ -> JJ/MM/AAAA (format de lecture français). */
+const fmtIsoFr = (iso) => iso.split('-').reverse().join('/');
+
+/**
+ * Lignes lisibles du besoin exprimé pour le bureau privatif (vide pour tout autre sujet).
+ * @param {{office_seats: number | null, office_duration: string | null, office_start: string | null}} data
+ * @returns {string[]} Une ligne « Libellé : valeur » par information renseignée.
+ */
+function needLines(data) {
+  if (data.office_seats == null && !data.office_duration) return [];
+  const lines = [];
+  if (data.office_seats != null) lines.push(`Nombre de postes : ${data.office_seats}`);
+  if (data.office_duration) lines.push(`Durée envisagée : ${data.office_duration}`);
+  if (data.office_start) {
+    lines.push(`Début souhaité : ${data.office_start === OFFICE_START_ASAP ? 'Dès que possible' : fmtIsoFr(data.office_start)}`);
+  }
+  return lines;
+}
 
 // Limitation de débit par IP. Le limiteur mutualisé (`security.js`) borne sa
 // table de compteurs : la version précédente, locale à ce fichier, croissait
@@ -62,6 +81,8 @@ leadsRouter.post('/leads', leadsLimiter, async (req, res) => {
     const message = String(req.body?.message || '').trim().slice(0, 2000);
     if (message) { try { setProspectNote(id, message); } catch { /* best-effort */ } }
 
+    const need = needLines(data);
+
     // Notification best-effort à la gérante (ne fait jamais échouer la saisie).
     try {
       const { subject, html } = renderRaw(
@@ -74,7 +95,9 @@ leadsRouter.post('/leads', leadsLimiter, async (req, res) => {
          <p style="margin:0 0 6px;"><strong>Téléphone :</strong> <a href="tel:{{phone}}">{{phone}}</a></p>
          <p style="margin:0 0 6px;"><strong>Profil :</strong> {{activity}}</p>
          <p style="margin:0 0 6px;"><strong>Origine :</strong> {{source}}</p>
-         <p style="margin:12px 0 4px;"><strong>Message :</strong></p>
+         ${need.length ? `<p style="margin:12px 0 4px;"><strong>Besoin exprimé (bureau privatif) :</strong></p>
+         <p style="line-height:1.6;white-space:pre-wrap;margin:0;">{{need}}</p>` : ''}
+         <p style="margin:12px 0 4px;"><strong>{{message_label}} :</strong></p>
          <p style="line-height:1.6;white-space:pre-wrap;margin:0;">{{message}}</p>`,
         {
           id,
@@ -86,6 +109,9 @@ leadsRouter.post('/leads', leadsLimiter, async (req, res) => {
           phone: data.phone,
           activity: ACTIVITY_LABEL[data.activity] || data.activity || '-',
           source: source || '-',
+          need: need.join('\n'),
+          // Pour le bureau privatif, le message est le « besoin particulier » (facultatif).
+          message_label: need.length ? 'Besoin particulier' : 'Message',
           message: message || '-',
         }
       );
@@ -103,7 +129,9 @@ leadsRouter.post('/leads', leadsLimiter, async (req, res) => {
       const ack = alreadyAcked >= ACK_MAX_PER_ADDRESS ? null : renderTemplate('lead_ack', {
         first_name: data.first_name,
         lead_subject: data.subject,
-        lead_message: message || '-',
+        // Rappel du besoin exprimé + message : une seule variable, le gabarit stocké en
+        // base (éventuellement personnalisé par l'admin) n'a donc pas à changer.
+        lead_message: need.length ? [...need, message ? `\n${message}` : ''].filter(Boolean).join('\n') : (message || '-'),
       });
       if (ack) {
         await sendMail({

@@ -24,6 +24,9 @@ const ACTIVITY_LABEL = {
   autre: 'Autre',
 };
 
+// Date ISO AAAA-MM-JJ -> JJ/MM/AAAA ; `DES_QUE_POSSIBLE` -> libellé.
+const fmtStart = (v) => (v === 'DES_QUE_POSSIBLE' ? 'Dès que possible' : String(v).split('-').reverse().join('/'));
+
 const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const fmtDate = (iso) => {
   const d = new Date(String(iso).replace(' ', 'T') + (String(iso).includes('Z') ? '' : 'Z'));
@@ -210,6 +213,9 @@ function ProspectDetail({ prospect, onClose, onChanged, onDeleted }) {
             <tr><td className="muted">Activité</td><td style={{ textAlign: 'right' }}>{ACTIVITY_LABEL[prospect.activity] || '-'}</td></tr>
             <tr><td className="muted">Reçu le</td><td style={{ textAlign: 'right' }}>{fmtDate(prospect.created_at)}</td></tr>
             {prospect.subject && <tr><td className="muted">Sujet</td><td style={{ textAlign: 'right' }}>{prospect.subject}</td></tr>}
+            {prospect.office_seats != null && <tr><td className="muted">Nombre de postes</td><td style={{ textAlign: 'right' }}>{prospect.office_seats}</td></tr>}
+            {prospect.office_duration && <tr><td className="muted">Durée envisagée</td><td style={{ textAlign: 'right' }}>{prospect.office_duration}</td></tr>}
+            {prospect.office_start && <tr><td className="muted">Début souhaité</td><td style={{ textAlign: 'right' }}>{fmtStart(prospect.office_start)}</td></tr>}
             {prospect.source && <tr><td className="muted">Provenance</td><td style={{ textAlign: 'right' }}>{prospect.source}</td></tr>}
           </tbody>
         </table>

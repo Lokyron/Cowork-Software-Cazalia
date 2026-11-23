@@ -152,6 +152,9 @@ CREATE TABLE IF NOT EXISTS prospects (
   note        TEXT,                                    -- note libre (admin)
   source      TEXT,                                    -- provenance éventuelle (?src=...)
   subject     TEXT,                                    -- sujet choisi dans le formulaire de contact (liste fermée, cf. lib/prospects.js)
+  office_seats    INTEGER,                             -- bureau privatif : nombre de postes souhaités (1-50)
+  office_duration TEXT,                                -- bureau privatif : durée envisagée (liste fermée)
+  office_start    TEXT,                                -- bureau privatif : date ISO AAAA-MM-JJ, 'DES_QUE_POSSIBLE' ou NULL
   created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_prospects_created ON prospects(created_at);

@@ -148,6 +148,7 @@ const MESSAGES = {
   EMAIL_INVALIDE: 'Adresse e-mail invalide.',
   TELEPHONE_INVALIDE: 'Numéro de téléphone invalide.',
   SUJET_INVALIDE: 'Merci de choisir un sujet dans la liste.',
+  BESOIN_INVALIDE: 'Merci de vérifier votre besoin : nombre de postes (1 à 50), durée et date de début (aujourd\'hui ou plus tard).',
   CONSENTEMENT_REQUIS: 'Merci de cocher la case de consentement.',
   STATUT_INVALIDE: 'Statut invalide.',
   PROSPECT_INTROUVABLE: 'Contact introuvable.',

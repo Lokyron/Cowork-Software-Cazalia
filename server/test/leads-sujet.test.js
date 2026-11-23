@@ -39,7 +39,7 @@ async function postLead(body) {
 test('la liste des sujets compte six entrées, dans l\'ordre attendu', () => {
   assert.deepEqual(LEAD_SUBJECTS, [
     'Informations sur les espaces', 'Tarifs et offres', 'Réservation et disponibilités',
-    'Location du bureau privatif', 'Location de la salle de réunion', 'Autre demande',
+    'Location du bureau privatif (longue durée)', 'Location de la salle de réunion', 'Autre demande',
   ]);
 });
 
@@ -61,7 +61,9 @@ test('createProspect : sujet hors liste ou de mauvais type refusé', () => {
 
 test('createProspect : sujet valide écrit en base', () => {
   for (const subject of LEAD_SUBJECTS) {
-    const { id } = createProspect({ ...base(), subject }, 'test');
+    // Le bureau privatif exige désormais son bloc « besoin » (postes + durée).
+    const need = subject.startsWith('Location du bureau privatif') ? { office_seats: 2, office_duration: '12 mois' } : {};
+    const { id } = createProspect({ ...base(), subject, ...need }, 'test');
     assert.equal(db.prepare(`SELECT subject FROM prospects WHERE id = ?`).get(id).subject, subject);
   }
 });

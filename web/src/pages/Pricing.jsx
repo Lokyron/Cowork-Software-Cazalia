@@ -263,7 +263,7 @@ export default function Pricing() {
       {devis && (
         <ContactModal
           onClose={() => setDevis(false)}
-          initialSubject="Location du bureau privatif"
+          initialSubject="Location du bureau privatif (longue durée)"
           source="devis_bureau_prive"
           title="Demander un devis"
           intro="Contrat longue durée personnalisé. Laissez-nous vos coordonnées et décrivez votre besoin."
