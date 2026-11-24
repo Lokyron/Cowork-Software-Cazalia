@@ -369,22 +369,68 @@ function ManualSection({ templates, members, flash }) {
 }
 
 // ── Journal ──────────────────────────────────────────────────────────────────
+const LOG_PAGE_SIZE = 50;
+
 function LogSection() {
   const [log, setLog] = useState(null);
-  useEffect(() => { api.get('/admin/email/log').then((r) => setLog(r.log)).catch(() => setLog([])); }, []);
+  const [total, setTotal] = useState(0);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
+  const [offset, setOffset] = useState(0);
+  // Échec de chargement : distinct d'un filtre qui ne rend rien.
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Recherche différée : un appel par pause de frappe, pas par caractère. Tout
+  // changement de filtre ramène à la première page.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const params = new URLSearchParams({ limit: String(LOG_PAGE_SIZE), offset: String(offset) });
+      if (query.trim()) params.set('email', query.trim());
+      if (status) params.set('status', status);
+      api.get(`/admin/email/log?${params}`)
+        .then((r) => { setLog(r.log); setTotal(r.total); setLoadError(false); })
+        .catch(() => { setLog([]); setTotal(0); setLoadError(true); });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [query, status, offset, reloadKey]);
   if (!log) return null;
   // 'sent' = accepté par le fournisseur ; les statuts suivants viennent du
   // webhook de délivrabilité et disent ce qui est VRAIMENT arrivé.
   const STY = {
     sent: '', delivered: 'green', deferred: 'amber', skipped: 'amber',
-    failed: 'red', bounced: 'red', blocked: 'red', spam: 'red', unsubscribed: 'amber',
+    failed: 'red', error: 'red', bounced: 'red', blocked: 'red', spam: 'red', unsubscribed: 'amber',
   };
   const LABEL = {
     sent: 'accepté', delivered: 'remis', deferred: 'différé', skipped: 'non envoyé',
-    failed: 'échec', bounced: 'rejeté', blocked: 'bloqué', spam: 'signalé en spam', unsubscribed: 'désabonné',
+    failed: 'échec', error: 'erreur fournisseur', bounced: 'rejeté', blocked: 'bloqué', spam: 'signalé en spam', unsubscribed: 'désabonné',
   };
+  const pageEnd = Math.min(offset + LOG_PAGE_SIZE, total);
+  const hasFilter = Boolean(query.trim() || status);
   return (
     <Section title="Journal des envois">
+      <div className="row">
+        <div className="field" style={{ flex: 2 }}>
+          <input
+            type="search"
+            placeholder="🔍 Rechercher par adresse e-mail…"
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOffset(0); }}
+          />
+        </div>
+        <div className="field">
+          <select value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); }}>
+            <option value="">Tous les statuts</option>
+            {Object.entries(LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+          </select>
+        </div>
+      </div>
+      {loadError && (
+        <div className="alert error">
+          Impossible de charger le journal des envois.{' '}
+          <button className="ghost" onClick={() => setReloadKey((k) => k + 1)}>Réessayer</button>
+        </div>
+      )}
       <div className="table-wrap">
         <table>
           <thead><tr><th>Date</th><th>Destinataire</th><th>Template</th><th>Via</th><th>Statut</th></tr></thead>
@@ -401,10 +447,29 @@ function LogSection() {
                 </td>
               </tr>
             ))}
-            {log.length === 0 && <tr><td colSpan={5} className="muted">Aucun envoi.</td></tr>}
+            {log.length === 0 && !loadError && (
+              <tr><td colSpan={5} className="muted">
+                {hasFilter ? (
+                  <>
+                    Aucun envoi ne correspond à ce filtre.{' '}
+                    <button className="ghost" onClick={() => { setQuery(''); setStatus(''); setOffset(0); }}>Effacer les filtres</button>
+                  </>
+                ) : 'Aucun envoi.'}
+              </td></tr>
+            )}
           </tbody>
         </table>
       </div>
+      {total > 0 && (
+        <div className="flex-between" style={{ marginTop: 12 }}>
+          <span className="muted">{offset + 1}-{pageEnd} sur {total}</span>
+          <div>
+            <button className="ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - LOG_PAGE_SIZE))}>Précédent</button>
+            {' '}
+            <button className="ghost" disabled={pageEnd >= total} onClick={() => setOffset(offset + LOG_PAGE_SIZE)}>Suivant</button>
+          </div>
+        </div>
+      )}
     </Section>
   );
 }

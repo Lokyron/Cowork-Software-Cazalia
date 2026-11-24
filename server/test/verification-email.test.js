@@ -111,6 +111,75 @@ test('une nouvelle demande invalide le jeton précédent', () => {
   assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM email_verifications WHERE user_id = ? AND used_at IS NULL`).get(uid).n, 1);
 });
 
+test('renvoi : le nouveau jeton n\'invalide l\'ancien qu\'une fois l\'envoi confirmé', () => {
+  const uid = makeUser();
+  const old = V.createVerificationToken(uid).token;
+
+  // Envoi réussi : un seul lien actif, le nouveau.
+  const ok = V.createVerificationToken(uid, { keepPrevious: true }).token;
+  assert.ok(V.getVerificationInfo(old) && V.getVerificationInfo(ok)); // transitoirement les deux
+  V.settleVerificationToken(uid, ok, true);
+  assert.equal(V.getVerificationInfo(old), null);
+  assert.ok(V.getVerificationInfo(ok));
+  assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM email_verifications WHERE user_id = ? AND used_at IS NULL`).get(uid).n, 1);
+
+  // Envoi raté : le nouveau jeton, jamais remis, est écarté ; l'actuel reste valable.
+  const lost = V.createVerificationToken(uid, { keepPrevious: true }).token;
+  V.settleVerificationToken(uid, lost, false);
+  assert.equal(V.getVerificationInfo(lost), null);
+  assert.ok(V.getVerificationInfo(ok));
+});
+
+test('renvois concurrents : deux émissions entrelacées laissent toujours un lien utilisable', () => {
+  const pending = (uid) => db.prepare(`SELECT COUNT(*) AS n FROM email_verifications WHERE user_id = ? AND used_at IS NULL`).get(uid).n;
+
+  // A crée, B crée, A confirme, B confirme (double-clic sur « Renvoyer le lien »).
+  const uid = makeUser();
+  const old = V.createVerificationToken(uid).token;
+  const a = V.createVerificationToken(uid, { keepPrevious: true }).token;
+  const b = V.createVerificationToken(uid, { keepPrevious: true }).token;
+  V.settleVerificationToken(uid, a, true);
+  V.settleVerificationToken(uid, b, true);
+  assert.equal(V.getVerificationInfo(old), null, 'le lien d\'avant les renvois ne doit plus marcher');
+  assert.equal(V.getVerificationInfo(a), null, 'A est antérieur à B : remplacé');
+  assert.ok(V.getVerificationInfo(b), 'B, le plus récent confirmé, reste utilisable');
+  assert.equal(pending(uid), 1);
+
+  // Ordre inverse : B confirme avant A. Le plus récent (B) survit encore.
+  const uid2 = makeUser();
+  const a2 = V.createVerificationToken(uid2, { keepPrevious: true }).token;
+  const b2 = V.createVerificationToken(uid2, { keepPrevious: true }).token;
+  V.settleVerificationToken(uid2, b2, true);
+  V.settleVerificationToken(uid2, a2, true);
+  assert.ok(V.getVerificationInfo(b2));
+  assert.ok(pending(uid2) >= 1);
+
+  // Un envoi concurrent raté n'emporte pas le lien de l'autre.
+  const uid3 = makeUser();
+  const a3 = V.createVerificationToken(uid3, { keepPrevious: true }).token;
+  const b3 = V.createVerificationToken(uid3, { keepPrevious: true }).token;
+  V.settleVerificationToken(uid3, b3, false);
+  V.settleVerificationToken(uid3, a3, true);
+  assert.ok(V.getVerificationInfo(a3));
+  assert.equal(V.getVerificationInfo(b3), null);
+
+  // Cas nominal : un seul renvoi réussi invalide l'ancien jeton.
+  const uid4 = makeUser();
+  const before = V.createVerificationToken(uid4).token;
+  const after = V.createVerificationToken(uid4, { keepPrevious: true }).token;
+  V.settleVerificationToken(uid4, after, true);
+  assert.equal(V.getVerificationInfo(before), null);
+  assert.ok(V.getVerificationInfo(after));
+  assert.equal(pending(uid4), 1);
+
+  // Les jetons d'un autre compte ne sont jamais touchés.
+  const other = makeUser();
+  const otherTok = V.createVerificationToken(other).token;
+  const mine = V.createVerificationToken(uid4, { keepPrevious: true }).token;
+  V.settleVerificationToken(uid4, mine, true);
+  assert.ok(V.getVerificationInfo(otherTok));
+});
+
 test('la durée de vie par défaut du jeton est de 7 jours', () => {
   assert.equal(config.emailVerifyTokenTtlMs, 7 * 24 * 3600 * 1000);
   const uid = makeUser();
@@ -234,7 +303,7 @@ test('POST /verify-email passe email_verified à 1 ; GET /verify-email/:token va
   assert.equal(again.json.ok, true);
 });
 
-test('POST /resend-verification : exige une session, invalide l\'ancien lien, neutre si déjà vérifié', async () => {
+test('POST /resend-verification : exige une session, garde l\'ancien lien si l\'envoi échoue, neutre si déjà vérifié', async () => {
   assert.equal((await call('POST', '/resend-verification')).status, 401);
   const uid = makeUser();
   const { token: old } = V.createVerificationToken(uid);
@@ -242,8 +311,11 @@ test('POST /resend-verification : exige une session, invalide l\'ancien lien, ne
   // Aucun fournisseur d'e-mail en test : l'envoi échoue et le renvoi le dit (503).
   assert.equal(r.status, 503);
   assert.equal(r.json.error, 'EMAIL_ENVOI_IMPOSSIBLE');
-  assert.equal(V.getVerificationInfo(old), null); // l'ancien lien est invalidé
+  // L'envoi a échoué : l'ancien lien, lui, doit rester utilisable (le membre ne reste pas sans lien).
+  assert.ok(V.getVerificationInfo(old));
   assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM email_verifications WHERE user_id = ? AND used_at IS NULL`).get(uid).n, 1);
+  assert.doesNotThrow(() => V.consumeVerificationToken(old));
+  assert.equal(isVerified(uid), 1);
 
   const verified = makeUser({ verified: 1 });
   const before = db.prepare(`SELECT COUNT(*) AS n FROM email_verifications WHERE user_id = ?`).get(verified).n;

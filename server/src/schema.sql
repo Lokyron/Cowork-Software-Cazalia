@@ -119,6 +119,10 @@ CREATE INDEX IF NOT EXISTS idx_resets_user ON password_resets(user_id);
 
 -- Jetons de vérification d'adresse e-mail. Même structure que password_resets : seule
 -- l'EMPREINTE SHA-256 du jeton (préfixe `sha256:`) est stockée, jamais le jeton en clair.
+-- ATTENTION : `invalidateOlder` (lib/emailVerification.js) compare les `rowid` IMPLICITES pour
+-- ordonner les jetons. Un rebuild de cette table (migration de recréation) doit préserver l'ordre
+-- d'insertion des rowid (INSERT ... SELECT ... ORDER BY rowid) : sinon l'invalidation se
+-- tromperait de jetons, sans aucune erreur.
 CREATE TABLE IF NOT EXISTS email_verifications (
   token      TEXT    PRIMARY KEY,                       -- empreinte `sha256:<hex>` du jeton
   user_id    INTEGER NOT NULL REFERENCES users(id),
@@ -186,7 +190,9 @@ CREATE TABLE IF NOT EXISTS email_log (
   subject       TEXT,
   -- Statut à l'envoi : 'sent' | 'failed' | 'skipped'
   -- Enrichi ensuite par les webhooks de délivrabilité du fournisseur :
-  -- 'delivered' | 'bounced' | 'blocked' | 'spam' | 'deferred' | 'unsubscribed'
+  -- 'delivered' | 'bounced' | 'blocked' | 'spam' | 'deferred' | 'unsubscribed' | 'error'
+  -- ('error' = événement d'erreur Brevo reçu APRÈS acceptation : le quota est consommé,
+  -- contrairement à 'failed' = message jamais remis au fournisseur)
   status        TEXT    NOT NULL,
   error         TEXT,
   provider      TEXT,                                     -- 'smtp' | 'brevo'

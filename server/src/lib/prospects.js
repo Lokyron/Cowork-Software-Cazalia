@@ -158,6 +158,20 @@ const insertStmt = db.prepare(
 );
 
 /**
+ * Valide une demande exactement comme `createProspect`, SANS rien enregistrer.
+ * Sert au chemin « champ piège » de POST /api/leads : une charge invalide y reçoit
+ * la même erreur 400 qu'un envoi nominal, une charge valide un faux succès.
+ *
+ * @param {object} input Corps de la requête.
+ * @param {Date} [now] Horloge (tests).
+ * @returns {object} Données nettoyées (adresse normalisée comme à l'enregistrement), jamais persistées.
+ * @throws {Error} Mêmes erreurs métier que `createProspect` (cf. `sanitize`).
+ */
+export function validateProspect(input, now = new Date()) {
+  return sanitize(input, now);
+}
+
+/**
  * Enregistre une pré-inscription publique.
  *
  * @param {Record<string, unknown>} input Champs du formulaire.

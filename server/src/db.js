@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import { config } from './config.js';
 import { defaultSpaceContent } from './lib/spaceContent.js';
-import { DEFAULT_TEMPLATES } from './lib/emailTemplates.js';
+import { DEFAULT_TEMPLATES, btn, btnGhost, fallbackLink, ctaStack } from './lib/emailTemplates.js';
 import { encryptSecret, isEncrypted } from './lib/crypto.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -447,4 +447,64 @@ if (!ctaStackFlag) {
     db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_cta_stack_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
   });
   ctaTx();
+}
+
+// Gabarits d'e-mails : boutons « bulletproof » (tableau à cellule colorée), lien de secours en
+// clair sous le bouton de `password_reset` / `email_verification`, et « Ancien créneau » plus
+// lisible (#5b6577 au lieu de #9aa3b2). Le semis par INSERT OR IGNORE ne touche jamais les
+// lignes existantes : sans cette migration, ces correctifs n'atteindraient pas la production.
+// Retouches CHIRURGICALES d'un motif exact, jamais de réécriture du corps : si le motif attendu
+// est absent (corps édité depuis /admin/emails), la ligne est laissée telle quelle. Le drapeau
+// est posé dans tous les cas : un corps ignoré garde son ancien balisage, sans nouvel essai.
+const bulletproofFlag = db.prepare(`SELECT value FROM app_settings WHERE key = ?`).get('migr_email_bulletproof_v1');
+if (!bulletproofFlag) {
+  // Anciens boutons, tels que semés avant ce lot (aucune classe, <a> en ligne portant le fond).
+  const OLD_BTN = /<a href="(\{\{[a-z_]+\}\})" style="display:inline-block;background:#1c3155;color:#fff;text-decoration:none;padding:11px 20px;border-radius:9px;font-weight:600;">([^<]*)<\/a>/;
+  const OLD_GHOST = /<a href="(\{\{calendar_url\}\})" style="display:inline-block;background:#ffffff;color:#1c3155;text-decoration:none;padding:10px 18px;border-radius:9px;font-weight:600;border:1px solid rgba\(28,49,85,\.25\);">([^<]*)<\/a>/;
+  // Bouton seul dans son paragraphe : un tableau ne peut pas rester dans un <p> (le paragraphe
+  // se refermerait avant lui), le conteneur devient donc un <div> de mêmes marges.
+  const OLD_BTN_P = new RegExp(`<p style="(margin:[^"]*)">(${OLD_BTN.source})</p>`);
+  // Forme F2 : les deux anciens boutons empilés dans un même <p>, séparés par <br><br>.
+  // Marge exacte du semis d'origine : une marge retouchée n'est pas reconnue (corps laissé tel quel).
+  // Groupes : 1 = bouton plein, 2/3 = href/libellé, 4 = bouton agenda, 5/6 = href/libellé.
+  const OLD_CTA_P = new RegExp(`<p style="margin:18px 0 0;">(${OLD_BTN.source})<br><br>(${OLD_GHOST.source})</p>`);
+  const FALLBACK_FOR = { password_reset: '{{reset_link}}', email_verification: '{{verify_link}}' };
+  const rows = db.prepare(`SELECT code, body_html FROM email_templates
+                            WHERE code IN ('booking_confirmation','booking_modified','booking_cancelled','password_reset','email_verification','manual')`).all();
+  const upd = db.prepare(`UPDATE email_templates SET body_html = ?, updated_at = datetime('now') WHERE code = ?`);
+  const bulletproofTx = db.transaction(() => {
+    for (const row of rows) {
+      let body = row.body_html;
+      // 1) Bouton principal seul dans un <p> (annulation, reset, vérification, envoi manuel).
+      body = body.replace(OLD_BTN_P, (_m, margin, _a, href, label) => {
+        const fallback = FALLBACK_FOR[row.code] === href && !body.includes('Si le bouton ne fonctionne pas')
+          ? `\n${fallbackLink(href)}` : '';
+        return `<div style="${margin}">${btn(href, label)}</div>${fallback}`;
+      });
+      // 2) Boutons de la pile d'actions (réservation). Deux formes en production :
+      //    - F2, pile « <p> bouton <br><br> bouton agenda </p> » : forme de TOUTE installation
+      //      antérieure au tableau (migr_calendar_btn_v1 puis migr_cta_stack_v1). Le paragraphe
+      //      est remplacé par la pile courante (`ctaStack`), libellés conservés.
+      //    - F3, tableau semé avec les anciens boutons : ancre remplacée sur place dans sa cellule.
+      //    Dans les deux cas la ligne agenda est balisée <!--cal--> et le résultat est
+      //    identique au gabarit courant (cellule du bouton principal sans padding : l'espace vient
+      //    du `padding:10px 0 0` de la ligne agenda).
+      if (row.code === 'booking_confirmation' || row.code === 'booking_modified') {
+        body = body.replace(OLD_CTA_P, (_m, _btn, href, label, _ghost, _ghostHref, ghostLabel) => ctaStack(href, label, ghostLabel));
+        body = body.replace(/<tr><td style="padding:0 0 10px;">(<a href="\{\{dashboard_url\}\}"[^>]*>[^<]*<\/a>)<\/td><\/tr>/, (m, a) => {
+          const o = OLD_BTN.exec(a);
+          return o ? `<tr><td>${btn(o[1], o[2])}</td></tr>` : m;
+        });
+        body = body.replace(new RegExp(`<tr><td>(${OLD_GHOST.source})</td></tr>`), (_m, _a, href, label) =>
+          `<!--cal--><tr><td style="padding:10px 0 0;">${btnGhost(href, label)}</td></tr><!--/cal-->`);
+      }
+      // 3) Ancien créneau : gris plus foncé (contraste), uniquement dans la cellule visée.
+      if (row.code === 'booking_modified') {
+        body = body.replace('text-align:right;color:#9aa3b2;text-decoration:line-through;', 'text-align:right;color:#5b6577;text-decoration:line-through;');
+      }
+      if (body !== row.body_html) upd.run(body, row.code);
+    }
+    db.prepare(`INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('migr_email_bulletproof_v1', ?, datetime('now'))`).run(JSON.stringify('done'));
+  });
+  bulletproofTx();
 }

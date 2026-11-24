@@ -47,7 +47,7 @@ function safeEqual(a, b) {
 // destinataire du même lot) ; sans cet ordre, le journal mentirait.
 const RANK = {
   skipped: 0, sent: 1, deferred: 2, delivered: 3,
-  unsubscribed: 4, blocked: 5, spam: 6, failed: 7, bounced: 8,
+  unsubscribed: 4, blocked: 5, error: 5, spam: 6, failed: 7, bounced: 8,
 };
 
 const findByMessageId = db.prepare(

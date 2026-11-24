@@ -103,13 +103,17 @@ export async function getAccount(apiKey) {
  * @param {string} params.to Adresse du destinataire.
  * @param {string} params.subject Sujet rendu.
  * @param {string} params.html Corps HTML rendu.
+ * @param {string | null} [params.text] Version texte brut (`textContent`) : sans elle,
+ *        le message serait HTML seul (règle spam MIME_HTML_ONLY).
+ * @param {Record<string, string> | null} [params.headers] En-têtes personnalisés
+ *        (ex. `List-Unsubscribe`), transmis dans le champ `headers` de l'API.
  * @param {string | null} [params.tag] Étiquette Brevo (code du gabarit) : elle
  *        permet de filtrer les statistiques par type de message côté Brevo.
  * @returns {Promise<{messageId: string | null}>}
  * @throws {Error} Si l'envoi est refusé (clé invalide, domaine non authentifié,
  *         quota épuisé…).
  */
-export async function sendEmail({ apiKey, sender, to, subject, html, tag = null, replyTo = null }) {
+export async function sendEmail({ apiKey, sender, to, subject, html, text = null, headers = null, tag = null, replyTo = null }) {
   const body = {
     sender: sender.name ? { name: sender.name, email: sender.email } : { email: sender.email },
     to: [{ email: to }],
@@ -117,6 +121,8 @@ export async function sendEmail({ apiKey, sender, to, subject, html, tag = null,
     htmlContent: html,
   };
   if (replyTo && replyTo.email) body.replyTo = replyTo.name ? { name: replyTo.name, email: replyTo.email } : { email: replyTo.email };
+  if (text) body.textContent = text;
+  if (headers && Object.keys(headers).length) body.headers = headers;
   if (tag) body.tags = [tag];
   const out = await call(apiKey, '/smtp/email', { method: 'POST', body });
   return { messageId: normalizeMessageId(out.messageId) };
@@ -150,7 +156,10 @@ const EVENT_STATUS = {
   spam: 'spam', complaint: 'spam',
   unsubscribed: 'unsubscribed', unsubscribe: 'unsubscribed',
   deferred: 'deferred',
-  error: 'failed',
+  // Brevo a ACCEPTÉ le message (quota consommé chez lui) puis signale une erreur :
+  // distinct de 'failed' (jamais remis au fournisseur, quota intact), sans quoi le
+  // webhook ferait « reculer » le compteur du jour (cf. `countSentTodayStmt`).
+  error: 'error',
 };
 
 /**

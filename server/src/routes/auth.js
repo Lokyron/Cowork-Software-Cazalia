@@ -26,7 +26,7 @@ import {
 import { deleteUserAccount, getProfile, updateOwnProfile } from '../lib/users.js';
 import { syncUser } from '../lib/newsletter.js';
 import { sendPasswordResetEmail, sendEmailVerificationEmail } from '../lib/mailer.js';
-import { createVerificationToken, getVerificationInfo, consumeVerificationToken } from '../lib/emailVerification.js';
+import { createVerificationToken, settleVerificationToken, getVerificationInfo, consumeVerificationToken } from '../lib/emailVerification.js';
 import { generateSecret, sealSecret, otpauthUri, qrDataUrl, verifyToken } from '../lib/twofactor.js';
 
 export const authRouter = Router();
@@ -121,20 +121,36 @@ function publicUser(u) {
  *
  * @param {import('express').Request} req Requête en cours (origine du lien).
  * @param {number} userId Compte à vérifier.
+ * @param {{keepPreviousOnFailure?: boolean}} [opts] Renvoi explicite : l'ancien lien n'est
+ *        invalidé qu'une fois le nouvel envoi confirmé, pour ne pas laisser le membre sans lien valide.
+ *        Cette garantie ne couvre QUE le renvoi explicite. À l'inscription et au changement d'adresse,
+ *        `createVerificationToken` invalide tout puis insère : si l'envoi échoue, le membre n'a plus
+ *        de lien utilisable et doit en redemander un (renvoi). C'est voulu pour le changement
+ *        d'adresse : un lien parti vers l'ANCIENNE adresse ne doit jamais valider la nouvelle.
  * @returns {Promise<{sent: boolean, reason?: string}>} `sent:false` si le courrier
  *          n'est pas parti (SMTP absent, plafond, échec) ou si une exception a eu lieu.
  */
-async function sendVerificationLink(req, userId) {
+async function sendVerificationLink(req, userId, { keepPreviousOnFailure = false } = {}) {
+  let issued = null;
   try {
-    const { token, user } = createVerificationToken(userId);
+    // `keepPrevious` seulement pour le renvoi explicite (cf. la JSDoc ci-dessus) : inscription et
+    // changement d'adresse invalident volontairement tout lien antérieur, même si l'envoi échoue.
+    issued = createVerificationToken(userId, { keepPrevious: keepPreviousOnFailure });
+    const { token, user } = issued;
     const base = config.publicBaseUrl || `${req.protocol}://${req.get('host')}`;
     const out = await sendEmailVerificationEmail({
       to: user.email, displayName: user.display_name,
       verifyUrl: `${base}/verifier-email?token=${token}`, userId: user.id,
     });
-    return { sent: Boolean(out?.sent), reason: out?.reason };
+    const sent = Boolean(out?.sent);
+    if (keepPreviousOnFailure) settleVerificationToken(userId, token, sent);
+    return { sent, reason: out?.reason };
   } catch (err) {
     console.warn('[verification-email]', err.message); // jamais bloquant, rien n'est exposé
+    if (keepPreviousOnFailure && issued) {
+      try { settleVerificationToken(userId, issued.token, false); }
+      catch (e) { console.warn('[verification-email] jeton non écarté :', e.message); }
+    }
     return { sent: false, reason: 'EXCEPTION' };
   }
 }
@@ -525,7 +541,7 @@ authRouter.post('/resend-verification', requireAuth, resendVerifyLimiter, async 
   const u = getUserFull.get(req.user.id);
   if (u && !u.email_verified) {
     securityEvent('email_verification_renvoyee', { userId: u.id, ip: req.ip });
-    const out = await sendVerificationLink(req, u.id);
+    const out = await sendVerificationLink(req, u.id, { keepPreviousOnFailure: true });
     if (!out.sent) {
       // La cause interne (SMTP absent, plafond…) reste dans le journal des e-mails.
       return sendBusinessError(res, fail('EMAIL_ENVOI_IMPOSSIBLE'));

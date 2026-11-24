@@ -12,8 +12,8 @@ import nodemailer from 'nodemailer';
 import { db } from '../db.js';
 import { config } from '../config.js';
 import { getSmtp, getArrival, getMail, getBrevo, getSender } from './settings.js';
-import { wrapHtml, voucherBox, accessBox } from './emailTemplates.js';
-import { escapeHtml, headerSafe } from './html.js';
+import { wrapHtml, voucherBox, accessBox, PREHEADERS, INTERNAL_TEMPLATES } from './emailTemplates.js';
+import { escapeHtml, headerSafe, htmlToText } from './html.js';
 import { parisDayStartUtc } from './time.js';
 import * as brevo from './brevo.js';
 
@@ -27,6 +27,8 @@ const baseUrl = () => (config.publicBaseUrl || 'https://cazalia.fr').replace(/\/
 // Logo d'en-tête des e-mails : PNG transparent (SVG non supporté par la plupart des
 // clients mail), servi en URL absolue depuis le front.
 const logoUrl = () => `${baseUrl()}/images/logo-email.png`;
+// Adresse de contact de la plateforme (même boîte que `LEADS_RECIPIENT` dans routes/leads.js).
+const CONTACT_EMAIL = 'contact@cazalia.fr';
 
 // ── Transport ────────────────────────────────────────────────────────────────
 /**
@@ -95,7 +97,38 @@ export function interpolateText(str, vars) {
   );
 }
 
+// Retire le bouton « Ajouter à mon agenda » quand `calendar_url` est vide : ligne
+// balisée `<!--cal-->…<!--/cal-->` des gabarits courants, ou ancien lien en ligne
+// (gabarits migrés avant l'introduction du balisage). Sinon le bouton aurait un `href` vide.
+function dropEmptyCalendar(bodyHtml, full) {
+  const s = String(bodyHtml);
+  if (full.calendar_url) return s;
+  return s
+    .replace(/<!--cal-->[\s\S]*?<!--\/cal-->/g, '')
+    .replace(/<a\b[^>]*href="\{\{\s*calendar_url\s*\}\}"[^>]*>[\s\S]*?<\/a>/g, '');
+}
+
+// Remplace les blocs conditionnels `{{wifi_block}}` et `{{access_block}}` : fragments HTML
+// construits par l'application, rendus seulement quand la variable correspondante est fournie.
+function fillBlocks(bodyHtml, full) {
+  const wifiBlock = full.wifi_voucher ? interpolate(voucherBox, full) : '';
+  const accessBlock = full.access_pin ? interpolate(accessBox, full) : '';
+  return dropEmptyCalendar(bodyHtml, full)
+    .replace(/\{\{\s*wifi_block\s*\}\}/g, wifiBlock)
+    .replace(/\{\{\s*access_block\s*\}\}/g, accessBlock);
+}
+
 const getTemplateStmt = db.prepare(`SELECT * FROM email_templates WHERE code = ?`);
+
+/**
+ * Le gabarit existe-t-il ? (lecture seule, sans rendu ni journal)
+ *
+ * @param {string} code Code du gabarit.
+ * @returns {boolean}
+ */
+export function templateExists(code) {
+  return Boolean(getTemplateStmt.get(code));
+}
 
 /**
  * Rend un gabarit enregistré (sujet + HTML complet avec la mise en page).
@@ -107,22 +140,24 @@ const getTemplateStmt = db.prepare(`SELECT * FROM email_templates WHERE code = ?
  *
  * @param {string} code Code du gabarit (`booking_confirmation`, `password_reset`…).
  * @param {Record<string, unknown>} [vars] Variables du gabarit.
+ * @param {{marketing?: boolean}} [options] `marketing` : envoi commercial (campagne). Le pied de
+ *        page suit la MÊME règle que les en-têtes (`mailKind`) : jamais de `List-Unsubscribe` avec
+ *        un pied « e-mail de service », ni l'inverse.
  * @returns {{subject: string, html: string} | null} `null` si le gabarit n'existe pas.
  */
-export function renderTemplate(code, vars = {}) {
+export function renderTemplate(code, vars = {}, { marketing = false } = {}) {
   const t = getTemplateStmt.get(code);
   if (!t) return null;
   const full = { site_name: 'Cazalia', wifi_ssid: getArrival().wifi_ssid, ...vars };
-  const wifiBlock = full.wifi_voucher ? interpolate(voucherBox, full) : '';
-  const accessBlock = full.access_pin ? interpolate(accessBox, full) : '';
-  const bodyRaw = interpolate(
-    t.body_html
-      .replace(/\{\{\s*wifi_block\s*\}\}/g, wifiBlock)
-      .replace(/\{\{\s*access_block\s*\}\}/g, accessBlock),
-    full,
-  );
+  const bodyRaw = interpolate(fillBlocks(t.body_html, full), full);
   const subject = interpolateText(t.subject, full);
-  const html = wrapHtml({ title: subject, content: bodyRaw, siteName: full.site_name, logoUrl: logoUrl() });
+  // Mention de pied selon le destinataire : envoi commercial, accusé de contact sans
+  // compte, sinon message de service lié au compte (cf. `footerVariant`).
+  const footer = footerVariant(code, marketing);
+  const html = wrapHtml({
+    title: subject, content: bodyRaw, siteName: full.site_name, logoUrl: logoUrl(),
+    footer, preheader: PREHEADERS[code] || '', baseUrl: baseUrl(),
+  });
   return { subject, html };
 }
 
@@ -134,22 +169,20 @@ export function renderTemplate(code, vars = {}) {
  * @param {string} subject Sujet, avec marqueurs `{{variable}}`.
  * @param {string} bodyHtml Corps HTML, avec marqueurs `{{variable}}`.
  * @param {Record<string, unknown>} [vars] Variables du gabarit.
+ * @param {{footer?: 'account' | 'contact' | 'marketing' | 'internal', preheader?: string}} [options]
+ *        Variante de mention de pied de page (`account` par défaut) et texte d'aperçu.
  * @returns {{subject: string, html: string}}
  */
-export function renderRaw(subject, bodyHtml, vars = {}) {
+export function renderRaw(subject, bodyHtml, vars = {}, { footer = 'account', preheader = '' } = {}) {
   const full = { site_name: 'Cazalia', wifi_ssid: getArrival().wifi_ssid, ...vars };
-  const wifiBlock = full.wifi_voucher ? interpolate(voucherBox, full) : '';
-  const accessBlock = full.access_pin ? interpolate(accessBox, full) : '';
-  const body = interpolate(
-    String(bodyHtml)
-      .replace(/\{\{\s*wifi_block\s*\}\}/g, wifiBlock)
-      .replace(/\{\{\s*access_block\s*\}\}/g, accessBlock),
-    full,
-  );
+  const body = interpolate(fillBlocks(bodyHtml, full), full);
   const renderedSubject = interpolateText(subject, full);
   return {
     subject: renderedSubject,
-    html: wrapHtml({ title: renderedSubject, content: body, siteName: full.site_name, logoUrl: logoUrl() }),
+    html: wrapHtml({
+      title: renderedSubject, content: body, siteName: full.site_name, logoUrl: logoUrl(),
+      footer, preheader, baseUrl: baseUrl(),
+    }),
   };
 }
 
@@ -164,6 +197,21 @@ const logEmail = (row) => {
   } catch { /* ignore */ }
 };
 
+/**
+ * Journalise un envoi écarté AVANT d'atteindre `sendMail` (utilisateur, gabarit ou
+ * réservation introuvable, aucun administrateur…). Sans cette ligne, le message
+ * disparaîtrait sans la moindre trace dans le journal des envois.
+ *
+ * @param {object} p
+ * @param {string} p.toEmail Destinataire, ou à défaut l'identifiant concerné (`to_email` est NOT NULL).
+ * @param {string | null} p.templateCode Code du gabarit visé.
+ * @param {string} p.reason Code de raison, écrit dans la colonne `error`.
+ * @param {number | null} [p.toUserId] Utilisateur destinataire, quand il est connu.
+ */
+export function logSkipped({ toEmail, templateCode, reason, toUserId = null }) {
+  logEmail({ to_email: toEmail ?? '', to_user_id: toUserId, template_code: templateCode, status: 'skipped', error: reason });
+}
+
 // ── Plafond d'envois quotidien ───────────────────────────────────────────────
 // Motivation : l'offre gratuite Brevo plafonne à 300 e-mails par jour. Sans
 // garde-fou, une campagne de 300 messages épuiserait le quota et le PREMIER
@@ -172,7 +220,8 @@ const logEmail = (row) => {
 // non commerciaux, et on refuse les envois de masse avant d'atteindre le mur.
 const countSentTodayStmt = db.prepare(
   // 'skipped' n'a jamais quitté l'application ; 'failed' n'a pas été accepté par
-  // le fournisseur : ni l'un ni l'autre ne consomme le quota.
+  // le fournisseur : ni l'un ni l'autre ne consomme le quota. 'error' (événement
+  // Brevo APRÈS acceptation), 'bounced', 'blocked' et 'spam' l'ont consommé : comptés.
   `SELECT COUNT(*) AS n FROM email_log WHERE created_at >= ? AND status NOT IN ('skipped', 'failed')`
 );
 
@@ -189,6 +238,38 @@ function mailKind(templateCode, marketing) {
   if (templateCode === 'password_reset' || templateCode === 'email_verification') return 'critical';
   if (marketing || templateCode === 'manual') return 'marketing';
   return 'transactional';
+}
+
+/**
+ * En-têtes de désinscription d'un envoi, selon sa nature.
+ *
+ * `marketing` : `List-Unsubscribe`. L'application n'expose AUCUNE URL de désinscription
+ * en un clic (le choix se fait connecté, dans « Mon compte ») : on ne pose donc que
+ * l'adresse `mailto:` de contact. `List-Unsubscribe-Post` (RFC 8058) exige une URL
+ * HTTPS : il n'est volontairement pas émis. `critical` et `transactional` : aucun
+ * en-tête (un message de service ne se « désinscrit » pas).
+ *
+ * @param {'critical' | 'marketing' | 'transactional'} kind Nature du message.
+ * @returns {Record<string, string> | null}
+ */
+function mailHeaders(kind) {
+  if (kind !== 'marketing') return null;
+  return { 'List-Unsubscribe': `<mailto:${CONTACT_EMAIL}?subject=Desinscription>` };
+}
+
+/**
+ * Variante de mention de pied de page d'un envoi. Dérive de `mailKind`, la même source de
+ * vérité que les en-têtes (`mailHeaders`) : un message `marketing` porte le pied commercial,
+ * quel que soit son code de gabarit. Hors commercial, l'accusé de réception d'une demande
+ * de contact (destinataire sans compte) a son pied propre ; le reste est un message de service.
+ *
+ * @param {string | null} templateCode Code du gabarit.
+ * @param {boolean} [marketing] Envoi commercial explicite (campagne).
+ * @returns {'account' | 'contact' | 'marketing'}
+ */
+export function footerVariant(templateCode, marketing = false) {
+  if (mailKind(templateCode, marketing) === 'marketing') return 'marketing';
+  return templateCode === 'lead_ack' ? 'contact' : 'account';
 }
 
 /**
@@ -223,6 +304,18 @@ function quotaRefusal(kind) {
 }
 
 /**
+ * Un envoi de cette nature serait-il accepté MAINTENANT par les garde-fous de `sendMail`
+ * (fournisseur configuré, plafond du jour) ? Lecture seule : rien n'est envoyé ni journalisé.
+ * Ne peut pas prévoir un échec du fournisseur lui-même, qui ne se connaît qu'après l'appel.
+ *
+ * @param {{templateCode?: string | null, marketing?: boolean}} [p]
+ * @returns {boolean}
+ */
+export function wouldAcceptSend({ templateCode = null, marketing = false } = {}) {
+  return isMailConfigured() && quotaRefusal(mailKind(templateCode, marketing)) === null;
+}
+
+/**
  * Envoi bas niveau d'un message déjà rendu, avec journalisation systématique.
  *
  * Unique point de sortie des e-mails : le plafond quotidien, le choix du
@@ -234,11 +327,13 @@ function quotaRefusal(kind) {
  * @param {number | null} [params.toUserId] Utilisateur associé (journal).
  * @param {string} params.subject Sujet rendu.
  * @param {string} params.html Corps HTML rendu.
+ * @param {string | null} [params.text] Version texte brut explicite ; elle l'emporte sur
+ *        la conversion automatique du HTML (`htmlToText`) quand elle n'est pas vide.
  * @param {string | null} [params.templateCode] Code du gabarit (journal, étiquette Brevo).
  * @param {boolean} [params.marketing] Envoi commercial : soumis à la réserve de quota.
  * @returns {Promise<{sent: boolean, reason?: string, error?: string, messageId?: string | null}>}
  */
-export async function sendMail({ to, toUserId = null, subject, html, templateCode = null, marketing = false, fromEmail = null, fromName = null, replyTo = null }) {
+export async function sendMail({ to, toUserId = null, subject, html, text = null, templateCode = null, marketing = false, fromEmail = null, fromName = null, replyTo = null }) {
   const { provider } = getMail();
   const base = { to_email: to, to_user_id: toUserId, template_code: templateCode, subject, provider };
 
@@ -256,6 +351,11 @@ export async function sendMail({ to, toUserId = null, subject, html, templateCod
     return { sent: false, reason: refusal };
   }
 
+  // Version texte : un message HTML seul déclenche MIME_HTML_ONLY (spam) et reste
+  // illisible en aperçu de notification ou en lecteur d'écran simple.
+  const textBody = (typeof text === 'string' && text.trim()) ? text : htmlToText(html);
+  const headers = mailHeaders(mailKind(templateCode, marketing));
+
   try {
     let messageId = null;
     // Expéditeur : par défaut l'adresse configurée ; un appelant peut l'imposer
@@ -268,12 +368,14 @@ export async function sendMail({ to, toUserId = null, subject, html, templateCod
       const out = await brevo.sendEmail({
         apiKey: getBrevo().apiKey,
         sender: { name: fromName || sender.fromName, email: fromEmail || sender.fromEmail },
-        to, subject, html, tag: templateCode, replyTo: replyToObj,
+        to, subject, html, text: textBody, headers, tag: templateCode, replyTo: replyToObj,
       });
       messageId = out.messageId;
     } else {
       const fromStr = fromEmail ? (fromName ? `${fromName} <${fromEmail}>` : fromEmail) : fromHeader();
-      const info = await buildTransport().sendMail({ from: fromStr, to, subject, html, ...(replyTo ? { replyTo } : {}) });
+      const info = await buildTransport().sendMail({
+        from: fromStr, to, subject, html, text: textBody, ...(headers ? { headers } : {}), ...(replyTo ? { replyTo } : {}),
+      });
       messageId = info?.messageId ? String(info.messageId).replace(/^<|>$/g, '') : null;
     }
     logEmail({ ...base, status: 'sent', message_id: messageId });
@@ -302,7 +404,7 @@ export async function sendTest(toEmail) {
   const label = provider === 'brevo' ? 'Brevo' : 'SMTP';
   const { subject, html } = renderRaw(`Test ${label} Cazalia ✅`,
     `<h1 style="font-size:20px;margin:0 0 12px;">Envoi ${label} opérationnel</h1>
-     <p style="line-height:1.6;margin:0;">Cet e-mail confirme que l'envoi depuis {{site_name}} fonctionne.</p>`, {});
+     <p style="line-height:1.6;margin:0;">Cet e-mail confirme que l'envoi depuis {{site_name}} fonctionne.</p>`, {}, { footer: 'internal' });
   let account = null;
   try {
     if (provider === 'brevo') {
@@ -332,14 +434,20 @@ function allowed(user, code, marketing) {
 
 export async function sendToUser({ userId, code, vars = {}, marketing = false }) {
   const user = getUserStmt.get(userId);
-  if (!user) return { sent: false, reason: 'UTILISATEUR_INTROUVABLE' };
+  if (!user) {
+    logSkipped({ toEmail: `utilisateur#${userId}`, templateCode: code, reason: 'UTILISATEUR_INTROUVABLE' });
+    return { sent: false, reason: 'UTILISATEUR_INTROUVABLE' };
+  }
   if (!allowed(user, code, marketing)) {
     logEmail({ to_email: user.email, to_user_id: user.id, template_code: code, subject: null, status: 'skipped', error: 'OPT_OUT' });
     return { sent: false, reason: 'OPT_OUT' };
   }
   const merged = { client_name: user.display_name, first_name: user.first_name || user.display_name, dashboard_url: `${baseUrl()}/mon-espace`, ...vars };
-  const rendered = renderTemplate(code, merged);
-  if (!rendered) return { sent: false, reason: 'TEMPLATE_INTROUVABLE' };
+  const rendered = renderTemplate(code, merged, { marketing });
+  if (!rendered) {
+    logSkipped({ toEmail: user.email, toUserId: user.id, templateCode: code, reason: 'TEMPLATE_INTROUVABLE' });
+    return { sent: false, reason: 'TEMPLATE_INTROUVABLE' };
+  }
   return sendMail({ to: user.email, toUserId: user.id, subject: rendered.subject, html: rendered.html, templateCode: code, marketing });
 }
 
@@ -388,7 +496,10 @@ function reservationVars(r) {
 
 export async function sendBookingConfirmation(reservationId) {
   const r = getResStmt.get(reservationId);
-  if (!r) return { sent: false, reason: 'RESA_INTROUVABLE' };
+  if (!r) {
+    logSkipped({ toEmail: `reservation#${reservationId}`, templateCode: 'booking_confirmation', reason: 'RESA_INTROUVABLE' });
+    return { sent: false, reason: 'RESA_INTROUVABLE' };
+  }
   return sendToUser({ userId: r.user_id, code: 'booking_confirmation', vars: reservationVars(r) });
 }
 
@@ -401,7 +512,10 @@ export async function sendBookingConfirmation(reservationId) {
  */
 export async function sendBookingModified(reservationId, { previous } = {}) {
   const r = getResStmt.get(reservationId);
-  if (!r) return { sent: false, reason: 'RESA_INTROUVABLE' };
+  if (!r) {
+    logSkipped({ toEmail: `reservation#${reservationId}`, templateCode: 'booking_modified', reason: 'RESA_INTROUVABLE' });
+    return { sent: false, reason: 'RESA_INTROUVABLE' };
+  }
   const vars = reservationVars(r);
   if (previous?.start_at && previous?.end_at) {
     vars.previous_date = fmtDate(previous.start_at);
@@ -412,7 +526,10 @@ export async function sendBookingModified(reservationId, { previous } = {}) {
 
 export async function sendBookingCancelled(reservationId, { refunded, amount } = {}) {
   const r = getResStmt.get(reservationId);
-  if (!r) return { sent: false, reason: 'RESA_INTROUVABLE' };
+  if (!r) {
+    logSkipped({ toEmail: `reservation#${reservationId}`, templateCode: 'booking_cancelled', reason: 'RESA_INTROUVABLE' });
+    return { sent: false, reason: 'RESA_INTROUVABLE' };
+  }
   const refund_info = refunded
     ? `Votre annulation est dans les délais : un remboursement de ${eurFromCents(amount)} vous sera effectué sous quelques jours.`
     : "Cette annulation n'ouvre pas droit à remboursement (hors délai).";
@@ -430,21 +547,31 @@ export async function sendBookingCancelled(reservationId, { refunded, amount } =
  */
 export async function sendRefundRequestToAdmin(reservationId, { amount } = {}) {
   const r = getResFullStmt.get(reservationId);
-  if (!r) return { sent: false, reason: 'RESA_INTROUVABLE' };
+  if (!r) {
+    logSkipped({ toEmail: `reservation#${reservationId}`, templateCode: 'refund_request', reason: 'RESA_INTROUVABLE' });
+    return { sent: false, reason: 'RESA_INTROUVABLE' };
+  }
   const admins = adminEmailsStmt.all().map((a) => a.email).filter(Boolean);
-  if (!admins.length) return { sent: false, reason: 'AUCUN_ADMIN' };
-  const subject = `Remboursement à effectuer - ${eurFromCents(amount ?? r.price_cents)} (${r.member_name})`;
-  const body =
-    `<p>Une réservation payée en ligne a été annulée <strong>dans les délais</strong>. ` +
-    `Un remboursement est à effectuer manuellement depuis le tableau de bord Stripe.</p>` +
-    `<ul>` +
-    `<li><strong>Membre :</strong> ${r.member_name} (${r.member_email})</li>` +
-    `<li><strong>Espace :</strong> ${r.space_name}</li>` +
-    `<li><strong>Créneau :</strong> ${fmtDate(r.start_at)} ${fmtTime(r.start_at)} - ${fmtTime(r.end_at)}</li>` +
-    `<li><strong>Montant à rembourser :</strong> ${eurFromCents(amount ?? r.price_cents)}</li>` +
-    (r.payment_intent ? `<li><strong>Paiement Stripe :</strong> ${r.payment_intent}</li>` : '') +
-    `</ul>`;
-  const { subject: s, html } = renderRaw(subject, body, {});
+  if (!admins.length) {
+    logSkipped({ toEmail: '', templateCode: 'refund_request', reason: 'AUCUN_ADMIN' });
+    return { sent: false, reason: 'AUCUN_ADMIN' };
+  }
+  // Valeurs issues de la base (nom du membre, espace…) : passées en marqueurs `{{…}}`
+  // pour que `renderRaw` les échappe, comme `lead_notification` dans routes/leads.js.
+  const tpl = INTERNAL_TEMPLATES.refund_request;
+  const { subject: s, html } = renderRaw(
+    tpl.subject,
+    tpl.body({ hasPaymentIntent: Boolean(r.payment_intent) }),
+    {
+      amount: eurFromCents(amount ?? r.price_cents),
+      member_name: r.member_name,
+      member_email: r.member_email,
+      space_name: r.space_name,
+      slot: `${fmtDate(r.start_at)} ${fmtTime(r.start_at)} - ${fmtTime(r.end_at)}`,
+      payment_intent: r.payment_intent,
+    },
+    { footer: 'internal' },
+  );
   const results = [];
   for (const to of admins) {
     results.push(await sendMail({ to, subject: s, html, templateCode: 'refund_request' }));

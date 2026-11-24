@@ -11,9 +11,12 @@ import {
   getMail, setMail, getBrevo, getBrevoPublic, setBrevo, rotateBrevoWebhookToken,
 } from '../lib/settings.js';
 import { TEMPLATE_VARIABLES } from '../lib/emailTemplates.js';
-import { renderTemplate, renderRaw, sendTest, sendToUser, sendMail, getQuota } from '../lib/mailer.js';
+import { renderTemplate, renderRaw, sendTest, sendToUser, sendMail, getQuota, footerVariant } from '../lib/mailer.js';
 import { declareWebhook } from '../lib/brevo.js';
 import { syncAllMembers } from '../lib/newsletter.js';
+
+// Plafond de `offset` : bien en deçà de 2^53, de sorte que la valeur reste liable en SQLite.
+const MAX_LOG_OFFSET = 1_000_000_000;
 
 export const emailsRouter = Router();
 
@@ -210,9 +213,13 @@ emailsRouter.put('/templates/:code', (req, res) => {
  */
 emailsRouter.post('/preview', (req, res) => {
   const vars = sampleVars();
+  // L'aperçu rend le pied qui PARTIRA : la seule voie d'envoi de masse (POST /send) passe
+  // `marketing: true` avec un code, et le gabarit `manual` en `marketing` sans code. Même source
+  // de vérité que les en-têtes (`footerVariant` → `mailKind`) : un code critique (réinitialisation,
+  // vérification) garde son pied « compte », tout le reste affiche le pied commercial.
   const rendered = req.body?.code
-    ? renderTemplate(req.body.code, vars)
-    : renderRaw(req.body?.subject || '', req.body?.body_html || '', vars);
+    ? renderTemplate(req.body.code, vars, { marketing: true })
+    : renderRaw(req.body?.subject || '', req.body?.body_html || '', vars, { footer: footerVariant('manual', true) });
   if (!rendered) return res.status(404).json({ error: 'TEMPLATE_INTROUVABLE' });
   res.json(rendered);
 });
@@ -284,13 +291,13 @@ async function sendCustomToUser(userId, subject, bodyHtml) {
   if (!u) return { sent: false, reason: 'UTILISATEUR_INTROUVABLE' };
   if (!u.notify_marketing) return { sent: false, reason: 'OPT_OUT' };
   const vars = { client_name: u.display_name, first_name: u.first_name || u.display_name, dashboard_url: `${baseUrl()}/mon-espace`, site_name: 'Cazalia' };
-  const rendered = renderRaw(subject, bodyHtml, vars);
+  const rendered = renderRaw(subject, bodyHtml, vars, { footer: 'marketing' });
   return sendMail({ to: u.email, toUserId: u.id, subject: rendered.subject, html: rendered.html, templateCode: 'manual', marketing: true });
 }
 
 // ── Journal ──────────────────────────────────────────────────────────────────
 /**
- * GET /api/admin/email/log - 100 derniers envois.
+ * GET /api/admin/email/log - journal des envois, filtrable et paginé.
  * Le journal ne contient ni corps de message ni pièce jointe : uniquement le
  * destinataire, le gabarit, le sujet, le fournisseur et le statut - ce dernier
  * étant enrichi par les webhooks de délivrabilité (remis, rejeté, spam…).
@@ -298,14 +305,43 @@ async function sendCustomToUser(userId, subject, bodyHtml) {
  * L'identifiant de message du fournisseur n'est PAS exposé : il ne sert qu'au
  * recollage interne des événements.
  *
- * @returns 200 `{log, quota}`
+ * Paramètres de requête (tous facultatifs) : `email` (recherche partielle, sans
+ * casse, dans le destinataire), `status`, `template_code`, `limit` (1-200, 100
+ * par défaut), `offset`.
+ *
+ * @returns 200 `{log, total, limit, offset, quota}` - `total` : nombre de lignes
+ *          correspondant au filtre, indépendamment de la pagination.
  */
-emailsRouter.get('/log', (_req, res) => {
+emailsRouter.get('/log', (req, res) => {
+  const q = (k) => (typeof req.query[k] === 'string' ? req.query[k].trim() : '');
+  const where = [];
+  const params = {};
+  if (q('email')) {
+    // `instr` plutôt que LIKE : aucun joker (%, _) à échapper dans la saisie.
+    where.push(`instr(lower(to_email), lower(@email)) > 0`);
+    params.email = q('email');
+  }
+  if (q('status')) { where.push(`status = @status`); params.status = q('status'); }
+  if (q('template_code')) { where.push(`template_code = @template_code`); params.template_code = q('template_code'); }
+  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  // Entiers bornés : `Number('1e400')` vaut Infinity et `1e20` n'est pas liable par
+  // better-sqlite3 (« datatype mismatch » => 500). Toute valeur non finie retombe sur le défaut.
+  const intParam = (raw, def, min, max) => {
+    // Absent, vide ou répété (tableau) : défaut. `0` est une vraie valeur, ramenée à `min`.
+    if (typeof raw !== 'string' || raw.trim() === '') return def;
+    const n = Math.trunc(Number(raw));
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
+  };
+  const limit = intParam(req.query.limit, 100, 1, 200);
+  const offset = intParam(req.query.offset, 0, 0, MAX_LOG_OFFSET);
   res.json({
     log: db.prepare(
       `SELECT id, to_email, template_code, subject, status, error, provider, updated_at, created_at
-         FROM email_log ORDER BY id DESC LIMIT 100`
-    ).all(),
+         FROM email_log ${clause} ORDER BY id DESC LIMIT @limit OFFSET @offset`
+    ).all({ ...params, limit, offset }),
+    total: db.prepare(`SELECT COUNT(*) AS n FROM email_log ${clause}`).get(params).n,
+    limit,
+    offset,
     quota: getQuota(),
   });
 });

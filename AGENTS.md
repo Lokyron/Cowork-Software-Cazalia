@@ -101,6 +101,14 @@ Chacun de ces points a coûté du temps ou de l'argent. Ce sont des **pièges de
 9. **La documentation existe déjà, en double par endroits.** `docs/` du dépôt et `../Reseau & Accès/`
    contiennent les mêmes schémas réseau. Avant d'écrire une procédure d'infra, **cherche-la** : elle a
    déjà été écrite une fois.
+10. **`email_verifications` : l'ordre des `rowid` est un invariant.** `invalidateOlder` s'appuie sur le
+   `rowid` implicite. Une migration qui recrée la table doit préserver l'ordre d'insertion
+   (`INSERT … SELECT … ORDER BY rowid`), sinon l'invariant casse silencieusement.
+11. **Aucun retour arrière des gabarits d'e-mail.** Pas de route de réinitialisation, pas de sauvegarde
+   de `body_html`. Avant toute migration de gabarit, fais un dump :
+   `sqlite3 cowork.db -json "SELECT code, body_html FROM email_templates" > …`. Pour rejouer une
+   migration, supprime son drapeau dans `app_settings`. Un retour arrière du code ne défait pas la
+   migration.
 
 ## 4. Conventions
 

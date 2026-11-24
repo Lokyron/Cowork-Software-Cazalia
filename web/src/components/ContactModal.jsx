@@ -80,6 +80,7 @@ export default function ContactModal({
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [done, setDone] = useState(false);
+  const [ackSent, setAckSent] = useState(false); // accusé réellement remis au fournisseur
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
 
@@ -117,7 +118,8 @@ export default function ContactModal({
         payload.office_duration = office_duration;
         payload.office_start = office_asap ? OFFICE_START_ASAP : (office_start || '');
       }
-      await api.post('/leads', payload);
+      const r = await api.post('/leads', payload);
+      setAckSent(r?.ack_sent === true);
       setDone(true);
     } catch (err) {
       setFeedback(msg(err.code));
@@ -135,7 +137,10 @@ export default function ContactModal({
 
         {done ? (
           <div className="alert ok">
-            Merci ! Votre demande a bien été envoyée. Un e-mail de confirmation vient de vous être adressé (pensez à vérifier vos courriers indésirables) ; nous vous répondrons dès que possible à l'adresse indiquée.
+            Merci ! Votre demande a bien été envoyée.
+            {ackSent
+              ? " Un e-mail de confirmation vient de vous être adressé (pensez à vérifier vos courriers indésirables) ; nous vous répondrons dès que possible à l'adresse indiquée."
+              : " Nous vous répondrons dès que possible à l'adresse indiquée."}
             <div style={{ marginTop: 12 }}><button onClick={onClose}>Fermer</button></div>
           </div>
         ) : (

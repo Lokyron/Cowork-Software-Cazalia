@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createClaim } from '../lib/claims.js';
 import { sendMail, renderRaw } from '../lib/mailer.js';
+import { INTERNAL_TEMPLATES } from '../lib/emailTemplates.js';
 import { sendBusinessError } from '../middleware.js';
 import { rateLimit } from '../security.js';
 
@@ -40,15 +41,8 @@ claimsRouter.post('/claims', claimsLimiter, async (req, res) => {
     // Notification best-effort à la gérante (ne lève jamais).
     try {
       const { subject, html } = renderRaw(
-        `Nouvelle réclamation #{{id}} - {{kind}}`,
-        `<h1 style="font-size:20px;margin:0 0 12px;">Réclamation #{{id}}</h1>
-         <p style="margin:0 0 6px;"><strong>Type :</strong> {{kind}}</p>
-         <p style="margin:0 0 6px;"><strong>Nom :</strong> {{first_name}} {{last_name}}</p>
-         <p style="margin:0 0 6px;"><strong>E-mail :</strong> <a href="mailto:{{email}}">{{email}}</a></p>
-         <p style="margin:0 0 6px;"><strong>Téléphone :</strong> <a href="tel:{{phone}}">{{phone}}</a></p>
-         <p style="margin:0 0 6px;"><strong>Réservation :</strong> {{reservation_ref}}</p>
-         <p style="margin:12px 0 4px;"><strong>Message :</strong></p>
-         <p style="line-height:1.6;white-space:pre-wrap;margin:0;">{{message}}</p>`,
+        INTERNAL_TEMPLATES.claim_notification.subject,
+        INTERNAL_TEMPLATES.claim_notification.body(),
         {
           id,
           kind: KIND_LABEL[data.kind] || data.kind,
@@ -58,7 +52,8 @@ claimsRouter.post('/claims', claimsLimiter, async (req, res) => {
           phone: data.phone || '-',
           reservation_ref: data.reservation_ref || '-',
           message: data.message,
-        }
+        },
+        { footer: 'internal' },
       );
       await sendMail({
         to: CLAIMS_RECIPIENT, subject, html, templateCode: 'claim_notification',

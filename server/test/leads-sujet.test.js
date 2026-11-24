@@ -85,7 +85,7 @@ test('POST /leads : sujet hors liste -> 400 SUJET_INVALIDE', async () => {
 test('POST /leads : sujet valide -> 201 et sujet en base', async () => {
   const res = await postLead({ ...base(), email: 'ok@example.com', subject: 'Tarifs et offres', source: 'aide_contact' });
   assert.equal(res.statusCode, 201);
-  assert.deepEqual(res.body, { ok: true });
+  assert.deepEqual(res.body, { ok: true, ack_sent: false }); // aucun fournisseur en test
   const row = db.prepare(`SELECT subject, note FROM prospects WHERE email = 'ok@example.com'`).get();
   assert.equal(row.subject, 'Tarifs et offres');
   assert.equal(row.note, 'Bonjour');

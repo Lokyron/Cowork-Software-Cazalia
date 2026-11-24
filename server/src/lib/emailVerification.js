@@ -22,6 +22,20 @@ const markUsed = db.prepare(`UPDATE email_verifications SET used_at = datetime('
 const invalidatePending = db.prepare(
   `UPDATE email_verifications SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL`
 );
+// N'invalide que les jetons ANTÉRIEURS à celui qu'on confirme (ordre d'insertion, `rowid`),
+// jamais « tous les autres » : deux renvois concurrents s'invalideraient mutuellement et
+// laisseraient zéro lien valide. Le plus récent confirmé survit toujours.
+//
+// ATTENTION : l'invariant repose sur le `rowid` IMPLICITE de la table (SQLite alloue
+// max(rowid)+1), fiable en pratique mais non contractuel. Une future migration qui RECRÉERAIT
+// `email_verifications` (copie vers une table neuve) doit préserver l'ordre d'insertion des
+// `rowid` (INSERT ... SELECT ... ORDER BY rowid), sans quoi cette requête invaliderait les
+// mauvais jetons, SILENCIEUSEMENT. `created_at` (résolution d'une seconde) ne le remplace pas.
+const invalidateOlder = db.prepare(
+  `UPDATE email_verifications SET used_at = datetime('now')
+    WHERE user_id = ? AND used_at IS NULL
+      AND rowid < (SELECT rowid FROM email_verifications WHERE token = ?)`
+);
 const setVerified = db.prepare(`UPDATE users SET email_verified = 1 WHERE id = ?`);
 const setUnverified = db.prepare(`UPDATE users SET email_verified = 0 WHERE id = ?`);
 const getBookingState = db.prepare(`SELECT role, email_verified FROM users WHERE id = ?`);
@@ -63,21 +77,40 @@ function isUsable(row) {
 /**
  * Émet un jeton de vérification à usage unique.
  * Tout jeton encore en attente pour cet utilisateur est invalidé au passage :
- * un seul lien est actif à la fois.
+ * un seul lien est actif à la fois. Avec `keepPrevious`, l'ancien lien reste valable
+ * jusqu'à ce que l'appelant ait confirmé l'envoi du nouveau (`settleVerificationToken`).
  *
  * @param {number} userId Utilisateur concerné.
+ * @param {{keepPrevious?: boolean}} [opts] `keepPrevious` : ne pas invalider les jetons en attente.
  * @returns {{token: string, expiresAt: string, user: object}} `token` est le secret EN CLAIR,
  *          à insérer dans le lien : il n'est plus récupérable ensuite.
  * @throws {Error} `UTILISATEUR_INTROUVABLE`.
  */
-export function createVerificationToken(userId) {
+export function createVerificationToken(userId, { keepPrevious = false } = {}) {
   const user = getUserById.get(userId);
   if (!user) throw fail('UTILISATEUR_INTROUVABLE');
-  invalidatePending.run(userId);
+  if (!keepPrevious) invalidatePending.run(userId);
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + config.emailVerifyTokenTtlMs).toISOString();
   insertVerification.run(tokenDigest(token), userId, expiresAt);
   return { token, expiresAt, user };
+}
+
+/**
+ * Conclut l'émission d'un jeton créé avec `keepPrevious`, selon le sort de l'e-mail.
+ * Envoi réussi : les jetons en attente ÉMIS AVANT celui-ci sont invalidés (un seul lien
+ * actif dans le cas nominal). Les jetons plus récents ne sont pas touchés : si deux renvois
+ * se chevauchent, le dernier confirmé reste valable au lieu que chacun invalide l'autre.
+ * Envoi raté : le nouveau jeton, que personne ne connaît, est écarté et l'ancien
+ * lien, lui, continue de fonctionner.
+ *
+ * @param {number} userId Utilisateur concerné.
+ * @param {string} token Jeton en clair renvoyé par `createVerificationToken`.
+ * @param {boolean} delivered `true` si le message a été remis au fournisseur.
+ */
+export function settleVerificationToken(userId, token, delivered) {
+  if (delivered) invalidateOlder.run(userId, tokenDigest(token));
+  else markUsed.run(tokenDigest(token));
 }
 
 /**

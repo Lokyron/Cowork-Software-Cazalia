@@ -251,11 +251,40 @@ test('les événements Brevo sont traduits quelle que soit leur graphie', () => 
   assert.equal(eventToStatus('soft_bounce'), 'bounced');
   assert.equal(eventToStatus('unsubscribed'), 'unsubscribed');
   assert.equal(eventToStatus('spam'), 'spam');
+  // Événement d'erreur APRÈS acceptation : statut distinct de 'failed' (échec d'envoi côté application).
+  assert.equal(eventToStatus('error'), 'error');
   // Événements non suivis (ouverture, clic, accusé de prise en charge).
   assert.equal(eventToStatus('opened'), null);
   assert.equal(eventToStatus('click'), null);
   assert.equal(eventToStatus('request'), null);
   assert.equal(eventToStatus(undefined), null);
+});
+
+test("un événement Brevo « error » après un envoi accepté ne fait pas reculer le compteur de quota", async () => {
+  clearLog();
+  configureBrevo();
+  const fetchStub = stubFetch({ messageId: '<mid-quota@smtp-relay.mailin.fr>' });
+  try {
+    const r = await sendMail({ to: 'client@exemple.test', subject: 'S', html: '<p>c</p>', templateCode: 'password_reset' });
+    assert.equal(r.sent, true);
+  } finally { fetchStub.restore(); }
+  assert.equal(getQuota().sentToday, 1);
+
+  const token = settings.rotateBrevoWebhookToken();
+  const res = fakeRes();
+  handleBrevoWebhook({ params: { token }, body: { event: 'error', 'message-id': '<mid-quota@smtp-relay.mailin.fr>', reason: 'erreur interne' } }, res);
+  assert.equal(res.statusCode, 204);
+  assert.equal(db.prepare(`SELECT status FROM email_log WHERE message_id = 'mid-quota@smtp-relay.mailin.fr'`).get().status, 'error');
+  // Brevo a déjà décompté ce message : l'application ne doit pas croire qu'il lui reste du quota.
+  assert.equal(getQuota().sentToday, 1);
+
+  // Un « remis » tardif n'efface pas l'erreur ; bounced, blocked et spam restent comptés.
+  handleBrevoWebhook({ params: { token }, body: { event: 'delivered', 'message-id': 'mid-quota@smtp-relay.mailin.fr' } }, fakeRes());
+  assert.equal(db.prepare(`SELECT status FROM email_log WHERE message_id = 'mid-quota@smtp-relay.mailin.fr'`).get().status, 'error');
+  const ins = db.prepare(`INSERT INTO email_log (to_email, status) VALUES ('a@exemple.test', ?)`);
+  for (const st of ['bounced', 'blocked', 'spam']) ins.run(st);
+  ins.run('skipped'); ins.run('failed'); // eux ne comptent pas
+  assert.equal(getQuota().sentToday, 4);
 });
 
 test('normalizeMessageId retire les chevrons', () => {
