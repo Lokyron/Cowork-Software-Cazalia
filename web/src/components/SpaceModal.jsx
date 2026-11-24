@@ -71,7 +71,9 @@ export default function SpaceModal({ space, photoSrc, onClose, onReserve, onDevi
         )}
         {isLibreService && (
           <div className="alert" style={{ marginTop: 16, background: 'rgba(59,130,246,0.06)', border: '1px solid var(--line)' }}>
-            Accès <strong>libre-service</strong> sur place, sans réservation ni paiement en ligne.
+            Accès <strong>libre-service</strong> : pas de réservation à poser, pas de supplément. Vous vous y
+            installez pour un appel ou une visio. Cette même pièce se loue aussi en bureau privatif : elle n'est
+            alors pas accessible, le temps d'une demi-journée ou d'une journée.
           </div>
         )}
         {isBoth && (

@@ -25,7 +25,7 @@ const eurc = (cents) => {
   return Number.isInteger(v) ? `${v} €` : v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 };
 
-const CONFIDENTIELLE = 'En libre accès pour toute réservation dans l\'open space';
+const CONFIDENTIELLE = 'En accès libre, sous réserve de non-privatisation';
 
 // Formules d'abonnement. Le montant réellement prélevé vient des Prices Stripe
 // configurés dans l'administration ; celui affiché ici est indicatif.
@@ -74,7 +74,7 @@ const ponctuelFrom = (t) => [
   {
     name: 'Salle confidentielle',
     price: 'Incluse', unit: null,
-    lines: [CONFIDENTIELLE, 'Aucune réservation à faire'],
+    lines: ['Avec toute réservation d\'open space', CONFIDENTIELLE, 'Rien à réserver'],
   },
 ];
 
@@ -253,7 +253,9 @@ export default function Pricing() {
       )}
 
       <p className="muted" style={{ fontSize: 13, margin: '18px 0 0' }}>
-        Salle confidentielle : {CONFIDENTIELLE.charAt(0).toLowerCase() + CONFIDENTIELLE.slice(1)}, quelle que soit la formule.
+        <strong>Salle confidentielle</strong> : incluse avec toute réservation d'open space, quelle que soit la
+        formule. Rien à réserver, rien à payer. Elle reste en accès libre, sauf lorsque cette même pièce est
+        privatisée en bureau privatif, le temps d'une demi-journée ou d'une journée.
       </p>
 
       <p className="muted" style={{ textAlign: 'center', marginTop: 18 }}>

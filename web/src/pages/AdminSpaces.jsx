@@ -105,7 +105,7 @@ export default function AdminSpaces() {
                 <option value="">- Non catégorisé (aucune grille de prix) -</option>
                 <option value="OPEN_SPACE">Open Space (½-journée / journée)</option>
                 <option value="MEETING_ROOM">Salle de réunion (heure / forfaits)</option>
-                <option value="CONFIDENTIAL">Salle confidentielle (libre-service)</option>
+                <option value="CONFIDENTIAL">Salle confidentielle (libre-service, même pièce que le bureau privatif)</option>
                 <option value="PRIVATE_OFFICE">Bureau privé (½-journée / journée, tarif de l'espace)</option>
               </select>
             </div>
