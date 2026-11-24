@@ -87,6 +87,45 @@ export function parisDayStartUtc(ref = new Date()) {
 }
 
 /**
+ * Clé de jour civil de Paris (`YYYY-MM-DD`) d'un instant.
+ * @param {Date|string|number} [ref] Instant (défaut : maintenant).
+ * @returns {string}
+ */
+export function parisDateKey(ref = new Date()) {
+  return _dayFmt.format(new Date(ref));
+}
+
+// Décalage de Paris (ms, positif à l'est de UTC) à un instant donné.
+function parisOffsetMs(ms) {
+  const p = Object.fromEntries(
+    _utcPartsFmt.formatToParts(new Date(ms)).filter((x) => x.type !== 'literal').map((x) => [x.type, Number(x.value)])
+  );
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second) - ms;
+}
+
+/**
+ * Instant UTC correspondant à une heure LOCALE de Paris : `minutes` minutes
+ * après minuit le jour civil `year`-`month`-`day`. `minutes` peut valoir 1440
+ * (minuit de fin) ; `day` peut déborder (le jour 32 est le 1er du mois suivant).
+ * Le décalage est relu après correction, ce qui reste juste autour des changements
+ * d'heure (jours de 23 h et de 25 h).
+ *
+ * @param {number} year Année.
+ * @param {number} month Mois 1-12.
+ * @param {number} day Jour civil.
+ * @param {number} [minutes] Minutes depuis minuit, heure de Paris.
+ * @returns {string} ISO 8601 en UTC.
+ */
+export function parisLocalToUtcIso(year, month, day, minutes = 0) {
+  const guess = Date.UTC(year, month - 1, day, 0, minutes);
+  const first = parisOffsetMs(guess);
+  let t = guess - first;
+  const second = parisOffsetMs(t);
+  if (second !== first) t = guess - second;
+  return new Date(t).toISOString();
+}
+
+/**
  * Indique si une annulation ouvre droit à remboursement, c'est-à-dire si elle
  * intervient plus de `windowHours` avant le début du créneau.
  *

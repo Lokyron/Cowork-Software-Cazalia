@@ -77,3 +77,15 @@ export function startOfWeekStr(dateStr) {
   const offset = (dow + 6) % 7; // jours depuis lundi
   return addDaysStr(dateStr, -offset);
 }
+
+// Ajoute n mois (négatif possible) à une chaîne yyyy-mm-dd, sans passer par un
+// fuseau. Le jour est ramené au dernier jour du mois d'arrivée s'il n'existe pas
+// (31 janvier + 1 mois = 28 ou 29 février).
+export function addMonthsStr(dateStr, n) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const total = y * 12 + (m - 1) + n;
+  const ny = Math.floor(total / 12);
+  const nm = total % 12;
+  const last = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
+  return `${ny}-${String(nm + 1).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+}

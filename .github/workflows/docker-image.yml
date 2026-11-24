@@ -17,7 +17,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Les tests passent AVANT la construction de l'image : un test rouge bloque la
+  # publication (`build` en dépend). Mêmes installations que le Dockerfile
+  # (`npm install`, le serveur n'a pas de lockfile). `better-sqlite3` s'installe
+  # sur le runner Linux (binaire précompilé, sinon compilation avec la chaîne de
+  # build déjà présente sur ubuntu-latest). Node 22 : `node --test "test/*.test.js"`
+  # n'expanse les motifs glob qu'à partir de Node 21.
+  tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Dépendances serveur
+        working-directory: server
+        run: npm install --no-audit --no-fund
+
+      - name: Tests serveur
+        working-directory: server
+        run: npm test
+
+      - name: Dépendances web
+        working-directory: web
+        run: npm install --no-audit --no-fund
+
+      - name: Tests web
+        working-directory: web
+        run: npm test
+
   build:
+    needs: tests
     runs-on: ubuntu-latest
     permissions:
       contents: read

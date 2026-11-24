@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, msg } from '../api.js';
 import { useAuth } from '../auth.jsx';
+import { addMonthsStr, todayStr } from '../time.js';
+import DatePicker from './DatePicker.jsx';
 
 // Sujets proposés (liste fermée, obligatoire).
 // ⚠ Dupliquée côté serveur (`LEAD_SUBJECTS` dans server/src/lib/prospects.js), qui
@@ -35,13 +37,6 @@ const OFFICE_START_ASAP = 'DES_QUE_POSSIBLE';
 
 // Réponses du bloc « Votre besoin » (vides tant que le sujet n'est pas le bureau privatif).
 const EMPTY_NEED = { office_seats: '', office_duration: '', office_start: '', office_asap: false };
-
-/** Date du jour au format AAAA-MM-JJ (heure locale), pour l'attribut `min` du champ date. */
-const todayLocalIso = () => {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
 
 /** Sujet à pré-sélectionner pour une demande de devis sur un espace donné. */
 export function subjectForSpace(space) {
@@ -188,10 +183,14 @@ export default function ContactModal({
                 <div className="field">
                   <label htmlFor="office-start">À partir de quand souhaitez-vous commencer ?</label>
                   <div className="row need-start">
-                    <div className="field">
-                      <input id="office-start" type="date" min={todayLocalIso()} value={form.office_start}
-                        onChange={set('office_start')} disabled={form.office_asap} />
-                    </div>
+                    <DatePicker
+                      id="office-start"
+                      value={form.office_start}
+                      onChange={(d) => setForm((f) => ({ ...f, office_start: d }))}
+                      min={todayStr()}
+                      max={addMonthsStr(todayStr(), 36)}
+                      disabled={form.office_asap}
+                    />
                     <label className="consent need-asap">
                       <input type="checkbox" checked={form.office_asap} onChange={toggleAsap} />
                       <span>Dès que possible</span>

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { api, msg } from '../api.js';
 import { fmtDateTime, parisDateKey, parisTimeHM, parisLocalToUtcIso } from '../time.js';
 import TimeSelect from './TimeSelect.jsx';
+import DatePicker from './DatePicker.jsx';
+import { formuleOf } from '../datePickerCore.js';
 import VoucherBlock from './VoucherBlock.jsx';
 
 // Panneau (modale) de détail d'une réservation côté admin.
@@ -94,7 +96,13 @@ export default function ReservationDetail({ reservation, onClose, onChanged }) {
         <div className="card" style={{ background: 'rgba(255,255,255,0.5)', padding: 14, marginBottom: 14 }}>
           <label style={{ marginBottom: 8 }}>Déplacer le créneau</label>
           <div className="row">
-            <div className="field"><label>Date</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+            <DatePicker
+              label="Date"
+              value={date}
+              onChange={setDate}
+              permissive
+              availability={r.space_id ? { spaceId: r.space_id, seats: r.seats || 1, ...formuleOf(r), excludeReservationId: r.id } : undefined}
+            />
             <div className="field"><label>Début</label><TimeSelect value={start} onChange={(e) => setStart(e.target.value)} /></div>
             <div className="field"><label>Fin</label><TimeSelect value={end} onChange={(e) => setEnd(e.target.value)} /></div>
           </div>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, msg } from '../api.js';
 import { parisLocalToUtcIso } from '../time.js';
 import TimeSelect from './TimeSelect.jsx';
+import DatePicker from './DatePicker.jsx';
 import { ResendVerification } from './EmailVerifyBanner.jsx';
 import { spaceModes, tarifTypesOffered } from '../price.js';
 
@@ -198,7 +199,13 @@ export default function CartBuilder({ adapter, admin = false, blocked = false, o
         </div>
 
         <div className="row">
-          <div className="field"><label>Jour</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          <DatePicker
+            label="Jour"
+            value={date}
+            onChange={setDate}
+            permissive={admin}
+            availability={space ? { spaceId: space.id, seats, tarifType, slot: formule === 'heure' ? undefined : formule } : undefined}
+          />
           {formule === 'heure' ? (
             <>
               <div className="field"><label>Début</label><TimeSelect value={start} onChange={(e) => setStart(e.target.value)} /></div>

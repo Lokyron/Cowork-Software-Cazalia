@@ -1,7 +1,9 @@
 import { db } from '../db.js';
 import { config } from '../config.js';
 import { fail } from './errors.js';
-import { billedHours, toUtcIso, isBeforeRefundWindow, parisWeekday, parisMinutes } from './time.js';
+import {
+  billedHours, toUtcIso, isBeforeRefundWindow, parisWeekday, parisMinutes, parisDateKey, parisLocalToUtcIso,
+} from './time.js';
 
 /**
  * Indique si un créneau tient entièrement dans les horaires d'ouverture.
@@ -72,14 +74,172 @@ export function spaceAvailability(spaceId, startIso, endIso, opts = {}) {
   const { taken } = overlapSumStmt.get(spaceId, endIso, startIso);
   const held = countHolds ? heldSeats(spaceId, startIso, endIso, opts.excludeHoldId) : 0;
   const busy = taken + held;
-  if (space.exclusive) {
-    return { exclusive: true, privatizable: false, capacity: space.capacity, seats_left: busy > 0 ? 0 : 1 };
+  return {
+    exclusive: !!space.exclusive,
+    privatizable: space.exclusive ? false : !!space.privatizable,
+    capacity: space.capacity,
+    seats_left: seatsLeftFor(space, busy),
+  };
+}
+
+// Règle de comptage commune (créneau unique et vue mensuelle) : exclusif → 1
+// libre / 0 pris dès qu'une place l'est ; inventaire → capacité − places occupées.
+function seatsLeftFor(space, busy) {
+  if (space.exclusive) return busy > 0 ? 0 : 1;
+  return Math.max(0, space.capacity - busy);
+}
+
+// ── Disponibilité d'un mois (calendrier) ─────────────────────────────────────
+// Deux requêtes pour TOUT le mois (réservations confirmées + verrous panier non
+// expirés qui chevauchent le mois), puis calcul des statuts en mémoire. Le comptage
+// est celui de `spaceAvailability` pour les formules « demi-journée » et « journée »
+// (chevauchement strict, somme des places, `seatsLeftFor`) ; la formule « heure » s'en
+// écarte VOLONTAIREMENT (voir `evaluate`). Aucune identité n'est lue : seuls start_at,
+// end_at et seats.
+//
+// Verrous de panier : le calendrier les compte (`monthHoldStmt`), comme
+// `spaceAvailability` / `addToCart`. `moveReservation`, lui, NE les compte PAS : il ne
+// somme que les réservations confirmées (`overlapSumExclStmt`). Le calendrier de
+// déplacement est donc PLUS STRICT que le déplacement lui-même : un jour tenu par un
+// panier en cours y apparaît occupé alors que le déplacement l'accepterait. C'est le
+// bon sens de l'écart (on n'annonce jamais « libre » là où l'action échouerait), mais
+// ce n'est pas une équivalence.
+const monthResaStmt = db.prepare(
+  `SELECT start_at, end_at, seats FROM reservations
+    WHERE space_id = ? AND status = 'confirmed' AND id <> ? AND start_at < ? AND end_at > ?`
+);
+const monthHoldStmt = db.prepare(
+  `SELECT start_at, end_at, seats FROM reservation_holds
+    WHERE space_id = ? AND expires_at > ? AND start_at < ? AND end_at > ?`
+);
+
+// Fenêtre de mois consultables, relative au mois courant (Paris) : le mois
+// précédent (le calendrier peut reculer d'un cran, tout y est « passé ») jusqu'à
+// +36 mois, soit l'horizon métier le plus lointain connu (3 ans, `office_start`).
+// Au-delà, c'est du balayage sans usage commercial.
+export const MONTH_MIN_OFFSET = -1;
+export const MONTH_MAX_OFFSET = 36;
+// Les demi-journées se distinguent par l'heure de début : avant midi = matin.
+const NOON_MINUTES = 12 * 60;
+
+/**
+ * Analyse un mois `YYYY-MM`.
+ * @param {unknown} raw Valeur brute.
+ * @returns {{year: number, month: number}}
+ * @throws {Error} `MOIS_INVALIDE` si le format n'est pas `YYYY-MM`.
+ */
+export function parseMonth(raw) {
+  const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(typeof raw === 'string' ? raw : '');
+  if (!m) throw fail('MOIS_INVALIDE');
+  return { year: Number(m[1]), month: Number(m[2]) };
+}
+
+// Fenêtres [début, fin] (minutes) à tester pour un jour de semaine, selon la formule.
+// Formule « heure » : UNE fenêtre par plage d'ouverture, jamais l'enveloppe min..max.
+// Avec une coupure déjeuner (`[[510,780],[840,1170]]`), l'enveloppe engloberait la
+// coupure, où l'occupation est toujours nulle : une journée pleine matin ET après-midi
+// afficherait « libre ». Chaque plage est évaluée seule, puis `monthAvailability`
+// les agrège (« full » seulement si TOUTES sont pleines).
+// Avec UNE seule plage, la fenêtre est celle de l'ancienne enveloppe : c'est vrai de
+// CETTE fonction uniquement, pas du `seats_left` qui en résulte (voir `evaluate`).
+export function windowsFor(weekday, tarifType, slot) {
+  const hours = config.openingHours?.[weekday] || [];
+  if (!hours.length) return [];
+  if (tarifType === 'heure') return hours.map(([a, b]) => [a, b]);
+  const forfaits = config.forfaitSlots?.[weekday] || {};
+  if (tarifType === 'journee' || slot === 'journee') return forfaits.journee || [];
+  const halves = forfaits.demi_journee || [];
+  if (slot === 'matin') return halves.filter(([a]) => a < NOON_MINUTES);
+  if (slot === 'aprem') return halves.filter(([a]) => a >= NOON_MINUTES);
+  return halves;
+}
+
+/**
+ * Statut de chaque jour d'un mois pour un espace, en une seule passe SQL.
+ *
+ * @param {number} spaceId Espace (doit être actif).
+ * @param {string} monthRaw Mois `YYYY-MM`.
+ * @param {{seats?: number, tarifType?: 'heure'|'demi_journee'|'journee', slot?: 'matin'|'aprem'|'journee'|null, now?: Date, excludeReservationId?: number}} [opts]
+ *        `now` est injectable pour les tests. `excludeReservationId` retire une
+ *        réservation du décompte (écran de déplacement : elle ne doit pas se
+ *        compter elle-même, comme `overlapSumExclStmt` dans `moveReservation`, mais
+ *        les verrous de panier restent comptés : voir le commentaire au-dessus de
+ *        `monthResaStmt`).
+ * @returns {{space_id: number, month: string, tarif_type: string, seats: number, timezone: string,
+ *            capacity: number, exclusive: boolean, days: {date: string, status: string, seats_left: number|null}[]} | null}
+ *          `seats_left` est `null` pour un jour fermé ou passé, ET quand le jour couvre
+ *          plusieurs fenêtres qui n'ont pas le même nombre de places restantes (un seul
+ *          chiffre mentirait sur au moins l'une d'elles ; `status` dit déjà « partial »).
+ *          `null` si l'espace est inconnu ou inactif.
+ * @throws {Error} `MOIS_INVALIDE` ou `MOIS_HORS_FENETRE`.
+ */
+export function monthAvailability(spaceId, monthRaw, opts = {}) {
+  const { year, month } = parseMonth(monthRaw);
+  const now = opts.now || new Date();
+  const tarifType = opts.tarifType || 'heure';
+  const slot = opts.slot || null;
+  const [cy, cm] = parisDateKey(now).split('-').map(Number);
+  const offset = (year * 12 + month) - (cy * 12 + cm);
+  if (offset < MONTH_MIN_OFFSET || offset > MONTH_MAX_OFFSET) throw fail('MOIS_HORS_FENETRE');
+
+  const space = spaceStmt.get(spaceId);
+  if (!space) return null;
+  const seats = resolveSeats(space, opts.seats);
+
+  const monthStart = parisLocalToUtcIso(year, month, 1, 0);
+  const monthEnd = parisLocalToUtcIso(year, month + 1, 1, 0);
+  const items = [
+    ...monthResaStmt.all(spaceId, Number(opts.excludeReservationId) || 0, monthEnd, monthStart),
+    ...monthHoldStmt.all(spaceId, now.toISOString(), monthEnd, monthStart),
+  ].map((r) => ({ s: Date.parse(r.start_at), e: Date.parse(r.end_at), seats: r.seats }));
+
+  const occupied = (from, to) => items.reduce((n, i) => (i.s < to && i.e > from ? n + i.seats : n), 0);
+  // Évalue UNE fenêtre.
+  //  • Forfaits (demi-journée, journée) : somme des places des réservations qui la
+  //    chevauchent, exactement la règle de `spaceAvailability` sur ce créneau.
+  //  • Formule « heure » : DIVERGENCE VOULUE avec `spaceAvailability`, qui SOMMERAIT
+  //    sur toute la plage. Ici on retient le MEILLEUR moment (l'instant le moins
+  //    occupé), car on ne sait pas encore quelles heures le visiteur voudra : deux
+  //    demi-journées pleines à 60 % chacune afficheraient sinon une journée pleine
+  //    alors qu'il reste des heures libres. Exemple : 3 places prises pendant deux
+  //    heures sur un open space de 10 donnent `seats_left: 10` ici (à l'instant le
+  //    plus creux) mais 7 chez `spaceAvailability` sur la plage entière. « touched »
+  //    signale qu'une réservation touche la fenêtre (jour « partial » même à 10).
+  //    Ce n'est donc PAS « identique à avant » : seul `windowsFor` l'est avec une
+  //    plage unique. La divergence est figée par les tests.
+  const evaluate = (from, to) => {
+    if (tarifType !== 'heure') {
+      const busy = occupied(from, to);
+      return { left: seatsLeftFor(space, busy), touched: busy > 0 };
+    }
+    const points = [from, ...items.flatMap((i) => [i.s, i.e])].filter((t) => t >= from && t < to);
+    const busyAt = points.map((t) => occupied(t, t + 1));
+    return { left: seatsLeftFor(space, Math.min(...busyAt)), touched: occupied(from, to) > 0 };
+  };
+
+  const todayKey = parisDateKey(now);
+  const mm = String(month).padStart(2, '0');
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const days = [];
+  for (let d = 1; d <= daysInMonth; d += 1) {
+    const date = `${year}-${mm}-${String(d).padStart(2, '0')}`;
+    if (date < todayKey) { days.push({ date, status: 'past', seats_left: null }); continue; }
+    const weekday = new Date(Date.UTC(year, month - 1, d)).getUTCDay();
+    const results = windowsFor(weekday, tarifType, slot).map(([a, b]) =>
+      evaluate(Date.parse(parisLocalToUtcIso(year, month, d, a)), Date.parse(parisLocalToUtcIso(year, month, d, b))));
+    if (!results.length) { days.push({ date, status: 'closed', seats_left: null }); continue; }
+    // Un seul chiffre n'est honnête que si toutes les fenêtres du jour sont d'accord.
+    // `status` suit la convention « meilleure fenêtre » (assumée) ; afficher à côté
+    // « 10 places » sur un jour dont une demi-journée est pleine serait faux : dès que
+    // les fenêtres divergent, `seats_left` vaut `null` (le front écrit « quelques places »).
+    const left = results.every((r) => r.left === results[0].left) ? results[0].left : null;
+    const statuses = results.map((r) => (r.left < seats ? 'full' : r.touched ? 'partial' : 'open'));
+    const status = statuses.every((x) => x === 'open') ? 'open' : statuses.every((x) => x === 'full') ? 'full' : 'partial';
+    days.push({ date, status, seats_left: left });
   }
   return {
-    exclusive: false,
-    privatizable: !!space.privatizable,
-    capacity: space.capacity,
-    seats_left: Math.max(0, space.capacity - busy),
+    space_id: spaceId, month: `${year}-${mm}`, tarif_type: tarifType, seats, timezone: 'Europe/Paris',
+    capacity: space.capacity, exclusive: !!space.exclusive, days,
   };
 }
 

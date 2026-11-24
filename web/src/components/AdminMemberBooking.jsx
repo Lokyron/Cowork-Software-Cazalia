@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, msg } from '../api.js';
 import { parisLocalToUtcIso, todayStr } from '../time.js';
 import TimeSelect from './TimeSelect.jsx';
+import DatePicker from './DatePicker.jsx';
 
 let _id = 0;
 const newSlot = (date) => ({ id: ++_id, date: date || todayStr(), start: '09:00', end: '12:00', seats: 1 });
@@ -102,7 +103,14 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
             return (
               <div key={s.id} className={`slot-row ${badSlot === i ? 'slot-bad' : ''}`}>
                 <div className="row" style={{ alignItems: 'flex-end' }}>
-                  <div className="field"><label>Jour</label><input type="date" min={todayStr()} value={s.date} onChange={(e) => setField(s.id, 'date', e.target.value)} /></div>
+                  <DatePicker
+                    id={`slot-date-${s.id}`}
+                    label="Jour"
+                    min={todayStr()}
+                    value={s.date}
+                    onChange={(d) => setField(s.id, 'date', d)}
+                    availability={space ? { spaceId: space.id, seats: s.seats, tarifType: 'heure' } : undefined}
+                  />
                   <div className="field"><label>Début</label><TimeSelect value={s.start} onChange={(e) => setField(s.id, 'start', e.target.value)} /></div>
                   <div className="field"><label>Fin</label><TimeSelect value={s.end} onChange={(e) => setField(s.id, 'end', e.target.value)} /></div>
                   {space && !space.exclusive && (space.privatizable ? (

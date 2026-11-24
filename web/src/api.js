@@ -1,4 +1,15 @@
 // Petit client fetch. Cookie de session envoyé automatiquement (same-origin / proxy).
+
+// Compteur d'écritures : +1 à la fin de TOUT appel non-GET (réussi ou refusé), car une
+// écriture (ajout au panier, réservation, déplacement, annulation) peut changer les
+// disponibilités. Les caches de lecture dérivés (le calendrier du sélecteur de date)
+// s'en servent pour savoir que ce qu'ils ont gardé n'est plus fiable, sans mécanisme
+// d'événements à brancher écran par écran. `dataVersion()` ne mesure que les écritures
+// faites depuis CET onglet ; celles des autres onglets / membres restent couvertes par
+// la durée de fraîcheur propre à chaque cache.
+let writeCount = 0;
+export const dataVersion = () => writeCount;
+
 async function request(method, url, body) {
   const opts = {
     method,
@@ -9,7 +20,12 @@ async function request(method, url, body) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
-  const res = await fetch(`/api${url}`, opts);
+  let res;
+  try {
+    res = await fetch(`/api${url}`, opts);
+  } finally {
+    if (method !== 'GET') writeCount += 1;
+  }
   let data = null;
   try {
     data = await res.json();

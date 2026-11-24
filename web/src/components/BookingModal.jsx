@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, msg } from '../api.js';
 import { parisLocalToUtcIso } from '../time.js';
 import TimeSelect from './TimeSelect.jsx';
+import DatePicker from './DatePicker.jsx';
 import CreateMemberModal from './CreateMemberModal.jsx';
 import { spaceModes } from '../price.js';
 
@@ -157,7 +158,13 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
           )}
 
           <div className="row">
-            <div className="field"><label>Jour</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+            <DatePicker
+              label="Jour"
+              value={date}
+              onChange={setDate}
+              permissive={isAdmin}
+              availability={space ? { spaceId: space.id, seats, tarifType: 'heure' } : undefined}
+            />
             <div className="field"><label>Début</label><TimeSelect value={start} onChange={(e) => setStart(e.target.value)} /></div>
             <div className="field"><label>Fin</label><TimeSelect value={end} onChange={(e) => setEnd(e.target.value)} /></div>
           </div>

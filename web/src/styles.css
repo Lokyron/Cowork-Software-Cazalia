@@ -1398,3 +1398,164 @@ figure.carousel-item { margin: 0 16px 0 0; overflow: hidden; }
   /* Réserve basse : la bulle (56 px + 16 px de marge) ne recouvre pas le pied de page. */
   .site-footer { padding-bottom: 88px; }
 }
+
+/* ── Sélecteur de jour (DatePicker) ─────────────────────────────────────────────
+   Bulle sous le champ sur ordinateur, feuille du bas sous 760 px (bascule en JS,
+   même seuil que le reste du site). La bulle et la feuille sont rattachées à
+   <body> : z-index 110, au-dessus de .modal-overlay (100). Les règles sont
+   préfixées « .dp » pour l'emporter sur les styles globaux de button / table. */
+.dp, .dp-overlay {
+  --dp-hover: rgba(28, 49, 85, 0.08);
+  --dp-hatch: repeating-linear-gradient(135deg, rgba(28, 49, 85, 0.1) 0 3px, transparent 3px 7px);
+  --dp-handle: rgba(28, 49, 85, 0.28);
+  --dp-grad: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  --dp-day-shadow: 0 4px 12px rgba(59, 130, 246, 0.38);
+  --dp-modal-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+  --dp-sheet-bg: rgba(255, 255, 255, 0.96); /* quasi opaque : à 0,72 le texte de la page transparaissait */
+  --dp-scrim: rgba(15, 23, 42, 0.45);
+  --dp-full-bg: rgba(190, 18, 60, 0.07);
+}
+@keyframes dp-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes dp-fade { from { opacity: 0; } to { opacity: 1; } }
+html.dp-lock { overflow: hidden; }
+
+/* Champ */
+.dp-box { position: relative; }
+.dp-box input { padding-right: 46px; }
+.dp-box input:disabled { opacity: 0.5; cursor: not-allowed; }
+.dp-box .dp-cal-btn {
+  position: absolute; top: 3px; right: 3px; width: 38px; height: 38px; padding: 0;
+  display: grid; place-items: center; border: 0; border-radius: 10px;
+  background: transparent; color: var(--navy); cursor: pointer;
+  box-shadow: none; transform: none; filter: none;
+}
+.dp-box .dp-cal-btn:hover:not(:disabled) { background: rgba(28, 49, 85, 0.08); }
+.dp-box .dp-cal-btn:disabled { opacity: 0.5; cursor: not-allowed; background: transparent; }
+.dp-hint { margin-top: 6px; }
+.dp-hint:empty { display: none; }
+/* Dans une .row (champs alignés par le bas), le message d'erreur sort du flux : il ne change pas la hauteur du champ,
+   donc il ne décale plus l'alignement des voisins. */
+.row > .dp-field { position: relative; }
+.row > .dp-field .dp-hint { position: absolute; left: 0; top: 100%; margin-top: 4px; z-index: 2; white-space: nowrap; }
+.dp-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Conteneurs */
+.dp { font-family: var(--font); color: var(--ink); --dp-cell: 40px; }
+.dp-pop {
+  position: fixed; z-index: 110; width: 320px; padding: 14px;
+  background: var(--glass-strong); border: 1px solid var(--glass-border); border-radius: var(--radius);
+  box-shadow: var(--glass-shadow), var(--glass-inset), var(--dp-modal-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(165%); backdrop-filter: blur(22px) saturate(165%);
+  animation: rise 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dp-overlay {
+  position: fixed; inset: 0; z-index: 110; display: flex; align-items: flex-end;
+  background: var(--dp-scrim); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  animation: dp-fade 0.2s ease-out;
+}
+.dp-sheet {
+  --dp-cell: 46px;
+  width: 100%; max-height: 92vh; max-height: 92dvh; overflow-y: auto; overflow-x: hidden;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: var(--dp-sheet-bg); border: 1px solid var(--glass-border); border-bottom: 0;
+  border-radius: 24px 24px 0 0; box-shadow: var(--dp-modal-shadow);
+  animation: dp-sheet-up 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dp .dp-grab { display: flex; justify-content: center; padding: 10px 0 8px; touch-action: none; cursor: grab; }
+.dp .dp-handle { width: 42px; height: 5px; border-radius: 999px; background: var(--dp-handle); }
+
+/* En-tête */
+.dp .dp-head { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+.dp .dp-nav {
+  flex: none; width: 40px; height: 40px; padding: 0; display: grid; place-items: center;
+  border: 0; border-radius: 10px; background: transparent; color: var(--navy); cursor: pointer;
+  box-shadow: none; transform: none; filter: none;
+}
+.dp-sheet .dp-nav { width: 44px; height: 44px; }
+.dp .dp-nav:hover:not(:disabled) { background: var(--dp-hover); }
+.dp .dp-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+.dp .dp-title {
+  flex: 1; min-width: 0; min-height: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--navy);
+  font-size: 15px; font-weight: 600; letter-spacing: -0.01em; cursor: pointer;
+  box-shadow: none; transform: none; filter: none;
+}
+.dp-sheet .dp-title { min-height: 44px; font-size: 16px; }
+.dp .dp-title:hover { background: var(--dp-hover); }
+.dp .dp-title svg { transition: transform 0.2s; }
+.dp .dp-title[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+/* Grille des jours */
+.dp .dp-grid { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: inherit; }
+.dp .dp-grid th {
+  height: 30px; padding: 0; border: 0; font-size: 12px; font-weight: 600; color: var(--muted);
+  text-align: center; text-transform: none; letter-spacing: 0;
+}
+.dp .dp-grid td { padding: 1px; border: 0; text-align: center; }
+/* La cellule est l'élément focusable (motif APG) : l'anneau de focus se dessine sur la
+   pastille interne, pas sur la case du tableau. */
+.dp .dp-grid td[data-day] { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.dp .dp-grid td[data-day]:focus { outline: none; }
+.dp .dp-grid tbody tr:hover { background: none; }
+.dp .dp-day {
+  position: relative; display: grid; place-items: center; width: 100%; height: var(--dp-cell); min-width: 0; padding: 0;
+  border: 1px solid transparent; border-radius: 12px; background: transparent; color: var(--ink);
+  font-size: 14px; font-weight: 500; cursor: pointer;
+  box-shadow: none; transform: none; filter: none; transition: background 0.12s, color 0.12s;
+}
+.dp-sheet .dp-day { font-size: 15px; }
+.dp .dp-day:hover { background: var(--dp-hover); }
+.dp .dp-day.is-out { color: var(--muted); opacity: 0.55; font-weight: 400; }
+.dp .dp-day.is-disabled { color: var(--muted); opacity: 0.38; cursor: default; font-weight: 400; }
+.dp .dp-day.is-disabled:hover { background: transparent; }
+.dp .dp-day.is-closed { background: var(--dp-hatch); color: var(--muted); opacity: 0.85; cursor: not-allowed; }
+.dp .dp-day.is-closed:hover { background: var(--dp-hatch); }
+.dp .dp-day.is-full { background: var(--dp-full-bg); color: var(--red); cursor: not-allowed; text-decoration: line-through; text-decoration-thickness: 1px; }
+.dp .dp-day.is-full:hover { background: var(--dp-full-bg); }
+.dp .dp-day.is-today { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); font-weight: 700; }
+.dp .dp-day.is-selected, .dp .dp-day.is-selected:hover {
+  background: var(--dp-grad); color: #fff; font-weight: 600; box-shadow: var(--dp-day-shadow); opacity: 1;
+}
+.dp .dp-grid td[data-day]:focus-visible > .dp-day { outline: 2px solid var(--navy); outline-offset: 1px; z-index: 1; }
+.dp .dp-dot { position: absolute; bottom: 5px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; }
+.dp .dp-dot.free { background: var(--green); }
+.dp .dp-dot.partial { background: var(--amber); }
+.dp .dp-dot.full { background: var(--red); }
+.dp .is-selected .dp-dot { background: #fff; }
+
+/* Grille des mois */
+.dp .dp-months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 4px 0 2px; }
+.dp .dp-month {
+  height: var(--dp-cell); min-height: 44px; padding: 0; border: 1px solid transparent; border-radius: 12px; background: transparent;
+  color: var(--ink); font-size: 14px; font-weight: 500; cursor: pointer;
+  box-shadow: none; transform: none; filter: none;
+}
+.dp .dp-month:hover:not(:disabled) { background: var(--dp-hover); }
+.dp .dp-month:disabled { opacity: 0.35; cursor: not-allowed; }
+.dp .dp-month.is-today { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); }
+.dp .dp-month.is-selected, .dp .dp-month.is-selected:hover { background: var(--dp-grad); color: #fff; font-weight: 600; box-shadow: var(--dp-day-shadow); }
+.dp .dp-month:focus-visible { outline: 2px solid var(--navy); outline-offset: 1px; }
+
+/* Légende, sélection, pied */
+.dp .dp-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
+.dp .dp-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.dp .dp-legend .dp-dot { position: static; margin: 0; display: inline-block; }
+.dp .dp-legend .dp-hatch { display: inline-block; width: 12px; height: 12px; border-radius: 4px; background: var(--dp-hatch); box-shadow: inset 0 0 0 1px var(--line); }
+.dp .dp-day.is-pending { color: var(--muted); opacity: 0.55; cursor: progress; }
+.dp .dp-day.is-pending:hover { background: transparent; }
+.dp .dp-note { margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.dp .dp-note.is-warn { color: var(--ink); }
+.dp .dp-retry { display: inline; min-height: 0; padding: 0; border: 0; background: none; box-shadow: none; transform: none; filter: none;
+  font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.dp .dp-sel { margin: 10px 0 0; padding-inline: 2px; min-height: 22px; font-size: 13px; color: var(--muted); font-weight: 300; }
+.dp .dp-sel strong { font-weight: 600; color: var(--navy); }
+.dp .dp-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; padding-inline: 2px; }
+.dp .dp-foot button { transform: none; filter: none; }
+.dp-sheet .dp-foot button { min-height: 44px; padding-inline: 16px; font-size: 14px; }
+.dp .dp-ok { width: 100%; margin-top: 10px; min-height: 48px; font-size: 15px; }
+
+@media (max-width: 359px) { .dp-sheet { padding-inline: 12px; } }
+@media (prefers-reduced-motion: reduce) {
+  .dp-pop, .dp-overlay, .dp-sheet { animation: none; }
+  .dp .dp-day, .dp .dp-title svg { transition: none; }
+}
