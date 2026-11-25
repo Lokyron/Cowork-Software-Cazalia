@@ -119,6 +119,30 @@ const monthHoldStmt = db.prepare(
 // Au-delà, c'est du balayage sans usage commercial.
 export const MONTH_MIN_OFFSET = -1;
 export const MONTH_MAX_OFFSET = 36;
+// Seuil du statut « partial » (« quelques places ») du calendrier, pour un espace en
+// INVENTAIRE : part de la capacité occupée à partir de laquelle un jour cesse d'être
+// « open ». 0.5 = la moitié. Valeur voulue par le client (open space de 7 postes :
+// « quelques places » dès 4 postes réservés). C'est UN réglage d'affichage : il ne change ni
+// ce qui est réservable ni ce qui est facturé (le refus `COMPLET` reste décidé ailleurs).
+export const PARTIAL_OCCUPANCY_RATIO = 0.5;
+
+/**
+ * Nombre de places occupées à partir duquel un espace en inventaire passe de « open » à
+ * « partial ». Capacité impaire : arrondi AU-DESSUS (7 places → 4), c'est le sens du
+ * client (« la moitié occupée ») ; 3 occupées sur 7, c'est encore strictement moins que
+ * la moitié. La capacité est supposée valide : `spaces.capacity` est `INTEGER NOT NULL
+ * CHECK (capacity >= 1)` (schema.sql), donc la base interdit 0, un négatif et `null`. Le
+ * `Math.max(1, …)` n'est qu'un plancher (si le ratio devenait très petit, le seuil ne
+ * tomberait pas à 0, ce qui rendrait tout jour « partial ») : il ne protège PAS d'une
+ * capacité `undefined` ou `NaN`, qui donnerait `NaN` (et donc jamais « partial »).
+ * Non applicable aux espaces exclusifs (binaires : libre ou réservé).
+ * @param {number} capacity Capacité de l'espace (entier >= 1).
+ * @returns {number}
+ */
+export function partialThreshold(capacity) {
+  return Math.max(1, Math.ceil(capacity * PARTIAL_OCCUPANCY_RATIO));
+}
+
 // Les demi-journées se distinguent par l'heure de début : avant midi = matin.
 const NOON_MINUTES = 12 * 60;
 
@@ -204,18 +228,25 @@ export function monthAvailability(spaceId, monthRaw, opts = {}) {
   //    alors qu'il reste des heures libres. Exemple : 3 places prises pendant deux
   //    heures sur un open space de 10 donnent `seats_left: 10` ici (à l'instant le
   //    plus creux) mais 7 chez `spaceAvailability` sur la plage entière. « touched »
-  //    signale qu'une réservation touche la fenêtre (jour « partial » même à 10).
+  //    signale qu'une réservation touche la fenêtre (exclusif : jour « partial »).
   //    Ce n'est donc PAS « identique à avant » : seul `windowsFor` l'est avec une
   //    plage unique. La divergence est figée par les tests.
+  //  « peak » = places occupées au plus fort de la fenêtre : c'est lui que compare le
+  //  seuil `partialThreshold` (la somme des chevauchements pour un forfait, le pic
+  //  instantané à l'heure). `touched` ne sert plus qu'aux espaces exclusifs.
   const evaluate = (from, to) => {
     if (tarifType !== 'heure') {
       const busy = occupied(from, to);
-      return { left: seatsLeftFor(space, busy), touched: busy > 0 };
+      return { left: seatsLeftFor(space, busy), touched: busy > 0, peak: busy };
     }
     const points = [from, ...items.flatMap((i) => [i.s, i.e])].filter((t) => t >= from && t < to);
     const busyAt = points.map((t) => occupied(t, t + 1));
-    return { left: seatsLeftFor(space, Math.min(...busyAt)), touched: occupied(from, to) > 0 };
+    return { left: seatsLeftFor(space, Math.min(...busyAt)), touched: occupied(from, to) > 0, peak: Math.max(...busyAt) };
   };
+  // « partial » : exclusif = binaire (la moindre réservation touche la fenêtre) ;
+  // inventaire = au moins `partialThreshold(capacity)` places occupées.
+  const threshold = partialThreshold(space.capacity);
+  const isPartial = (r) => (space.exclusive ? r.touched : r.peak >= threshold);
 
   const todayKey = parisDateKey(now);
   const mm = String(month).padStart(2, '0');
@@ -232,9 +263,20 @@ export function monthAvailability(spaceId, monthRaw, opts = {}) {
     // `status` suit la convention « meilleure fenêtre » (assumée) ; afficher à côté
     // « 10 places » sur un jour dont une demi-journée est pleine serait faux : dès que
     // les fenêtres divergent, `seats_left` vaut `null` (le front écrit « quelques places »).
-    const left = results.every((r) => r.left === results[0].left) ? results[0].left : null;
-    const statuses = results.map((r) => (r.left < seats ? 'full' : r.touched ? 'partial' : 'open'));
+    let left = results.every((r) => r.left === results[0].left) ? results[0].left : null;
+    const statuses = results.map((r) => (r.left < seats ? 'full' : isPartial(r) ? 'partial' : 'open'));
     const status = statuses.every((x) => x === 'open') ? 'open' : statuses.every((x) => x === 'full') ? 'full' : 'partial';
+    // Convention « le calendrier qualifie la journée, le badge chiffre le créneau » :
+    // `status` suit le PIC d'occupation (`peak`), alors qu'à l'heure `left` suit le MEILLEUR
+    // instant (souvent l'ouverture, où personne n'est là). Sans garde, un open space de 7
+    // avec 4 postes pris de 09:00 à 10:00 afficherait « quelques places » ET « 7 places
+    // restantes ». On ne garde donc le chiffre sur un jour « partial » que s'il est cohérent
+    // avec le seuil (`left <= capacité - seuil`), sinon `null` (le front écrit « quelques
+    // places »). On ne remplace pas `peak` par `capacité - left` : à l'heure, `partial`
+    // deviendrait inerte et un jour saturé de 09:00 à 18:00 s'afficherait « libre ».
+    // Forfaits : `peak === capacité - left`, la garde ne change rien. Exclusif : binaire,
+    // le chiffre (0/1) n'est pas une jauge, on n'y touche pas.
+    if (status === 'partial' && left !== null && !space.exclusive && left > space.capacity - threshold) left = null;
     days.push({ date, status, seats_left: left });
   }
   return {

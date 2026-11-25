@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, dataVersion } from '../api.js';
 import { addDaysStr, addMonthsStr, todayStr } from '../time.js';
+import { seatsRemaining } from '../seatsLabel.js';
 import { MONTHS, daysIn, dayInfo, fmtFR, longLabel, mkIso, pad, parseFR, parseIso, weekday } from '../datePickerCore.js';
 
 // Sélecteur de jour maison, en remplacement de <input type="date">.
@@ -19,7 +20,7 @@ import { MONTHS, daysIn, dayInfo, fmtFR, longLabel, mkIso, pad, parseFR, parseIs
 //                `min=""` ou `max=""` supprime explicitement la borne.
 //   disabled     désactive le champ
 //   label, id    étiquette du champ et id de l'<input> (pour un <label htmlFor> externe)
-//   availability { spaceId, seats, tarifType, slot, excludeReservationId } : colore les jours
+//   availability { spaceId, seats, tarifType, slot, excludeReservationId, noun } : colore les jours
 //                avec GET /api/availability/month (`excludeReservationId` : écran de
 //                déplacement, la réservation déplacée ne compte pas contre elle-même ;
 //                la route ne l'honore que pour un admin). Absent ou sans spaceId :
@@ -32,6 +33,8 @@ import { MONTHS, daysIn, dayInfo, fmtFR, longLabel, mkIso, pad, parseFR, parseIs
 //                avec « Réessayer » et les jours ne sont PAS présentés comme libres (le
 //                serveur revalide à la réservation). Une écriture faite entre-temps
 //                (panier, réservation : `dataVersion` d'api.js) périme le cache du mois.
+//                `noun` (« poste » | « place », issu de `seatNoun`) : le mot de l'étiquette
+//                vocale d'un jour (« 3 postes restants »). Absent : repli « place » (seatNoun(null)).
 //   permissive   écrans administrateur : les jours fermés / complets restent marqués
 //                mais restent sélectionnables (surbooking, hors horaires). Seules les
 //                bornes min / max bloquent.
@@ -618,7 +621,7 @@ export default function DatePicker({ value = '', onChange, min, max, disabled = 
         if (info.k === 'full') { cls += ' is-full'; lab += exclusiveNow ? ', réservé' : ', complet'; }
         if (info.k === 'partial') {
           if (exclusiveNow) lab += ', partiellement réservé';
-          else lab += info.left != null ? `, ${info.left} place${info.left > 1 ? 's' : ''} restante${info.left > 1 ? 's' : ''}` : ', quelques places';
+          else lab += info.left != null ? `, ${seatsRemaining(availability?.noun === 'poste' ? 'poste' : 'place', info.left)}` : ', quelques places';
         }
         if (info.k === 'open') lab += ', libre';
         if (info.k === 'pending') cls += ' is-pending';

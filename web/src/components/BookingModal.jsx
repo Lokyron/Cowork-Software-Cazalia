@@ -3,6 +3,7 @@ import { api, msg } from '../api.js';
 import { parisLocalToUtcIso } from '../time.js';
 import TimeSelect from './TimeSelect.jsx';
 import DatePicker from './DatePicker.jsx';
+import { seatsBadge, seatsHeading } from '../seatsLabel.js';
 import CreateMemberModal from './CreateMemberModal.jsx';
 import { spaceModes } from '../price.js';
 
@@ -71,6 +72,7 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
   const customCents = customCost !== '' ? Math.round(Number(customCost) * 100) : null;
   const effectiveCents = isAdmin && customCents != null ? customCents : costCents;
   const full = avail && avail.seats_left < seats;
+  const badge = seatsBadge(avail, space, seats);
   // Open Space et bureau privé : réservation par forfait (demi-journée / journée)
   // depuis la page Réserver - ce modal horaire ne le gère pas côté client.
   const openSpaceBlocked = !isAdmin && (space?.category === 'OPEN_SPACE' || space?.category === 'PRIVATE_OFFICE');
@@ -171,7 +173,7 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
 
           {space && !space.exclusive && (
             <div className="field" style={{ marginTop: 6 }}>
-              <label>{space.privatizable ? 'Réservation' : 'Places'}</label>
+              <label>{space.privatizable ? 'Réservation' : seatsHeading(space)}</label>
               {space.privatizable ? (
                 <select value={seats} onChange={(e) => setSeats(Number(e.target.value))} style={{ maxWidth: 240 }}>
                   <option value={1}>1 poste</option>
@@ -189,9 +191,7 @@ export default function BookingModal({ mode, presetSpaceId, initial, onClose, on
               : !space ? <span className="muted">Choisissez un espace.</span>
               : avail == null ? <span className="muted">…</span>
               : <>
-                  {avail.exclusive
-                    ? <span className={`badge ${full ? 'red' : 'green'}`}>{full ? 'Réservé' : 'Disponible'}</span>
-                    : <span className={`badge ${full ? 'red' : 'green'}`}>{avail.seats_left} place{avail.seats_left > 1 ? 's' : ''} restante{avail.seats_left > 1 ? 's' : ''}</span>}
+                  {badge ? <span className={`badge ${badge.tone}`}>{badge.text}</span> : <span className="muted">…</span>}
                   {' '}<span className="muted">
                     {effectiveCents == null ? 'tarif indisponible'
                       : (!isAdmin && avail.base_cents != null && avail.base_cents !== effectiveCents)

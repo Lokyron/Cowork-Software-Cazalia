@@ -63,7 +63,7 @@ export default function CartSidebar() {
             <strong>{eur(cart.total)}</strong>
           </div>
           <Link to="/reserver"><button style={{ width: '100%', marginTop: 12 }}>Finaliser ma réservation</button></Link>
-          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Places tenues 10 min. Le paiement se fait sur la page « Réserver ».</p>
+          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Créneaux tenus 10 min. Le paiement se fait sur la page « Réserver ».</p>
         </>
       )}
     </aside>

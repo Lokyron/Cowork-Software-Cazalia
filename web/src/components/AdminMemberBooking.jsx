@@ -3,6 +3,7 @@ import { api, msg } from '../api.js';
 import { parisLocalToUtcIso, todayStr } from '../time.js';
 import TimeSelect from './TimeSelect.jsx';
 import DatePicker from './DatePicker.jsx';
+import { seatNoun, seatsHeading, seatsCount } from '../seatsLabel.js';
 
 let _id = 0;
 const newSlot = (date) => ({ id: ++_id, date: date || todayStr(), start: '09:00', end: '12:00', seats: 1 });
@@ -89,7 +90,7 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
           <select value={spaceId} onChange={(e) => setSpaceId(e.target.value)}>
             {spaces.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} - {s.price_per_hour_cents != null ? `${eur(s.price_per_hour_cents)}/h` : '-'} {s.exclusive ? '(salle, forfait)' : s.privatizable ? '(focus, /poste)' : '(open-space, /place)'}
+                {s.name} - {s.price_per_hour_cents != null ? `${eur(s.price_per_hour_cents)}/h` : '-'} {s.exclusive ? '(salle, forfait)' : s.privatizable ? `(focus, /${seatNoun(s)})` : `(open-space, /${seatNoun(s)})`}
               </option>
             ))}
           </select>
@@ -109,7 +110,7 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
                     min={todayStr()}
                     value={s.date}
                     onChange={(d) => setField(s.id, 'date', d)}
-                    availability={space ? { spaceId: space.id, seats: s.seats, tarifType: 'heure' } : undefined}
+                    availability={space ? { spaceId: space.id, seats: s.seats, tarifType: 'heure', noun: seatNoun(space) } : undefined}
                   />
                   <div className="field"><label>Début</label><TimeSelect value={s.start} onChange={(e) => setField(s.id, 'start', e.target.value)} /></div>
                   <div className="field"><label>Fin</label><TimeSelect value={s.end} onChange={(e) => setField(s.id, 'end', e.target.value)} /></div>
@@ -123,7 +124,7 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
                     </div>
                   ) : (
                     <div className="field" style={{ flex: '0 0 74px' }}>
-                      <label>Places</label>
+                      <label>{seatsHeading(space)}</label>
                       <input type="number" min="1" max={space.capacity} value={s.seats}
                         onChange={(e) => setField(s.id, 'seats', Math.max(1, Math.min(space.capacity, Number(e.target.value) || 1)))} />
                     </div>
@@ -134,7 +135,7 @@ export default function AdminMemberBooking({ member, onClose, onDone }) {
                       {!valid ? <span className="badge red">Invalide</span>
                         : a == null || a === 'invalid' ? <span className="muted">…</span>
                         : full ? <span className="badge red">{space?.exclusive ? 'Réservé' : 'Complet'}</span>
-                        : <><span className="badge green">{space?.exclusive ? 'Dispo' : `${a.seats_left} pl.`}</span> <span className="muted">{a.cost != null ? eur(a.cost) : ''}</span></>}
+                        : <><span className="badge green">{space?.exclusive ? 'Dispo' : seatsCount(space, a.seats_left)}</span> <span className="muted">{a.cost != null ? eur(a.cost) : ''}</span></>}
                     </div>
                   </div>
                   <div className="field" style={{ flex: '0 0 auto' }}><label>&nbsp;</label><button className="outline small" onClick={() => removeSlot(s.id)} disabled={slots.length <= 1}>✕</button></div>

@@ -4,6 +4,7 @@ import { api, msg } from '../api.js';
 import { parisLocalToUtcIso } from '../time.js';
 import TimeSelect from './TimeSelect.jsx';
 import DatePicker from './DatePicker.jsx';
+import { seatsBadge, seatsHeading, seatNoun } from '../seatsLabel.js';
 import { ResendVerification } from './EmailVerifyBanner.jsx';
 import { spaceModes, tarifTypesOffered } from '../price.js';
 
@@ -130,6 +131,7 @@ export default function CartBuilder({ adapter, admin = false, blocked = false, o
   const customCents = customCost !== '' ? Math.round(Number(customCost) * 100) : null;
   const effectiveCents = admin && customCents != null ? customCents : costCents;
   const full = avail && avail.seats_left < seats;
+  const badge = seatsBadge(avail, space, seats);
 
   const add = async () => {
     if (!space || !iso || !iso.valid) return;
@@ -204,7 +206,7 @@ export default function CartBuilder({ adapter, admin = false, blocked = false, o
             value={date}
             onChange={setDate}
             permissive={admin}
-            availability={space ? { spaceId: space.id, seats, tarifType, slot: formule === 'heure' ? undefined : formule } : undefined}
+            availability={space ? { spaceId: space.id, noun: seatNoun(space), seats, tarifType, slot: formule === 'heure' ? undefined : formule } : undefined}
           />
           {formule === 'heure' ? (
             <>
@@ -221,7 +223,7 @@ export default function CartBuilder({ adapter, admin = false, blocked = false, o
 
         {space && !space.exclusive && (
           <div className="field" style={{ maxWidth: 240 }}>
-            <label>{space.privatizable ? 'Réservation' : 'Places'}</label>
+            <label>{space.privatizable ? 'Réservation' : seatsHeading(space)}</label>
             {space.privatizable ? (
               <select value={seats} onChange={(e) => setSeats(Number(e.target.value))}>
                 <option value={1}>1 poste</option>
@@ -240,9 +242,7 @@ export default function CartBuilder({ adapter, admin = false, blocked = false, o
             : !space ? <span className="muted">Choisissez un espace.</span>
             : avail == null ? <span className="muted">…</span>
             : <>
-                {avail.exclusive
-                  ? <span className={`badge ${full ? 'red' : 'green'}`}>{full ? 'Réservé' : 'Disponible'}</span>
-                  : <span className={`badge ${full ? 'red' : 'green'}`}>{avail.seats_left} place{avail.seats_left > 1 ? 's' : ''} restante{avail.seats_left > 1 ? 's' : ''}</span>}
+                {badge ? <span className={`badge ${badge.tone}`}>{badge.text}</span> : <span className="muted">…</span>}
                 {' '}<PriceTag cents={effectiveCents} baseCents={admin ? null : avail.base_cents} label={admin ? null : avail.discount_label} />
               </>}
         </div>

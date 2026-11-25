@@ -23,7 +23,7 @@ process.env.APP_SECRET = crypto.randomBytes(32).toString('hex');
 process.env.SCRYPT_N = '16384';
 
 const { db } = await import('../src/db.js');
-const { monthAvailability, spaceAvailability, windowsFor } = await import('../src/lib/booking.js');
+const { monthAvailability, spaceAvailability, windowsFor, partialThreshold, PARTIAL_OCCUPANCY_RATIO } = await import('../src/lib/booking.js');
 const { parisDateKey, parisLocalToUtcIso } = await import('../src/lib/time.js');
 const { config } = await import('../src/config.js');
 const { default: express } = await import('express');
@@ -93,9 +93,10 @@ test('mois normal : dimanche fermé, jours passés « past », jour vide « open
   for (const d of r.days) if (dow(d.date) === 0 && d.date >= '2026-11-24') assert.equal(d.status, 'closed');
 });
 
-test('réservation partielle : « partial » avec le bon seats_left ; saturation : « full »', () => {
+test('réservation partielle : « partial » dès la moitié de la capacité occupée ; saturation : « full »', () => {
   const m = month('2026-11', { tarifType: 'demi_journee', slot: 'matin' });
-  assert.deepEqual(day(m, '2026-11-30'), { date: '2026-11-30', status: 'partial', seats_left: 6 });
+  // Lun. 30 : 4 places sur 10 occupées, strictement moins de la moitié (5) : « open », 6 restantes.
+  assert.deepEqual(day(m, '2026-11-30'), { date: '2026-11-30', status: 'open', seats_left: 6 });
   assert.deepEqual(day(m, '2026-11-25'), { date: '2026-11-25', status: 'full', seats_left: 0 });
   assert.deepEqual(day(m, '2026-11-27'), { date: '2026-11-27', status: 'full', seats_left: 0 });
   // Demande de 7 places : 6 restantes ne suffisent plus.
@@ -109,17 +110,19 @@ test('réservation partielle : « partial » avec le bon seats_left ; saturation
   // Journée entière : le matin plein du 25 la rend pleine.
   const j = month('2026-11', { tarifType: 'journee' });
   assert.equal(day(j, '2026-11-25').status, 'full');
-  assert.equal(day(j, '2026-11-26').status, 'partial');
+  // Jeu. 26 : verrou de 3 places sur 10 (< 5) : « open ».
+  assert.equal(day(j, '2026-11-26').status, 'open');
 });
 
 test('formule « heure » : le meilleur moment de la journée compte', () => {
   const r = month('2026-11');
-  // Matin plein mais après-midi libre : il reste des heures, donc « partial » à 10 places.
-  assert.deepEqual(day(r, '2026-11-25'), { date: '2026-11-25', status: 'partial', seats_left: 10 });
+  // Matin plein mais après-midi libre : il reste des heures, donc « partial ». Le chiffre du
+  // meilleur instant (10) contredirait le statut : il est omis (convention : test dédié plus bas).
+  assert.deepEqual(day(r, '2026-11-25'), { date: '2026-11-25', status: 'partial', seats_left: null });
   // Journée entière saturée : « full ».
   assert.deepEqual(day(r, '2026-11-27'), { date: '2026-11-27', status: 'full', seats_left: 0 });
-  // Verrou de 3 places sur une heure : partial, 10 places disponibles ailleurs dans la journée.
-  assert.equal(day(r, '2026-11-26').status, 'partial');
+  // Verrou de 3 places sur une heure (< moitié de 10) : « open ».
+  assert.equal(day(r, '2026-11-26').status, 'open');
 });
 
 test('plusieurs fenêtres : seats_left vaut null quand elles divergent, le nombre exact sinon', () => {
@@ -127,21 +130,22 @@ test('plusieurs fenêtres : seats_left vaut null quand elles divergent, le nombr
   const d = month('2026-11', { tarifType: 'demi_journee' });
   // Mer. 25 : matin plein (0 place), après-midi libre (10) : « partial », mais AUCUN chiffre.
   assert.deepEqual(day(d, '2026-11-25'), { date: '2026-11-25', status: 'partial', seats_left: null });
-  // Lun. 30 : matin à 4 places (6 restantes), après-midi libre (10) : idem.
-  assert.deepEqual(day(d, '2026-11-30'), { date: '2026-11-30', status: 'partial', seats_left: null });
+  // Lun. 30 : matin à 4 places (6 restantes, sous le seuil de 5), après-midi libre (10) :
+  // « open » (aucune fenêtre n'atteint la moitié), mais les chiffres divergent : AUCUN chiffre.
+  assert.deepEqual(day(d, '2026-11-30'), { date: '2026-11-30', status: 'open', seats_left: null });
   // Ven. 27 : tout est pris, les deux fenêtres disent 0 : « full » et 0 (elles sont d'accord).
   assert.deepEqual(day(d, '2026-11-27'), { date: '2026-11-27', status: 'full', seats_left: 0 });
   // Aujourd'hui (mar. 24), jour vide : les deux fenêtres disent 10, le nombre reste affiché.
   assert.deepEqual(day(d, '2026-11-24'), { date: '2026-11-24', status: 'open', seats_left: 10 });
   // UNE seule fenêtre (slot demandé) : le nombre exact est conservé.
   const m = month('2026-11', { tarifType: 'demi_journee', slot: 'matin' });
-  assert.deepEqual(day(m, '2026-11-30'), { date: '2026-11-30', status: 'partial', seats_left: 6 });
+  assert.deepEqual(day(m, '2026-11-30'), { date: '2026-11-30', status: 'open', seats_left: 6 });
   assert.deepEqual(day(m, '2026-11-25'), { date: '2026-11-25', status: 'full', seats_left: 0 });
 });
 
 test('verrou de panier : vivant = occupé, expiré = ignoré', () => {
   const m = month('2026-11', { tarifType: 'demi_journee', slot: 'matin' });
-  assert.deepEqual(day(m, '2026-11-26'), { date: '2026-11-26', status: 'partial', seats_left: 7 });
+  assert.deepEqual(day(m, '2026-11-26'), { date: '2026-11-26', status: 'open', seats_left: 7 });
   const dec = month('2026-12', { tarifType: 'demi_journee', slot: 'matin' });
   assert.deepEqual(day(dec, '2026-12-01'), { date: '2026-12-01', status: 'open', seats_left: 10 });
   // Le verrou vivant expire une heure plus tard : il ne compte plus.
@@ -158,8 +162,8 @@ test('DIVERGENCE VOULUE en formule « heure » : monthAvailability retient le me
   // spaceAvailability SOMME les places de tout ce qui chevauche la plage : 3 prises, 7 restantes.
   assert.equal(spaceAvailability(OPEN, OUV_DEB, OUV_FIN).seats_left, 7);
   // monthAvailability (formule « heure ») prend l'instant le MOINS occupé de la journée : à
-  // 08:30 il n'y a personne, donc 10 places, et le jour est « partial » (une réservation le touche).
-  assert.deepEqual(day(month('2027-03'), '2027-03-02'), { date: '2027-03-02', status: 'partial', seats_left: 10 });
+  // 08:30 il n'y a personne, donc 10 places ; le pic (3 places) reste sous la moitié (5) : « open ».
+  assert.deepEqual(day(month('2027-03'), '2027-03-02'), { date: '2027-03-02', status: 'open', seats_left: 10 });
   // Ce n'est PAS un bug : on ne sait pas encore quelles heures seront demandées, et sommer
   // la plage afficherait « complet » pour deux demi-journées à 60 % chacune. La même
   // réservation, vue par une formule à fenêtre fixe, redonne le chiffre de spaceAvailability.
@@ -332,8 +336,8 @@ test('route : un visiteur anonyme obtient le calendrier, sans aucune donnée per
   assert.equal(body.month, target);
   assert.equal(body.seats, 1);
   assert.equal(body.days.length, new Date(Date.UTC(y, m, 0)).getUTCDate());
-  // Formule « heure » : 3 places prises deux heures, le reste de la journée est libre.
-  assert.deepEqual(day(body, iso), { date: iso, status: 'partial', seats_left: 10 });
+  // Le jour réservé est bien présent ; son statut est l'objet d'un autre test (seuil).
+  assert.ok(day(body, iso));
   for (const dd of body.days) assert.deepEqual(Object.keys(dd).sort(), ['date', 'seats_left', 'status']);
   // Aucune fuite : ni nom, ni e-mail, ni identifiant du membre, ni horaire de la réservation.
   for (const secret of [MEMBER_EMAIL, MEMBER_NAME, 'Zoé', 'Confidentielle', '0611223344', 'user', 'member', `T09:00`, `T11:00`]) {
@@ -566,4 +570,99 @@ test('ordre de montage : `attachUser` précède le routeur des espaces dans inde
   assert.ok(attach !== -1, 'app.use(attachUser) introuvable dans index.js');
   assert.ok(spaces !== -1, "app.use('/api', spacesRouter) introuvable dans index.js");
   assert.ok(attach < spaces, 'attachUser doit être monté AVANT spacesRouter');
+});
+
+// ── Seuil « quelques places » : la moitié de la capacité occupée ─────────────
+// Journée entière (08:30-19:30 Paris = 07:30Z-18:30Z en hiver), décembre 2026.
+const dayResa = (space, date, seats) => resa(space, `${date}T07:30:00.000Z`, `${date}T18:30:00.000Z`, seats);
+
+test('seuil : constante nommée, moitié arrondie au-dessus, jamais de 7 en dur', () => {
+  assert.equal(PARTIAL_OCCUPANCY_RATIO, 0.5);
+  assert.equal(partialThreshold(7), 4);   // impaire : 4 occupées = « la moitié » pour le client
+  assert.equal(partialThreshold(10), 5);  // paire : exactement la moitié
+  assert.equal(partialThreshold(6), 3);
+  assert.equal(partialThreshold(2), 1);
+  assert.equal(partialThreshold(1), 1);
+});
+
+test('capacité impaire (7, cas du client) : 3 occupées « open », 4 « partial », 6 « partial », 7 « full »', () => {
+  const SEVEN = Number(insSpace.run('Open space 7', 7, 0, 1, 1).lastInsertRowid);
+  const cases = [['2026-12-14', 0, 'open', 7], ['2026-12-15', 3, 'open', 4], ['2026-12-16', 4, 'partial', 3],
+    ['2026-12-17', 6, 'partial', 1], ['2026-12-18', 7, 'full', 0]];
+  for (const [date, n] of cases) if (n) dayResa(SEVEN, date, n);
+  const r = month('2026-12', { tarifType: 'journee' }, SEVEN);
+  for (const [date, , status, left] of cases) assert.deepEqual(day(r, date), { date, status, seats_left: left }, date);
+  // « open » reste cohérent avec seats_left : 4 places restantes sur 7, chiffre exact conservé.
+  assert.equal(day(r, '2026-12-15').seats_left, 4);
+});
+
+test('convention du calendrier : pic pour le statut, chiffre seulement s\'il est cohérent, null sinon', () => {
+  // Le calendrier qualifie la JOURNÉE (statut au PIC d'occupation), le badge de la page de
+  // réservation chiffre le CRÉNEAU. À l'heure, `seats_left` suit le meilleur instant (souvent
+  // l'ouverture) : sur un jour « partial » il contredirait le statut, d'où `null`.
+  const SEVEN = Number(insSpace.run('Open space 7 convention', 7, 0, 1, 1).lastInsertRowid);
+  const h = (date, from, to, n) => resa(SEVEN, `${date}T${from}:00.000Z`, `${date}T${to}:00.000Z`, n);
+  h('2026-12-21', '08:00', '09:00', 3);   // pic 3 < 4 : « open », chiffre conservé
+  h('2026-12-22', '08:00', '09:00', 4);   // pic 4 = seuil : « partial », 7 au meilleur instant
+  h('2026-12-23', '07:30', '18:30', 7);   // 7 postes sur 7 toute la journée : « full »
+  h('2026-12-24', '08:00', '17:00', 7);   // 7 sur 7 de 09:00 à 18:00 : surtout PAS « open »
+  const r = month('2026-12', {}, SEVEN);
+  assert.deepEqual(day(r, '2026-12-21'), { date: '2026-12-21', status: 'open', seats_left: 7 });
+  assert.deepEqual(day(r, '2026-12-22'), { date: '2026-12-22', status: 'partial', seats_left: null });
+  assert.deepEqual(day(r, '2026-12-23'), { date: '2026-12-23', status: 'full', seats_left: 0 });
+  assert.deepEqual(day(r, '2026-12-24'), { date: '2026-12-24', status: 'partial', seats_left: null });
+  // Forfaits : pic === capacité - restant, la garde ne change rien (chiffre exact conservé).
+  for (const tarifType of ['demi_journee', 'journee']) {
+    const f = month('2026-12', { tarifType, slot: tarifType === 'journee' ? null : 'matin' }, SEVEN);
+    assert.deepEqual(day(f, '2026-12-22'), { date: '2026-12-22', status: 'partial', seats_left: 3 }, tarifType);
+    assert.deepEqual(day(f, '2026-12-21'), { date: '2026-12-21', status: 'open', seats_left: 4 }, tarifType);
+  }
+});
+
+test('capacité 1 : « full » l\'emporte sur « partial » (évalué avant), seuil à 1', () => {
+  const ONE = Number(insSpace.run('Poste unique', 1, 0, 1, 1).lastInsertRowid);
+  assert.equal(partialThreshold(1), 1);
+  resa(ONE, '2026-12-21T07:30:00.000Z', '2026-12-21T18:30:00.000Z', 1);  // toute la journée
+  resa(ONE, '2026-12-22T08:00:00.000Z', '2026-12-22T09:00:00.000Z', 1);  // une heure
+  const j = month('2026-12', { tarifType: 'journee' }, ONE);
+  assert.deepEqual(day(j, '2026-12-21'), { date: '2026-12-21', status: 'full', seats_left: 0 });
+  assert.deepEqual(day(j, '2026-12-23'), { date: '2026-12-23', status: 'open', seats_left: 1 });
+  const h = month('2026-12', {}, ONE);
+  assert.deepEqual(day(h, '2026-12-21'), { date: '2026-12-21', status: 'full', seats_left: 0 });
+  // Une heure prise : pic 1 >= seuil 1 : « partial », et le « 1 place » du meilleur instant est omis.
+  assert.deepEqual(day(h, '2026-12-22'), { date: '2026-12-22', status: 'partial', seats_left: null });
+});
+
+test('capacité paire (6) : 2 occupées « open », 3 (la moitié exacte) « partial »', () => {
+  const SIX = Number(insSpace.run('Open space 6', 6, 0, 1, 1).lastInsertRowid);
+  dayResa(SIX, '2026-12-15', 2);
+  dayResa(SIX, '2026-12-16', 3);
+  const r = month('2026-12', { tarifType: 'journee' }, SIX);
+  assert.deepEqual(day(r, '2026-12-15'), { date: '2026-12-15', status: 'open', seats_left: 4 });
+  assert.deepEqual(day(r, '2026-12-16'), { date: '2026-12-16', status: 'partial', seats_left: 3 });
+});
+
+test('« full » inchangé : seats demandé > places restantes, même sous le seuil', () => {
+  const SEVEN = Number(insSpace.run('Open space 7 bis', 7, 0, 1, 1).lastInsertRowid);
+  dayResa(SEVEN, '2026-12-15', 3); // 3 occupées : « open » pour 1 poste, 4 restantes
+  dayResa(SEVEN, '2026-12-16', 4); // 4 occupées : « partial » pour 1 poste, 3 restantes
+  const un = month('2026-12', { tarifType: 'journee' }, SEVEN);
+  assert.equal(day(un, '2026-12-15').status, 'open');
+  assert.equal(day(un, '2026-12-16').status, 'partial');
+  const quatre = month('2026-12', { tarifType: 'journee', seats: 4 }, SEVEN);
+  assert.deepEqual(day(quatre, '2026-12-15'), { date: '2026-12-15', status: 'open', seats_left: 4 });
+  // 4 postes demandés, 3 restants : « full » POUR LUI, alors que la salle n'est pas pleine.
+  assert.deepEqual(day(quatre, '2026-12-16'), { date: '2026-12-16', status: 'full', seats_left: 3 });
+  assert.equal(quatre.seats, 4);
+});
+
+test('espace exclusif : binaire, le seuil ne s\'applique pas (capacité 6 = occupants)', () => {
+  // Salle de 6 occupants : une réservation d'1 « place » (unité = la salle) ne la met pas « partial ».
+  dayResa(ROOM, '2026-12-15', 1);
+  const j = month('2026-12', { tarifType: 'journee' }, ROOM);
+  assert.deepEqual(day(j, '2026-12-15'), { date: '2026-12-15', status: 'full', seats_left: 0 });
+  assert.deepEqual(day(j, '2026-12-16'), { date: '2026-12-16', status: 'open', seats_left: 1 });
+  // À l'heure : une seule réservation d'une heure rend le jour « partial » (comportement d'avant).
+  resa(ROOM, '2026-12-17T09:00:00.000Z', '2026-12-17T10:00:00.000Z', 1);
+  assert.deepEqual(day(month('2026-12', {}, ROOM), '2026-12-17'), { date: '2026-12-17', status: 'partial', seats_left: 1 });
 });
