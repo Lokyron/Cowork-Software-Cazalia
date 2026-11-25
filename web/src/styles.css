@@ -1310,6 +1310,7 @@ figure.carousel-item { margin: 0 16px 0 0; overflow: hidden; }
 /* ── Page Tarifs (refonte modèle éco.) ──────────────────────────────────── */
 .pricing-page { max-width: 1000px; margin: 0 auto; }
 .plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 8px; align-items: stretch; }
+.plan-grid.plan-grid-quad { grid-template-columns: repeat(2, 1fr); }
 .plan-card { display: flex; flex-direction: column; position: relative; }
 .plan-card.popular { border: 2px solid var(--accent); box-shadow: 0 14px 40px rgba(59, 130, 246, 0.18); }
 .plan-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 14px; border-radius: 999px; white-space: nowrap; }
@@ -1323,7 +1324,7 @@ figure.carousel-item { margin: 0 16px 0 0; overflow: hidden; }
 .bureau-cta { text-align: center; display: grid; gap: 10px; min-width: 180px; }
 .bureau-cta .plan-price strong { font-size: 22px; }
 @media (max-width: 760px) {
-  .plan-grid { grid-template-columns: 1fr; }
+  .plan-grid, .plan-grid.plan-grid-quad { grid-template-columns: 1fr; }
 }
 
 /* Bandeau « résiliation programmée » de l'encart abonnement. */

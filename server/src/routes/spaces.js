@@ -42,6 +42,59 @@ spacesRouter.get('/spaces', (_req, res) => {
   res.json({ spaces: rows.map((r) => ({ ...r, photo_frame: r.photo ? (frames[r.id] || null) : null })) });
 });
 
+const positiveCents = (c) => (c != null && Number(c) > 0 ? Math.round(Number(c)) : null);
+
+const privateOfficesStmt = db.prepare(
+  `SELECT id, category, online_bookable, exclusive, price_half_day_cents, price_day_cents
+     FROM spaces WHERE active = 1 AND category = 'PRIVATE_OFFICE' ORDER BY position, id`
+);
+
+/**
+ * Offre ponctuelle du bureau privatif, lue sur les espaces PRIVATE_OFFICE actifs
+ * en base (lecture seule, aucune règle de tarification ici).
+ *
+ * Un bureau est `bookable` selon les conditions de `effectivePricing` : réservable
+ * en ligne, exclusif, et au moins un forfait demi-journée / journée > 0. La page
+ * Réserver propose TOUS les bureaux réservables, chacun à son tarif : la vitrine
+ * annonce donc, forfait par forfait, le prix le plus bas sur l'ensemble d'entre
+ * eux (la demi-journée la moins chère et la journée la moins chère peuvent venir
+ * de deux bureaux différents). `from` vaut true quand les bureaux réservables ne
+ * proposent pas tous les mêmes forfaits aux mêmes prix : la carte dit alors
+ * « à partir de » (même motif que `price.js` côté front).
+ *
+ * `bookable` est le seul champ sur lequel le front se fonde pour afficher la carte.
+ *
+ * Cas limites, la route n'échoue jamais :
+ *   - aucun espace / aucun réservable -> `bookable: false`, prix et `from` à
+ *                                        null / false (on n'annonce rien)
+ *   - sans prix               -> `bookable: false`
+ *   - `online_bookable = 0`   -> `bookable: false` ; `online_bookable` reste vrai
+ *                                dès qu'un bureau actif est réservable en ligne
+ *
+ * @returns {{online_bookable:boolean, bookable:boolean, from:boolean,
+ *            half_day_cents:number|null, day_cents:number|null}} montants en centimes
+ */
+function privateOfficeOffer() {
+  const rows = privateOfficesStmt.all();
+  const offers = rows
+    .filter((r) => isOnlineBookable(r) && Number(r.exclusive) === 1)
+    .map((r) => ({ half: positiveCents(r.price_half_day_cents), day: positiveCents(r.price_day_cents) }))
+    .filter((o) => o.half != null || o.day != null);
+  const online = rows.some((r) => isOnlineBookable(r));
+  if (offers.length === 0) {
+    return { online_bookable: online, bookable: false, from: false, half_day_cents: null, day_cents: null };
+  }
+  const min = (key) => {
+    const v = offers.map((o) => o[key]).filter((c) => c != null);
+    return v.length ? Math.min(...v) : null;
+  };
+  const distinct = new Set(offers.map((o) => `${o.half}/${o.day}`));
+  return {
+    online_bookable: true, bookable: true, from: distinct.size > 1,
+    half_day_cents: min('half'), day_cents: min('day'),
+  };
+}
+
 /**
  * GET /api/pricing - grille tarifaire publique (vitrine).
  *
@@ -52,14 +105,19 @@ spacesRouter.get('/spaces', (_req, res) => {
  * Note : `subscriptions` est indicatif — le montant réellement prélevé vient des
  * Prices Stripe configurés dans l'administration.
  *
- * @returns 200 `{open_space, meeting_room, subscriptions, confort_meeting_discount,
- *                essentiel_quota_days, samedi}`
+ * `private_office` fait exception : les tarifs du bureau privatif ne sont pas dans
+ * `config.pricing`, ils sont saisis dans l'administration (colonnes de l'espace).
+ * Voir `privateOfficeOffer`.
+ *
+ * @returns 200 `{open_space, meeting_room, private_office, subscriptions,
+ *                confort_meeting_discount, essentiel_quota_days, samedi}`
  */
 spacesRouter.get('/pricing', (_req, res) => {
   const samedi = config.forfaitSlots?.[6] || { demi_journee: [], journee: [] };
   res.json({
     open_space: config.pricing.OPEN_SPACE,
     meeting_room: config.pricing.MEETING_ROOM,
+    private_office: privateOfficeOffer(),
     subscriptions: config.pricing.SUBSCRIPTIONS,
     confort_meeting_discount: config.pricing.CONFORT_MEETING_DISCOUNT,
     essentiel_quota_days: config.pricing.ESSENTIEL_QUOTA_DAYS,

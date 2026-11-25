@@ -5,6 +5,7 @@ import { useAuth } from '../auth.jsx';
 import ContactModal from '../components/ContactModal.jsx';
 import PublicHeader from '../components/PublicHeader.jsx';
 import ReservationNotice from '../components/ReservationNotice.jsx';
+import { CONFIDENTIELLE, bureauForfaitsLabel, eurc, ponctuelColumns, ponctuelFrom, samediNote } from '../vitrine-tarifs.js';
 
 // Les montants viennent de GET /api/pricing, c'est-à-dire de la source de vérité
 // du moteur de facturation (config.pricing). Ces valeurs ne servent que de repli
@@ -16,26 +17,25 @@ const DEFAULTS = {
   confort_meeting_discount: 0.5,
   essentiel_quota_days: 12,
   samedi: { demi_journee: true, journee: false },
+  // Pas de repli pour le bureau privatif : sans réponse de l'API, on ne sait pas
+  // s'il est réservable, donc la carte n'est pas affichée.
+  private_office: null,
 };
-
-// Les tarifs de la vitrine sont des montants ronds : on évite « 20,00 € » et on
-// ne montre les centimes que s'il y en a réellement.
-const eurc = (cents) => {
-  const v = (Number(cents) || 0) / 100;
-  return Number.isInteger(v) ? `${v} €` : v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
-};
-
-const CONFIDENTIELLE = 'En accès libre, sous réserve de non-privatisation';
 
 // Formules d'abonnement. Le montant réellement prélevé vient des Prices Stripe
 // configurés dans l'administration ; celui affiché ici est indicatif.
-const plansFrom = (t) => [
+// Le bureau privatif n'est inclus dans aucune formule (cf. lib/pricing.js serveur) :
+// quand il est réservable en ligne, chaque carte le dit.
+const plansFrom = (t) => {
+  const bureau = bureauForfaitsLabel(t.private_office) ? [['Bureau privatif', 'Non inclus, au tarif ponctuel']] : [];
+  return [
   {
     tier: 'ESSENTIEL', name: 'Essentiel', price: t.subscriptions.ESSENTIEL,
     features: [
       ['Open Space', `${t.essentiel_quota_days} jours / mois inclus`],
       ['Salle de réunion', 'Tarif standard'],
       ['Salle confidentielle', CONFIDENTIELLE],
+      ...bureau,
     ],
   },
   {
@@ -44,6 +44,7 @@ const plansFrom = (t) => [
       ['Open Space', 'Illimité'],
       ['Salle de réunion', `−${Math.round((1 - t.confort_meeting_discount) * 100)} % sur chaque réservation`],
       ['Salle confidentielle', CONFIDENTIELLE],
+      ...bureau,
     ],
   },
   {
@@ -52,31 +53,11 @@ const plansFrom = (t) => [
       ['Open Space', 'Illimité'],
       ['Salle de réunion', 'Illimitée incluse'],
       ['Salle confidentielle', CONFIDENTIELLE],
+      ...bureau,
     ],
   },
-];
-
-// Accès ponctuel : une carte par espace, au même format que les formules.
-const ponctuelFrom = (t) => [
-  {
-    name: 'Open Space',
-    price: eurc(t.open_space.journee), unit: '/ journée',
-    lines: [`${eurc(t.open_space.demi_journee)} la demi-journée`, 'Poste de travail en espace partagé'],
-  },
-  {
-    name: 'Salle de réunion',
-    price: eurc(t.meeting_room.heure), unit: "/ heure",
-    lines: [
-      `${eurc(t.meeting_room.demi_journee)} la demi-journée · ${eurc(t.meeting_room.journee)} la journée`,
-      'Salle privative, réservée pour vous seul',
-    ],
-  },
-  {
-    name: 'Salle confidentielle',
-    price: 'Incluse', unit: null,
-    lines: ['Avec toute réservation d\'open space', CONFIDENTIELLE, 'Rien à réserver'],
-  },
-];
+  ];
+};
 
 // Univers du sélecteur segmenté. L'ordre fixe l'ordre d'affichage et la position
 // du surligné glissant. « Abonnement » est au centre et affiché par défaut.
@@ -132,6 +113,8 @@ export default function Pricing() {
 
   const plans = plansFrom(tarifs);
   const ponctuel = ponctuelFrom(tarifs);
+  const bureauForfaits = bureauForfaitsLabel(tarifs.private_office);
+  const noteSamedi = samediNote(tarifs.samedi);
   const goReserver = () => navigate(user ? '/reserver' : '/login');
 
   return (
@@ -202,11 +185,12 @@ export default function Pricing() {
       {/* ── Ponctuel : une carte par espace, au format des formules ───────── */}
       {tab === 'ponctuel' && (
       <>
-      <div className="plan-grid">
+      <div className={`plan-grid ${ponctuelColumns(ponctuel.length) === 2 ? 'plan-grid-quad' : ''}`}>
         {ponctuel.map((o) => (
           <div key={o.name} className="card plan-card">
             <h2 className="plan-name">{o.name}</h2>
             <div className="plan-price">
+              {o.from && <span className="muted">à partir de </span>}
               <strong>{o.price}</strong>
               {o.unit && <span className="muted"> {o.unit}</span>}
             </div>
@@ -223,8 +207,7 @@ export default function Pricing() {
           <strong>Accès ponctuel - sans abonnement</strong>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: 14 }}>
             Réservez à la séance, payez en ligne au moment de réserver.
-            {!tarifs.samedi.journee && tarifs.samedi.demi_journee
-              && ' Le samedi, seule la demi-journée du matin est ouverte.'}
+            {noteSamedi && ` ${noteSamedi}`}
           </p>
         </div>
         <button className="outline" onClick={goReserver}>Réserver une session ponctuelle →</button>
@@ -237,8 +220,14 @@ export default function Pricing() {
       <div className="card bureau-card">
         <div>
           <span className="badge grey">Entreprises & indépendants</span>
-          <h3 style={{ margin: '8px 0 4px' }}>Bureau Privé - Longue durée</h3>
+          <h3 style={{ margin: '8px 0 4px' }}>Bureau privatif - Longue durée</h3>
           <p className="muted" style={{ margin: '0 0 10px' }}>Un espace privatisé, un contrat sur mesure au trimestre ou à l'année.</p>
+          {bureauForfaits && (
+            <p className="muted" style={{ margin: '0 0 10px', fontSize: 14 }}>
+              Pour {bureauForfaits} seulement, le bureau privatif se réserve en ligne, sans devis, dans l'onglet{' '}
+              <button type="button" className="link-action" style={{ fontSize: 'inherit' }} onClick={() => setTab('ponctuel')}>Ponctuel</button>.
+            </p>
+          )}
           <ul className="features">
             <li>Espace entièrement privatisé</li>
             <li>Contrat longue durée personnalisé</li>
@@ -252,11 +241,14 @@ export default function Pricing() {
       </div>
       )}
 
+      {/* Sur l'onglet Ponctuel, les cartes disent déjà tout : la note ne redit rien. */}
+      {tab !== 'ponctuel' && (
       <p className="muted" style={{ fontSize: 13, margin: '18px 0 0' }}>
         <strong>Salle confidentielle</strong> : incluse avec toute réservation d'open space, quelle que soit la
         formule. Rien à réserver, rien à payer. Elle reste en accès libre, sauf lorsque cette même pièce est
-        privatisée en bureau privatif, le temps d'une demi-journée ou d'une journée.
+        privatisée en bureau privatif.
       </p>
+      )}
 
       <p className="muted" style={{ textAlign: 'center', marginTop: 18 }}>
         <Link to="/">← Retour à l'accueil</Link>
