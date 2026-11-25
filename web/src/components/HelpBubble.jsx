@@ -28,12 +28,8 @@ const IconAlert = () => (
 const IconPhone = () => (
   <svg {...svgProps} width="18" height="18"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" /></svg>
 );
-const IconAt = () => (
-  <svg {...svgProps} width="18" height="18"><circle cx="12" cy="12" r="4" /><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1" /></svg>
-);
-
 // Bulle d'aide flottante (bas droite, toutes pages) : relais vers le formulaire
-// de contact, la page de réclamation, le téléphone et l'e-mail.
+// de contact, la page de réclamation et le téléphone.
 export default function HelpBubble() {
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
@@ -89,11 +85,13 @@ export default function HelpBubble() {
             <Link to="/reclamation" className="help-item" onClick={close}>
               <IconAlert /><span>Problème sur une réservation</span>
             </Link>
+            {/* Pas d'adresse e-mail en clair ici : la bulle est présente sur toutes les
+                pages publiques, c'est la cible la plus facile pour un moissonneur.
+                « Nous écrire » ouvre le formulaire, qui passe par /api/leads et son
+                limiteur. L'adresse reste visible ailleurs (pied de page, CGU/CGV),
+                où elle est attendue et moins exposée. */}
             <a href="tel:+33766211483" className="help-item" onClick={close}>
               <IconPhone /><span>07 66 21 14 83</span>
-            </a>
-            <a href="mailto:contact@cazalia.fr" className="help-item" onClick={close}>
-              <IconAt /><span>contact@cazalia.fr</span>
             </a>
           </div>
         )}
