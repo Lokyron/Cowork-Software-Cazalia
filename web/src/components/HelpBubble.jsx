@@ -12,8 +12,10 @@ const svgProps = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', s
 const IconChat = ({ size = 26 }) => (
   <svg {...svgProps} width={size} height={size}>
     <path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.5L3 20.5l1.6-4.9A8.5 8.5 0 1 1 21 11.5z" />
-    <path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.4" />
-    <path d="M12 15.8h.01" />
+    {/* Point d'interrogation : réduit de 20 % et centré sur le disque de la bulle
+        (12.5, 11.5). Le tracé d'origine débordait vers le bas, près de la queue. */}
+    <path d="M10.5 9.91a2 2 0 1 1 2.72 1.84c-.48.24-.8.64-.8 1.12" />
+    <path d="M12.42 15.11h.01" />
   </svg>
 );
 const IconClose = () => (
