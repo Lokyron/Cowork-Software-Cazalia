@@ -9,14 +9,15 @@
 
     <!-- Open Graph / Twitter Card : valeurs par défaut (celles de l'accueil). Le plugin
          web/seo/plugin.js les remplace par route dans dist/. Source : web/src/lib/seo.js.
-         og:image : URL absolue obligatoire. On réutilise hero.jpg ; un visuel dédié
-         1200×630 serait préférable pour les aperçus de lien. -->
+         og:image : URL absolue obligatoire. Elle pointe sur /api/media/current/hero, qui sert
+         la photo du bandeau choisie dans l'écran Photos (repli : images/hero.jpg).
+         Un visuel dédié 1200×630 resterait préférable pour les aperçus de lien. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Cazalia" />
     <meta property="og:title" content="Cazalia, coworking à Montpellier (Boutonnet)" />
     <meta property="og:description" content="Espace de coworking au cœur de Boutonnet, à Montpellier : open space et salles de réunion à réserver à l’heure, à la journée ou en abonnement mensuel." />
     <meta property="og:url" content="https://cazalia.fr/" />
-    <meta property="og:image" content="https://cazalia.fr/images/hero.jpg" />
+    <meta property="og:image" content="https://cazalia.fr/api/media/current/hero" />
     <meta property="og:locale" content="fr_FR" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
@@ -36,7 +37,7 @@
       "legalName": "CAZALIA",
       "description": "Espace de coworking à Montpellier, quartier Boutonnet.",
       "url": "https://cazalia.fr/",
-      "image": "https://cazalia.fr/images/hero.jpg",
+      "image": "https://cazalia.fr/api/media/current/hero",
       "telephone": "+33766211483",
       "email": "contact@cazalia.fr",
       "priceRange": "€€",

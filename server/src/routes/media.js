@@ -11,6 +11,8 @@
 import { Router } from 'express';
 import express from 'express';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { db } from '../db.js';
 import { requireAdmin, sendBusinessError } from '../middleware.js';
 import { rateLimit } from '../security.js';
@@ -35,6 +37,67 @@ mediaRouter.get('/media', (_req, res) => res.json(getMediaUrls()));
  * @returns 200 `{images: string[]}`
  */
 mediaRouter.get('/gallery', (_req, res) => res.json({ images: getMediaUrls().carousel }));
+
+/**
+ * Photo par défaut du build pour un emplacement : `dist/images/<slot>.jpg`, ou
+ * `web/public/images/<slot>.jpg` en développement local (pas de `web/dist`).
+ * Le nom vient de `SLOTS` (liste blanche), jamais de la requête.
+ * @param {string} slot Emplacement validé.
+ * @returns {string | null} Chemin du fichier, ou `null` s'il n'existe nulle part.
+ */
+function fallbackImage(slot) {
+  const webRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'web');
+  for (const dir of ['dist', 'public']) {
+    const full = path.join(webRoot, dir, 'images', `${slot}.jpg`);
+    if (fs.existsSync(full)) return full;
+  }
+  return null;
+}
+
+/**
+ * GET /api/media/current/:slot - sert la photo actuellement affectée à un emplacement.
+ *
+ * URL stable pour `og:image` (aperçus WhatsApp, LinkedIn) : le fichier est servi
+ * directement, sans redirection, car les générateurs d'aperçu suivent mal les 302.
+ * Sans photo affectée (ou fichier disparu), on sert la photo par défaut du build.
+ *
+ * Contrairement à `/media/:file`, l'URL ne change pas quand la photo change : le
+ * cache est donc court (5 min) et accompagné d'`ETag`/`Last-Modified` (posés par
+ * `sendFile`), pour que les requêtes conditionnelles répondent 304.
+ *
+ * Déclarée AVANT `/media/:file` par prudence ; le chemin à deux segments ne peut
+ * de toute façon pas être capté par `:file`.
+ *
+ * @param slot Emplacement, dans la liste blanche `SLOTS`.
+ * @returns 200 image · 404 si l'emplacement est inconnu, ou si aucun repli n'existe
+ */
+mediaRouter.get('/media/current/:slot', (req, res) => {
+  const slot = req.params.slot;
+  if (!SLOTS.includes(slot)) return res.status(404).end();
+
+  const send = (full, mime) => {
+    res.type(mime);
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.sendFile(full, (err) => {
+      if (err && !res.headersSent) {
+        // Fichier disparu entre le contrôle et l'envoi : un 404 ne doit pas hériter
+        // du cache de 5 min, sinon le générateur d'aperçu garde l'échec au lieu de réessayer.
+        res.removeHeader('Cache-Control');
+        res.removeHeader('Content-Type');
+        res.status(404).end();
+      }
+    });
+  };
+
+  const file = getMedia()[slot];
+  const full = file && mediaPath(file);
+  const mime = full && mimeForFile(file);
+  if (full && mime && fs.existsSync(full)) return send(full, mime);
+
+  const fb = fallbackImage(slot);
+  if (!fb) return res.status(404).end();
+  return send(fb, 'image/jpeg');
+});
 
 /**
  * Sert un fichier média.

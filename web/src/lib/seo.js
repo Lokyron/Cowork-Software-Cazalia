@@ -23,9 +23,10 @@ export const EMAIL = 'contact@cazalia.fr';
 // Horaires lisibles (la version structurée schema.org vit dans index.html).
 export const OPENING_HOURS = 'Lun-Ven 8h30-19h30, Samedi 9h-13h, Dimanche fermé';
 
-// Visuel OG : on réutilise la photo d'accueil en l'état.
+// Visuel OG : URL stable de l'API qui sert la photo du bandeau choisie dans l'écran
+// Photos (repli : images/hero.jpg du build). Aucun fichier copié dans le build.
 // TODO : un visuel dédié 1200×630 serait préférable pour les aperçus de lien.
-export const OG_IMAGE_FILE = 'images/hero.jpg';
+export const OG_IMAGE_PATH = 'api/media/current/hero';
 
 // Base d'URL publique, sans slash final. `override` sert au plugin Node.
 export function baseUrl(override) {
@@ -33,7 +34,7 @@ export function baseUrl(override) {
   return String(fromEnv || DEFAULT_BASE_URL).replace(/\/+$/, '');
 }
 
-export const ogImageUrl = (base = baseUrl()) => `${base}/${OG_IMAGE_FILE}`;
+export const ogImageUrl = (base = baseUrl()) => `${base}/${OG_IMAGE_PATH}`;
 
 // URL canonique publiée d'une route (canonical, og:url, <loc> du sitemap) : seule
 // source de cette forme. Toujours avec slash final (`/` → `https://cazalia.fr/`,

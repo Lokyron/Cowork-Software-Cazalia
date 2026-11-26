@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cazalia-media-'));
 const MEDIA_DIR = path.join(TMP_DIR, 'gallery');
@@ -22,6 +23,18 @@ process.env.SCRYPT_N = '16384';
 
 const media = await import('../src/lib/media.js');
 const { db } = await import('../src/db.js');
+
+// Serveur HTTP monté AVANT tout cas (un `await` entre deux tests ferait
+// exécuter le nettoyage `test.after` trop tôt).
+const { default: express } = await import('express');
+const { default: http } = await import('node:http');
+const { mediaRouter } = await import('../src/routes/media.js');
+
+const app = express();
+app.use('/api', mediaRouter);
+const server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+test.after(() => { server.close(); });
+const PORT = server.address().port;
 
 test.after(() => { fs.rmSync(TMP_DIR, { recursive: true, force: true }); });
 
@@ -295,4 +308,99 @@ test('le cadrage d\'un espace est purgé et filtré sur les espaces actifs', () 
   assert.deepEqual(Object.keys(rawMedia().frames.spaces), ['8']);
   media.purgeSpaceFrame(8);
   assert.equal(rawMedia().frames.spaces, undefined);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Route publique `/api/media/current/:slot` (source de la balise og:image)
+//
+// Requêtes en HTTP BRUT (`node:http`) et non `fetch` : le `fetch` de Node (undici)
+// revalide pour son compte et masquerait les 304 et les en-têtes réellement émis.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** GET brut : le chemin est envoyé tel quel (pas de normalisation côté client). */
+const rawGet = (reqPath, headers = {}) => new Promise((resolve, reject) => {
+  const req = http.request({ host: '127.0.0.1', port: PORT, path: reqPath, method: 'GET', headers }, (res) => {
+    const chunks = [];
+    res.on('data', (c) => chunks.push(c));
+    res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
+  });
+  req.on('error', reject);
+  req.end();
+});
+
+// Photos par défaut du build : le repli sert l'une d'elles (dist, sinon public).
+const WEB_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'web');
+const defaultImage = (slot) => {
+  for (const d of ['dist', 'public']) {
+    const f = path.join(WEB_ROOT, d, 'images', `${slot}.jpg`);
+    if (fs.existsSync(f)) return fs.readFileSync(f);
+  }
+  throw new Error(`photo par défaut absente pour ${slot}`);
+};
+
+test('/media/current : un emplacement forgé est refusé en 404, sans rien lire hors du dossier des médias', async () => {
+  reset();
+  // Un fichier « appât » hors du dossier des médias : il ne doit jamais sortir.
+  fs.writeFileSync(path.join(TMP_DIR, 'hero.jpg'), 'SECRET-HORS-DOSSIER');
+  const forged = [
+    '..%2F..%2Fetc%2Fpasswd', 'hero%2f..%2f..%2fetc%2fpasswd', 'hero%00', 'HERO', '.', '..', 'hero.jpg',
+  ];
+  for (const slot of forged) {
+    const r = await rawGet(`/api/media/current/${slot}`);
+    assert.equal(r.status, 404, `emplacement forgé accepté : ${slot}`);
+    assert.ok(!r.body.toString().includes('SECRET-HORS-DOSSIER'), `fuite via ${slot}`);
+    assert.ok(!/image\//.test(r.headers['content-type'] || ''), `type image sur un refus : ${slot}`);
+  }
+});
+
+test('/media/current : un emplacement connu avec photo affectée sert CETTE photo, avec son type', async () => {
+  reset();
+  const { file } = media.saveImage(PNG, 'bandeau');
+  media.setSlot('hero', file);
+  const r = await rawGet('/api/media/current/hero');
+  assert.equal(r.status, 200);
+  assert.equal(r.headers['content-type'], 'image/png');
+  assert.deepEqual(r.body, PNG, 'ce n\'est pas la photo affectée qui est servie');
+});
+
+test('/media/current : sans photo affectée, la photo par défaut du build est servie (og:image jamais cassée)', async () => {
+  reset();
+  for (const slot of media.SLOTS) {
+    const r = await rawGet(`/api/media/current/${slot}`);
+    assert.equal(r.status, 200, `repli absent pour ${slot}`);
+    assert.equal(r.headers['content-type'], 'image/jpeg');
+    assert.deepEqual(r.body, defaultImage(slot));
+  }
+});
+
+test('/media/current : cache court (5 min) et requête conditionnelle répondue en 304', async () => {
+  reset();
+  const { file } = media.saveImage(JPEG, 'bandeau');
+  media.setSlot('hero', file);
+  const r = await rawGet('/api/media/current/hero');
+  assert.equal(r.headers['cache-control'], 'public, max-age=300');
+  assert.ok(r.headers.etag, 'ETag attendu pour la revalidation');
+  const again = await rawGet('/api/media/current/hero', { 'if-none-match': r.headers.etag });
+  assert.equal(again.status, 304);
+});
+
+test('/media/:file garde son cache long d\'une semaine (non-régression)', async () => {
+  reset();
+  const { file } = media.saveImage(JPEG, 'galerie');
+  const r = await rawGet(`/api/media/${file}`);
+  assert.equal(r.status, 200);
+  assert.equal(r.headers['cache-control'], 'public, max-age=604800');
+});
+
+test('/media/current : le 404 d\'un fichier disparu en cours d\'envoi ne porte ni cache ni type image', async () => {
+  reset();
+  // Un dossier nommé comme une photo passe le `existsSync` mais fait échouer
+  // `sendFile` : même chemin d'erreur qu'un fichier supprimé entre les deux.
+  fs.mkdirSync(path.join(MEDIA_DIR, 'fantome.jpg'));
+  media.setSlot('hero', 'fantome.jpg');
+  const r = await rawGet('/api/media/current/hero');
+  assert.equal(r.status, 404);
+  assert.equal(r.headers['cache-control'], undefined, 'un 404 ne doit pas être mis en cache');
+  assert.ok(!/image\//.test(r.headers['content-type'] || ''));
+  fs.rmdirSync(path.join(MEDIA_DIR, 'fantome.jpg'));
 });

@@ -35,7 +35,11 @@ const MIME_BY_EXT = {
   '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif',
 };
 
-/** Emplacements nommés : une seule photo chacun. */
+/**
+ * Emplacements nommés : une seule photo chacun.
+ * Tout emplacement ajouté ici doit avoir sa photo par défaut `web/public/images/<slot>.jpg` :
+ * `/media/current/:slot` s'en sert de repli et répondrait 404 sans cela.
+ */
 export const SLOTS = ['hero', 'presentation'];
 
 /**
